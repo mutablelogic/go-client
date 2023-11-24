@@ -4,7 +4,6 @@ go 1.20
 
 require (
 	github.com/djthorpe/go-errors v1.0.3
-	github.com/mutablelogic/go-server v1.1.16
 	github.com/stretchr/testify v1.8.4
 )
 

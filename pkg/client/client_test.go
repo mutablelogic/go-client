@@ -3,7 +3,7 @@ package client_test
 import (
 	"testing"
 
-	"github.com/mutablelogic/go-server/pkg/client"
+	"github.com/mutablelogic/go-client/pkg/client"
 	"github.com/stretchr/testify/assert"
 )
 

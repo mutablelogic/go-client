@@ -33,13 +33,13 @@ type Client struct {
 	sync.Mutex
 	*http.Client
 
-	endpoint   *url.URL
-	ua         string
-	rate       float32 // number of requests allowed per second
-	strict     bool
-	token      Token // token for authentication on requests
-	ts         time.Time
-	skipverify bool
+	endpoint *url.URL
+	ua       string
+	rate     float32 // number of requests allowed per second
+	strict   bool
+	token    Token             // token for authentication on requests
+	headers  map[string]string // Headers for every request
+	ts       time.Time
 }
 
 type ClientOpt func(*Client) error
@@ -50,7 +50,7 @@ type RequestOpt func(*http.Request) error
 
 const (
 	DefaultTimeout            = time.Second * 10
-	DefaultUserAgent          = "github.com/mutablelogic/go-server"
+	DefaultUserAgent          = "github.com/mutablelogic/go-client"
 	PathSeparator             = string(os.PathSeparator)
 	ContentTypeJson           = "application/json"
 	ContentTypeTextXml        = "text/xml"
@@ -193,6 +193,17 @@ func (client *Client) request(method, accept, mimetype string, body io.Reader) (
 	}
 	if client.ua != "" {
 		r.Header.Set("User-Agent", client.ua)
+	}
+
+	// If there are headers, add them
+	if len(client.headers) > 0 {
+		for k, v := range client.headers {
+			if v == "" {
+				r.Header.Del(k)
+			} else {
+				r.Header.Set(k, v)
+			}
+		}
 	}
 
 	// Return success

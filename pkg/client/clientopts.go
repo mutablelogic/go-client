@@ -99,3 +99,17 @@ func OptSkipVerify() ClientOpt {
 		return nil
 	}
 }
+
+// OptHeader appends a custom header to each request
+func OptHeader(key, value string) ClientOpt {
+	return func(client *Client) error {
+		if client.headers == nil {
+			client.headers = make(map[string]string, 1)
+		}
+		if key == "" {
+			return ErrBadParameter.With("OptHeader")
+		}
+		client.headers[key] = value
+		return nil
+	}
+}

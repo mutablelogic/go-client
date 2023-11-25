@@ -11,7 +11,7 @@ import (
 
 func main() {
 	name := path.Base(os.Args[0])
-	flags, err := NewFlags(name, os.Args[1:], ElevenlabsFlags)
+	flags, err := NewFlags(name, os.Args[1:], ElevenlabsFlags, OpenAIFlags)
 	if err != nil {
 		if err != flag.ErrHelp {
 			fmt.Fprintln(os.Stderr, err)
@@ -38,6 +38,11 @@ func main() {
 		os.Exit(1)
 	}
 	cmd, err = ElevenlabsRegister(cmd, opts, flags)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	cmd, err = OpenAIRegister(cmd, opts, flags)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

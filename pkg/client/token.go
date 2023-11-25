@@ -1,0 +1,29 @@
+package client
+
+///////////////////////////////////////////////////////////////////////////////
+// TYPES
+
+type Token struct {
+	Scheme string
+	Value  string
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// GLOBALS
+
+const (
+	Bearer = "Bearer"
+)
+
+///////////////////////////////////////////////////////////////////////////////
+// STRINGIFY
+
+// Stringify the token value
+func (token Token) String() string {
+	// Set default
+	if token.Scheme == "" {
+		token.Scheme = Bearer
+	}
+	// Return token as a string
+	return token.Scheme + " " + token.Value
+}

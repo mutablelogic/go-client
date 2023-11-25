@@ -52,6 +52,7 @@ func (r Request) Accept() string {
 ///////////////////////////////////////////////////////////////////////////////
 // LIFECYCLE
 
+// Create a new client which can be used to return the current IP address
 func New(opts ...client.ClientOpt) (*Client, error) {
 	// Create client
 	client, err := client.New(append(opts, client.OptEndpoint(endPoint))...)

@@ -4,8 +4,6 @@ elevenlabs implements an API client for elevenlabs (https://elevenlabs.io/docs/a
 package elevenlabs
 
 import (
-	"net/http"
-
 	// Packages
 	"github.com/mutablelogic/go-client/pkg/client"
 )
@@ -34,76 +32,15 @@ const (
 )
 
 ///////////////////////////////////////////////////////////////////////////////
-// SCHEMA
-
-type Request struct {
-	client.Payload `json:"-"`
-	Model          string `json:"model_id"`
-	Text           string `json:"text"`
-	VoiceSettings  struct {
-		SimilarityBoost float64 `json:"similarity_boost"`
-		Stability       float64 `json:"stability"`
-		Style           string  `json:"style,omitempty"`
-		UseSpeakerBoost bool    `json:"use_speaker_boost"`
-	} `json:"voice_settings"`
-}
-
-func (r Request) Method() string {
-	return http.MethodGet
-}
-
-func (r Request) Type() string {
-	return ""
-}
-
-func (r Request) Accept() string {
-	return client.ContentTypeJson
-}
-
-type VoicesResponse struct {
-	Voices []Voice `json:"voices"`
-}
-
-type Voice struct {
-	Id          string `json:"voice_id"`
-	Name        string `json:"name"`
-	Description string `json:"description,omitempty"`
-	PreviewUrl  string `json:"preview_url,omitempty"`
-	Category    string `json:"category,omitempty"`
-}
-
-///////////////////////////////////////////////////////////////////////////////
 // LIFECYCLE
 
 func New(ApiKey string, opts ...client.ClientOpt) (*Client, error) {
 	// Create client
-	client, err := client.New(append(opts, client.OptEndpoint(endPoint), client.OptHeader("Xi-Api-Key", ApiKey))...)
+	client, err := client.New(append(opts, client.OptEndpoint(endPoint), client.OptHeader("xi-api-key", ApiKey))...)
 	if err != nil {
 		return nil, err
 	}
 
 	// Return the client
 	return &Client{client}, nil
-}
-
-///////////////////////////////////////////////////////////////////////////////
-// PUBLIC METHODS
-
-// Return current set of voices
-func (c *Client) Voices() ([]Voice, error) {
-	var request Request
-	var response VoicesResponse
-	if err := c.Do(request, &response, client.OptPath("voices")); err != nil {
-		return nil, err
-	}
-	return response.Voices, nil
-}
-
-// Get returns the current IP address from the API
-func (c *Client) TextToSpeech(Text string) ([]byte, error) {
-	var request Request
-	if err := c.Do(request, nil, client.OptPath("text-to-speech", "test")); err != nil {
-		return nil, err
-	}
-	return nil, nil
 }

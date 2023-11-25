@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"time"
+	// Packages
 )
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -62,15 +63,20 @@ func (transport *logtransport) RoundTrip(req *http.Request) (*http.Response, err
 		fmt.Fprintln(transport.w, "  => Error:", err)
 	} else {
 		fmt.Fprintln(transport.w, "  =>", resp.Status)
-
+		for k, v := range resp.Header {
+			fmt.Fprintf(transport.w, "  => %v: %q\n", k, v)
+		}
 		// If verbose is switched on, read the body
-		if transport.v && resp.Body != nil {
-			defer resp.Body.Close()
-			body, err := io.ReadAll(resp.Body)
-			if err == nil {
-				fmt.Fprintln(transport.w, "    ", string(body))
+		if transport.v && resp.Body != nil && resp.ContentLength > 0 {
+			contentType := resp.Header.Get("Content-Type")
+			if contentType == ContentTypeJson || contentType == ContentTypeTextPlain {
+				defer resp.Body.Close()
+				body, err := io.ReadAll(resp.Body)
+				if err == nil {
+					fmt.Fprintln(transport.w, "    ", string(body))
+				}
+				resp.Body = io.NopCloser(bytes.NewReader(body))
 			}
-			resp.Body = io.NopCloser(bytes.NewReader(body))
 		}
 	}
 

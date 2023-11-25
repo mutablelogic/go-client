@@ -104,7 +104,7 @@ func OptSkipVerify() ClientOpt {
 func OptHeader(key, value string) ClientOpt {
 	return func(client *Client) error {
 		if client.headers == nil {
-			client.headers = make(map[string]string, 1)
+			client.headers = make(map[string]string, 2)
 		}
 		if key == "" {
 			return ErrBadParameter.With("OptHeader")

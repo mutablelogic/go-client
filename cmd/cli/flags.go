@@ -1,0 +1,60 @@
+package main
+
+import (
+	"flag"
+	"os"
+	"time"
+
+	"github.com/djthorpe/go-errors"
+)
+
+///////////////////////////////////////////////////////////////////////////////
+// TYPES
+
+type Flags struct {
+	*flag.FlagSet
+}
+
+type FlagsRegister func(*Flags)
+
+///////////////////////////////////////////////////////////////////////////////
+// LIFECYCLE
+
+func NewFlags(name string, args []string, register ...FlagsRegister) (*Flags, error) {
+	flags := new(Flags)
+	flags.FlagSet = flag.NewFlagSet(name, flag.ContinueOnError)
+
+	// Register flags
+	flags.Bool("debug", false, "Enable debug logging")
+	flags.Duration("timeout", 0, "Timeout")
+	for _, fn := range register {
+		fn(flags)
+	}
+
+	// Parse command line
+	if err := flags.Parse(args); err != nil {
+		return nil, err
+	}
+
+	// Return success
+	return flags, nil
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// PUBLIC METHODS
+
+func (flags *Flags) IsDebug() bool {
+	return flags.Lookup("debug").Value.(flag.Getter).Get().(bool)
+}
+
+func (flags *Flags) Timeout() time.Duration {
+	return flags.Lookup("timeout").Value.(flag.Getter).Get().(time.Duration)
+}
+
+func (flags *Flags) GetString(key string) (string, error) {
+	if flag := flags.Lookup(key); flag == nil {
+		return "", errors.ErrNotFound.With(key)
+	} else {
+		return os.ExpandEnv(flag.Value.String()), nil
+	}
+}

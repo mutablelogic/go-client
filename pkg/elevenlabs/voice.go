@@ -1,9 +1,9 @@
 package elevenlabs
 
 import (
-	// Packages
 	"net/http"
 
+	// Packages
 	"github.com/djthorpe/go-errors"
 	"github.com/mutablelogic/go-client/pkg/client"
 )

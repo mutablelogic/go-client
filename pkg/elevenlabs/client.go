@@ -19,16 +19,7 @@ type Client struct {
 // GLOBALS
 
 const (
-	endPoint    = "https://api.elevenlabs.io/v1"
-	Sample64    = "mp3_44100_64"  // mp3 with 44.1kHz sample rate at 64kbps
-	Sample96    = "mp3_44100_96"  // mp3 with 44.1kHz sample rate at 96kbps
-	Sample128   = "mp3_44100_128" // default output format, mp3 with 44.1kHz sample rate at 128kbps
-	Sample192   = "mp3_44100_192" // mp3 with 44.1kHz sample rate at 192kbps
-	SamplePCM16 = "pcm_16000"     // PCM format (S16LE) with 16kHz sample rate
-	SamplePCM22 = "pcm_22050"     // PCM format (S16LE) with 22.05kHz sample rate
-	SamplePCM24 = "pcm_24000"     // PCM format (S16LE) with 24kHz sample rate
-	SamplePCM44 = "pcm_44100"     // PCM format (S16LE) with 44.1kHz sample rate
-	SampleU8    = "ulaw_8000"     // μ-law format (sometimes written mu-law, often approximated as u-law) with 8kHz sample rate
+	endPoint = "https://api.elevenlabs.io/v1"
 )
 
 ///////////////////////////////////////////////////////////////////////////////

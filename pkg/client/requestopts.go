@@ -23,7 +23,11 @@ func OptPath(value ...string) RequestOpt {
 // OptToken adds an authorization header. The header format is "Authorization: Bearer <token>"
 func OptToken(value Token) RequestOpt {
 	return func(r *http.Request) error {
-		r.Header.Set("Authorization", value.String())
+		if value.Value != "" {
+			r.Header.Set("Authorization", value.String())
+		} else {
+			r.Header.Del("Authorization")
+		}
 		return nil
 	}
 }

@@ -67,7 +67,7 @@ func (transport *logtransport) RoundTrip(req *http.Request) (*http.Response, err
 			fmt.Fprintf(transport.w, "  => %v: %q\n", k, v)
 		}
 		// If verbose is switched on, read the body
-		if transport.v && resp.Body != nil && resp.ContentLength > 0 {
+		if transport.v && resp.Body != nil {
 			contentType := resp.Header.Get("Content-Type")
 			if contentType == ContentTypeJson || contentType == ContentTypeTextPlain {
 				defer resp.Body.Close()

@@ -3,53 +3,71 @@ package openai
 ///////////////////////////////////////////////////////////////////////////////
 // TYPES
 
-// Represents a message for chat completion
+// Represents a message with a role for chat completion
 type Message interface {
 	Role() string
-	Type() string // Returns "text"
+	Content() []messageContent
 }
 
-type textMessage struct {
-	Role_    string `json:"role"`
-	Content_ string `json:"content"`
+// Represents message content, which can either be text or an image
+type messageContent struct {
+	Type     string `json:"type"`
+	Text     string `json:"text,omitempty"`
+	ImageUrl *Image `json:"image_url,omitempty"`
 }
 
-type imageUrlMessage struct {
-	Role_    string `json:"role"`
-	Content_ string `json:"content"`
+// Represents message content, which can either be text or an image
+type message struct {
+	Role_    string           `json:"role"`
+	Content_ []messageContent `json:"content"`
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 // CONSTRUCTOR
 
 func SystemMessage(text string) Message {
-	return textMessage{
-		Role_:    "system",
-		Content_: text,
+	return message{
+		Role_: "system",
+		Content_: []messageContent{
+			{Type: "text", Text: text},
+		},
 	}
 }
 
 func UserMessage(text string) Message {
-	return textMessage{
-		Role_:    "user",
-		Content_: text,
+	return message{
+		Role_: "user",
+		Content_: []messageContent{
+			{Type: "text", Text: text},
+		},
 	}
 }
 
 func AssistantMessage(text string) Message {
-	return textMessage{
-		Role_:    "assistant",
-		Content_: text,
+	return message{
+		Role_: "assistant",
+		Content_: []messageContent{
+			{Type: "text", Text: text},
+		},
+	}
+}
+
+func ImageUrlMessage(url string) Message {
+	return message{
+		Role_: "user",
+		Content_: []messageContent{
+			{Type: "image_url", ImageUrl: &Image{Url: url}},
+		},
 	}
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 // PUBLIC METHODS
 
-func (m textMessage) Role() string {
+func (m message) Role() string {
 	return m.Role_
 }
 
-func (textMessage) Type() string {
-	return "text"
+func (m message) Content() []messageContent {
+	return m.Content_
 }

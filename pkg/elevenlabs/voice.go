@@ -34,6 +34,11 @@ type voiceDeleteRequest struct {
 	client.Payload `json:"-"`
 }
 
+type voiceAddRequest struct {
+	Name        string `json:"name,omitempty"`
+	Description string `json:"description,omitempty"`
+}
+
 type voicesResponse struct {
 	Voices []Voice `json:"voices"`
 }
@@ -81,7 +86,7 @@ func (c *Client) VoiceSettings(Id string) (VoiceSettings, error) {
 }
 
 // Delete a voice
-func (c *Client) VoiceDelete(Id string) error {
+func (c *Client) DeleteVoice(Id string) error {
 	var request voiceDeleteRequest
 	if Id == "" {
 		return errors.ErrBadParameter.With("Id")
@@ -89,6 +94,28 @@ func (c *Client) VoiceDelete(Id string) error {
 	if err := c.Do(request, nil, client.OptPath("voices", Id)); err != nil {
 		return err
 	}
+	return nil
+}
+
+// Add a voice
+func (c *Client) AddVoice(Name, Description string) error {
+	var request voiceAddRequest
+
+	// Check parameters
+	if Name == "" {
+		return errors.ErrBadParameter.With("Name")
+	}
+
+	// Set request
+	request.Name = Name
+	request.Description = Description
+
+	// Execute request
+	if err := c.Do(request, nil, client.OptPath("voices", "add")); err != nil {
+		return err
+	}
+
+	// Return success
 	return nil
 }
 
@@ -105,4 +132,16 @@ func (voiceDeleteRequest) Type() string {
 
 func (voiceDeleteRequest) Accept() string {
 	return client.ContentTypeJson
+}
+
+func (voiceAddRequest) Method() string {
+	return http.MethodPost
+}
+
+func (voiceAddRequest) Type() string {
+	return client.ContentTypeBinary
+}
+
+func (voiceAddRequest) Accept() string {
+	return client.ContentTypeForm
 }

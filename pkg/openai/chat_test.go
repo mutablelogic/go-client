@@ -27,3 +27,21 @@ func Test_chat_001(t *testing.T) {
 	assert.NoError(err)
 	t.Log(string(data))
 }
+
+func Test_chat_002(t *testing.T) {
+	assert := assert.New(t)
+	client, err := openai.New(GetApiKey(t), opts.OptTrace(os.Stderr, true))
+	assert.NoError(err)
+	assert.NotNil(client)
+
+	response, err := client.ChatCompletions("gpt-4-vision-preview", []openai.Message{
+		openai.UserMessage("What's in this image?"),
+		openai.ImageUrlMessage("https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/Gfp-wisconsin-madison-the-nature-boardwalk.jpg/2560px-Gfp-wisconsin-madison-the-nature-boardwalk.jpg"),
+	}, openai.OptMaxChoices(1), openai.OptMaxTokens(300))
+	assert.NoError(err)
+	assert.NotNil(response)
+
+	data, err := json.MarshalIndent(response, "", "  ")
+	assert.NoError(err)
+	t.Log(string(data))
+}

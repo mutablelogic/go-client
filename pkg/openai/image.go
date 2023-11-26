@@ -16,8 +16,8 @@ import (
 // SCHEMA
 
 type Image struct {
-	Url  string `json:"url"`
-	Data string `json:"b64_json"`
+	Url  string `json:"url,omitempty"`
+	Data string `json:"b64_json,omitempty"`
 }
 
 ///////////////////////////////////////////////////////////////////////////////

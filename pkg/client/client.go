@@ -58,6 +58,7 @@ const (
 	ContentTypeTextPlain      = "text/plain"
 	ContentTypeTextHTML       = "text/html"
 	ContentTypeBinary         = "application/octet-stream"
+	ContentTypeForm           = "multipart/form-data"
 )
 
 ///////////////////////////////////////////////////////////////////////////////

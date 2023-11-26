@@ -5,6 +5,7 @@ go 1.20
 require (
 	github.com/djthorpe/go-errors v1.0.3
 	github.com/stretchr/testify v1.8.4
+	github.com/veandco/go-sdl2 v0.4.36
 	golang.org/x/exp v0.0.0-20231110203233-9a3e6036ecaa
 )
 

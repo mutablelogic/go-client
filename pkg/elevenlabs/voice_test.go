@@ -86,6 +86,6 @@ func Test_voice_005(t *testing.T) {
 	assert.NoError(err)
 	assert.NotEmpty(response)
 
-	err = client.VoiceDelete("test")
-	assert.NoError(err)
+	err = client.DeleteVoice("test")
+	assert.NotNil(err)
 }

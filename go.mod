@@ -1,6 +1,6 @@
 module github.com/mutablelogic/go-client
 
-go 1.20
+go 1.19
 
 require (
 	github.com/djthorpe/go-errors v1.0.3

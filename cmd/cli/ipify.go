@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 
 	// Packages
 	"github.com/mutablelogic/go-client/pkg/client"
@@ -29,11 +28,10 @@ func IpifyRegister(cmd []Client, opts []client.ClientOpt, flags *Flags) ([]Clien
 
 func IpifyGet(ipify *ipify.Client, flags *Flags) CommandFn {
 	return func() error {
-		if addr, err := ipify.Get(); err != nil {
+		addr, err := ipify.Get()
+		if err != nil {
 			return err
-		} else {
-			fmt.Printf("IP Address: %s\n", addr)
 		}
-		return nil
+		return flags.Write(addr)
 	}
 }

@@ -58,6 +58,7 @@ const (
 	ContentTypeTextPlain      = "text/plain"
 	ContentTypeTextHTML       = "text/html"
 	ContentTypeBinary         = "application/octet-stream"
+	ContentTypeForm           = "multipart/form-data"
 )
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -156,11 +157,39 @@ func (client *Client) Do(in Payload, out any, opts ...RequestOpt) error {
 	}
 
 	// If client token is set, then add to request
-	if client.token.Scheme != "" {
+	if client.token.Scheme != "" && client.token.Value != "" {
 		opts = append([]RequestOpt{OptToken(client.token)}, opts...)
 	}
 
 	return do(client.Client, req, accept, client.strict, out, opts...)
+}
+
+// Do a HTTP request and decode it into an object
+func (client *Client) Request(req *http.Request, out any, opts ...RequestOpt) error {
+	client.Mutex.Lock()
+	defer client.Mutex.Unlock()
+
+	// Check rate limit - sleep until next request can be made
+	now := time.Now()
+	if !client.ts.IsZero() && client.rate > 0.0 {
+		next := client.ts.Add(time.Duration(float32(time.Second) / client.rate))
+		if next.After(now) {
+			time.Sleep(next.Sub(now))
+		}
+	}
+
+	// Set timestamp at return
+	defer func(now time.Time) {
+		client.ts = now
+	}(now)
+
+	// If client token is set, then add to request, at the beginning so it can be
+	// overridden by any other options
+	if client.token.Scheme != "" && client.token.Value != "" {
+		opts = append([]RequestOpt{OptToken(client.token)}, opts...)
+	}
+
+	return do(client.Client, req, "", false, out, opts...)
 }
 
 ///////////////////////////////////////////////////////////////////////////////

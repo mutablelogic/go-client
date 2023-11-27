@@ -5,7 +5,9 @@ import (
 	"os"
 	"time"
 
+	// Packages
 	"github.com/djthorpe/go-errors"
+	"github.com/mutablelogic/go-client/pkg/writer"
 )
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -13,6 +15,8 @@ import (
 
 type Flags struct {
 	*flag.FlagSet
+
+	writer *writer.Writer
 }
 
 type FlagsRegister func(*Flags)
@@ -36,6 +40,13 @@ func NewFlags(name string, args []string, register ...FlagsRegister) (*Flags, er
 		return nil, err
 	}
 
+	// Create a writer
+	if w, err := writer.New(os.Stdout); err != nil {
+		return nil, err
+	} else {
+		flags.writer = w
+	}
+
 	// Return success
 	return flags, nil
 }
@@ -57,4 +68,8 @@ func (flags *Flags) GetString(key string) (string, error) {
 	} else {
 		return os.ExpandEnv(flag.Value.String()), nil
 	}
+}
+
+func (flags *Flags) Write(v writer.TableWriter) error {
+	return flags.writer.Write(v)
 }

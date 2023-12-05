@@ -74,6 +74,11 @@ func (flags *Flags) GetString(key string) (string, error) {
 
 func (flags *Flags) Write(v any) error {
 	opts := []writer.TableOpt{}
+
+	// Set terminal options
+	opts = append(opts, TerminalOpts(flags.Output())...)
+
+	// Set output options
 	switch flags.GetOut() {
 	case "text", "txt", "ascii":
 		opts = append(opts, writer.OptText('|', true, 0))

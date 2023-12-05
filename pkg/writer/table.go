@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	// Packages
-	terminal "golang.org/x/term"
 
 	// Namespace imports
 	. "github.com/djthorpe/go-errors"
@@ -18,8 +17,6 @@ import (
 // TYPES
 
 type TableWriter struct {
-	Width uint
-
 	w io.Writer
 }
 
@@ -75,9 +72,6 @@ func New(w io.Writer) *TableWriter {
 		self.w = w
 	}
 
-	// Set output width
-	self.Width = textWidth(self.w)
-
 	// Return success
 	return self
 }
@@ -105,7 +99,6 @@ func (t *TableWriter) NewMeta(v any, opts ...TableOpt) (*TableMeta, error) {
 	self.delim = ','
 	self.header = true
 	self.nilstr = nilValue
-	self.width = t.Width
 
 	// Set options
 	for _, opt := range opts {
@@ -127,7 +120,6 @@ func (t *TableWriter) NewMeta(v any, opts ...TableOpt) (*TableMeta, error) {
 
 func (t *TableWriter) String() string {
 	str := "<tablewriter"
-	str += " width=" + fmt.Sprint(t.Width)
 	return str + ">"
 }
 
@@ -136,23 +128,12 @@ func (t *TableMeta) String() string {
 	str += " type=" + t.Type.String()
 	str += " columns=" + fmt.Sprint(t.Columns)
 	str += " iterator=" + fmt.Sprint(t.Iterator)
+	str += " width=" + fmt.Sprint(t.width)
 	return str + ">"
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 // PUBLIC METHODS
-
-// Returns the text width of the writer
-func textWidth(w io.Writer) uint {
-	if fh, ok := w.(*os.File); ok {
-		if terminal.IsTerminal(int(fh.Fd())) {
-			if width, _, err := terminal.GetSize(int(fh.Fd())); err == nil {
-				return uint(width)
-			}
-		}
-	}
-	return defaultTextWidth
-}
 
 // Returns a header for CSV output
 func (t *TableMeta) Header() []string {

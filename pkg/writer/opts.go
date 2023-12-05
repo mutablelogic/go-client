@@ -1,5 +1,9 @@
 package writer
 
+import (
+	. "github.com/djthorpe/go-errors"
+)
+
 ///////////////////////////////////////////////////////////////////////////////
 // TYPES
 
@@ -34,6 +38,18 @@ func OptText(delim rune, header bool, width uint) TableOpt {
 		m.delim = delim
 		m.header = header
 		m.width = width
+		return nil
+	}
+}
+
+// Output text table format, with a delimiter, optional header and width
+func OptTextWidth(width uint) TableOpt {
+	return func(m *TableMeta) error {
+		if width > 0 && width < 3 {
+			return ErrBadParameter.With("Invalid text width")
+		} else {
+			m.width = width
+		}
 		return nil
 	}
 }

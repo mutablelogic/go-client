@@ -80,19 +80,27 @@ func (self *TableWriter) writeCSV(meta *TableMeta, w io.Writer) error {
 func (self *TableWriter) writeText(meta *TableMeta, w io.Writer) error {
 	text := NewTextWriter(meta.Columns, meta.delim)
 
-	// Write header
-	if meta.header {
-		if err := text.Writeln(w, meta.HeaderAny()); err != nil {
-			return err
+	for pass := int(0); pass < 2; pass++ {
+		// Write header
+		if meta.header {
+			if pass == 0 {
+				// TODO: Adjust the column widths
+			} else if err := text.Writeln(w, meta.HeaderAny()); err != nil {
+				return err
+			}
 		}
-	}
 
-	// Write rows
-	for elems := meta.NextRow(); elems != nil; elems = meta.NextRow() {
-		if row, err := meta.toStringAny(elems, false); err != nil {
-			return err
-		} else if err := text.Writeln(w, row); err != nil {
-			return err
+		// Write rows
+		for elems := meta.NextRow(); elems != nil; elems = meta.NextRow() {
+			row, err := meta.toStringAny(elems, false)
+			if err != nil {
+				return err
+			}
+			if pass == 0 {
+				// TODO: Adjust the column widths
+			} else if err := text.Writeln(w, row); err != nil {
+				return err
+			}
 		}
 	}
 

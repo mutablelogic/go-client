@@ -1,10 +1,9 @@
 package writer
 
 import (
-	// Packages
-
 	"strconv"
 
+	// Packages
 	. "github.com/djthorpe/go-errors"
 )
 

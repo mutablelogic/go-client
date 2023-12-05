@@ -2,6 +2,7 @@ package writer
 
 import (
 	// Packages
+
 	"strconv"
 
 	. "github.com/djthorpe/go-errors"
@@ -17,7 +18,9 @@ type Marshaller interface {
 ///////////////////////////////////////////////////////////////////////////////
 // PUBLIC METHODS
 
-func Marshal(v any) ([]byte, error) {
+// Convert any value to a byte array. If quote is true, then the value is
+// quoted if it is a string.
+func Marshal(v any, quote bool) ([]byte, error) {
 	// Returns nil if v is nil
 	if v == nil {
 		return nil, nil
@@ -29,7 +32,11 @@ func Marshal(v any) ([]byte, error) {
 	// Switch the type
 	switch v := v.(type) {
 	case string:
-		return []byte(strconv.Quote(v)), nil
+		if quote {
+			return []byte(strconv.Quote(v)), nil
+		} else {
+			return []byte(v), nil
+		}
 	case bool:
 		if v {
 			return []byte("true"), nil
@@ -61,6 +68,6 @@ func Marshal(v any) ([]byte, error) {
 	case float64:
 		return []byte(strconv.FormatFloat(float64(v), 'f', -1, 64)), nil
 	default:
-		return nil, ErrBadParameter.With("Marshal")
+		return nil, ErrBadParameter.Withf("Unable to marshal: %T", v)
 	}
 }

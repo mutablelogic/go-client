@@ -7,6 +7,7 @@ import (
 	"path"
 
 	"github.com/mutablelogic/go-client/pkg/client"
+	"github.com/pkg/errors"
 )
 
 func main() {
@@ -50,7 +51,11 @@ func main() {
 
 	// Run command
 	if err := Run(cmd, flags); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		if errors.Is(err, flag.ErrHelp) {
+			PrintCommands(flags, cmd)
+		} else {
+			fmt.Fprintln(os.Stderr, err)
+		}
 		os.Exit(1)
 	}
 }

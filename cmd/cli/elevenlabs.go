@@ -33,8 +33,8 @@ func ElevenlabsRegister(cmd []Client, opts []client.ClientOpt, flags *Flags) ([]
 		ns: "elevenlabs",
 		cmd: []Command{
 			{Name: "voices", Description: "Return registered voices", MinArgs: 2, MaxArgs: 2, Fn: ElevenlabsVoices(elevenlabs, flags)},
-			{Name: "voice", Description: "Return a voice", MinArgs: 3, MaxArgs: 3, Fn: ElevenlabsVoice(elevenlabs, flags)},
-			{Name: "tts", Description: "Text-to-speech", MinArgs: 3, MaxArgs: 3, Fn: ElevenlabsTextToSpeech(elevenlabs, flags)},
+			{Name: "voice", Description: "Return a voice", Syntax: "<voice>", MinArgs: 3, MaxArgs: 3, Fn: ElevenlabsVoice(elevenlabs, flags)},
+			{Name: "tts", Description: "Text-to-speech", Syntax: "<text>", MinArgs: 3, MaxArgs: 3, Fn: ElevenlabsTextToSpeech(elevenlabs, flags)},
 		},
 	})
 

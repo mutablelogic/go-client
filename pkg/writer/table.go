@@ -172,7 +172,7 @@ func (t *TableMeta) NextRow() []any {
 		return nil
 	}
 	for i, col := range t.Columns {
-		t.row[i] = rv.FieldByIndex(col.Index)
+		t.row[i] = rv.FieldByIndex(col.Index).Interface()
 	}
 	return t.row
 }

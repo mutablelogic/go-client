@@ -28,9 +28,9 @@ func (self *TableWriter) Write(v any, opts ...TableOpt) error {
 // PRIVATE METHODS
 
 // Create an array of strings representing the row
-func (meta *TableMeta) toString(elems []any) ([]string, error) {
+func (meta *TableMeta) toString(elems []any, quote bool) ([]string, error) {
 	for i, elem := range elems {
-		if bytes, err := Marshal(elem); err != nil {
+		if bytes, err := Marshal(elem, quote); err != nil {
 			return nil, err
 		} else {
 			meta.rowstr[i] = string(bytes)
@@ -52,7 +52,7 @@ func (self *TableWriter) writeCSV(meta *TableMeta, w io.Writer) error {
 
 	// Write rows
 	for elems := meta.NextRow(); elems != nil; elems = meta.NextRow() {
-		if row, err := meta.toString(elems); err != nil {
+		if row, err := meta.toString(elems, false); err != nil {
 			return err
 		} else if err := csv.Write(row); err != nil {
 			return err

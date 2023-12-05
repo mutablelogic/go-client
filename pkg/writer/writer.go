@@ -2,7 +2,6 @@ package writer
 
 import (
 	"encoding/csv"
-	"fmt"
 	"io"
 )
 
@@ -39,6 +38,18 @@ func (meta *TableMeta) toString(elems []any, quote bool) ([]string, error) {
 	return meta.rowstr, nil
 }
 
+// Create an array of strings representing the row
+func (meta *TableMeta) toStringAny(elems []any, quote bool) ([]any, error) {
+	for i, elem := range elems {
+		if bytes, err := Marshal(elem, quote); err != nil {
+			return nil, err
+		} else {
+			meta.row[i] = string(bytes)
+		}
+	}
+	return meta.row, nil
+}
+
 func (self *TableWriter) writeCSV(meta *TableMeta, w io.Writer) error {
 	csv := csv.NewWriter(w)
 	csv.Comma = meta.delim
@@ -67,38 +78,23 @@ func (self *TableWriter) writeCSV(meta *TableMeta, w io.Writer) error {
 }
 
 func (self *TableWriter) writeText(meta *TableMeta, w io.Writer) error {
-	csv := csv.NewWriter(w)
-	csv.Comma = meta.delim
+	text := NewTextWriter(meta.Columns, meta.delim)
 
 	// Write header
 	if meta.header {
-		if err := csv.Write(meta.Header()); err != nil {
+		if err := text.Writeln(w, meta.HeaderAny()); err != nil {
 			return err
 		}
 	}
 
 	// Write rows
 	for elems := meta.NextRow(); elems != nil; elems = meta.NextRow() {
-		for i, elem := range elems {
-			if elem == nil {
-				meta.rowstr[i] = meta.nilstr
-			} else if marshaller, ok := elem.(Marshaller); ok {
-				if bytes, err := marshaller.Marshal(); err != nil {
-					return err
-				} else {
-					meta.rowstr[i] = string(bytes)
-				}
-			} else {
-				meta.rowstr[i] = fmt.Sprint(elem)
-			}
-		}
-		if err := csv.Write(meta.rowstr); err != nil {
+		if row, err := meta.toStringAny(elems, false); err != nil {
+			return err
+		} else if err := text.Writeln(w, row); err != nil {
 			return err
 		}
 	}
-
-	// Flush
-	csv.Flush()
 
 	// Return success
 	return nil

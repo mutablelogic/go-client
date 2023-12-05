@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"os"
+	"strings"
 	"time"
 
 	// Packages
@@ -30,6 +31,7 @@ func NewFlags(name string, args []string, register ...FlagsRegister) (*Flags, er
 	// Register flags
 	flags.Bool("debug", false, "Enable debug logging")
 	flags.Duration("timeout", 0, "Timeout")
+	flags.String("out", "", "Output format (text, csv, json) or file name (.txt, .csv, .tsv, .json)")
 	for _, fn := range register {
 		fn(flags)
 	}
@@ -57,6 +59,11 @@ func (flags *Flags) Timeout() time.Duration {
 	return flags.Lookup("timeout").Value.(flag.Getter).Get().(time.Duration)
 }
 
+func (flags *Flags) GetOut() string {
+	v, _ := flags.GetString("out")
+	return strings.ToLower(v)
+}
+
 func (flags *Flags) GetString(key string) (string, error) {
 	if flag := flags.Lookup(key); flag == nil {
 		return "", errors.ErrNotFound.With(key)
@@ -66,5 +73,14 @@ func (flags *Flags) GetString(key string) (string, error) {
 }
 
 func (flags *Flags) Write(v any) error {
-	return flags.writer.Write(v)
+	opts := []writer.TableOpt{}
+	switch flags.GetOut() {
+	case "text", "txt", "ascii":
+		opts = append(opts, writer.OptText('|', true, 0))
+	case "csv":
+		opts = append(opts, writer.OptCSV(',', true))
+	case "tsv":
+		opts = append(opts, writer.OptCSV('\t', true))
+	}
+	return flags.writer.Write(v, opts...)
 }

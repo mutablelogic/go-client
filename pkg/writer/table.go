@@ -38,13 +38,16 @@ type TableMeta struct {
 }
 
 type ColumnMeta struct {
-	Key     string   // the unique key of the field
-	Name    string   // the name of the field
-	Index   []int    // the index of the field
-	Tuples  []string // the tuples from the tag
-	NonZero bool     // true if there is a non-zero value in this column
-	Width   int      // the maximum we column
+	Key     string     // the unique key of the field
+	Name    string     // the name of the field
+	Index   []int      // the index of the field
+	Tuples  []string   // the tuples from the tag
+	NonZero bool       // true if there is a non-zero value in this column
+	Width   int        // the maximum we column
+	Flags   FormatFlag // the formatting for the column
 }
+
+type FormatFlag uint
 
 ///////////////////////////////////////////////////////////////////////////////
 // GLBOALS
@@ -54,6 +57,10 @@ const (
 	tagWriter        = "writer"
 	nilValue         = "<nil>"
 	defaultTextWidth = 70
+)
+
+const (
+	FormatAlignLeft FormatFlag = 1 << iota
 )
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -150,6 +157,15 @@ func textWidth(w io.Writer) uint {
 // Returns a header for CSV output
 func (t *TableMeta) Header() []string {
 	names := make([]string, len(t.Columns))
+	for i, col := range t.Columns {
+		names[i] = col.Name
+	}
+	return names
+}
+
+// Returns a header for Text output
+func (t *TableMeta) HeaderAny() []any {
+	names := make([]any, len(t.Columns))
 	for i, col := range t.Columns {
 		names[i] = col.Name
 	}

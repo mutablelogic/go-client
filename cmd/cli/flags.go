@@ -15,8 +15,7 @@ import (
 
 type Flags struct {
 	*flag.FlagSet
-
-	writer *writer.Writer
+	writer *writer.TableWriter
 }
 
 type FlagsRegister func(*Flags)
@@ -41,11 +40,7 @@ func NewFlags(name string, args []string, register ...FlagsRegister) (*Flags, er
 	}
 
 	// Create a writer
-	if w, err := writer.New(os.Stdout); err != nil {
-		return nil, err
-	} else {
-		flags.writer = w
-	}
+	flags.writer = writer.New(os.Stdout)
 
 	// Return success
 	return flags, nil
@@ -70,6 +65,6 @@ func (flags *Flags) GetString(key string) (string, error) {
 	}
 }
 
-func (flags *Flags) Write(v writer.TableWriter) error {
+func (flags *Flags) Write(v any) error {
 	return flags.writer.Write(v)
 }

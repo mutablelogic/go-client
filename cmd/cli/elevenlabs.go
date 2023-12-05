@@ -46,12 +46,9 @@ func ElevenlabsVoices(client *elevenlabs.Client, flags *Flags) CommandFn {
 	return func() error {
 		if voices, err := client.Voices(); err != nil {
 			return err
-		} else if data, err := json.MarshalIndent(voices, "", "  "); err != nil {
-			return err
 		} else {
-			fmt.Printf("Voices: %s\n", data)
+			return flags.Write(voices)
 		}
-		return nil
 	}
 }
 

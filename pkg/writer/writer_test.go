@@ -1,7 +1,7 @@
 package writer_test
 
 import (
-	"os"
+	"strings"
 	"testing"
 
 	// Packages
@@ -9,51 +9,54 @@ import (
 	assert "github.com/stretchr/testify/assert"
 )
 
-// /////////////////////////////////////////////////////////////////////////////
-// TABLE WRITER
-
-type Test struct {
-	Columns_ []string
-	Rows_    [][]any
-}
-
-func (t *Test) Columns() []string {
-	return t.Columns_
-}
-
-func (t *Test) Count() int {
-	return len(t.Rows_)
-}
-
-func (t *Test) Row(n int) []any {
-	if n < 0 || n >= len(t.Rows_) {
-		return nil
-	} else {
-		return t.Rows_[n]
-	}
-}
-
 ///////////////////////////////////////////////////////////////////////////////
 // TEST CASES
 
 func Test_writer_000(t *testing.T) {
 	assert := assert.New(t)
-
-	// Create a new writer
-	w, err := writer.New(os.Stdout)
+	buf := new(strings.Builder)
+	table := writer.New(buf)
+	assert.NotNil(table)
+	err := table.Write(TestAB{})
 	assert.NoError(err)
-	assert.NotNil(w)
+	assert.Equal("a,b\n,\n", buf.String())
+}
 
-	// Create a test table
-	test := &Test{
-		Columns_: []string{"A", "B", "C"},
-		Rows_: [][]any{
-			{"1", "2", "3"},
-			{"4", "5", "6"},
-		},
-	}
-
-	// Write a table
-	err = w.Write(test)
+func Test_writer_001(t *testing.T) {
+	assert := assert.New(t)
+	buf := new(strings.Builder)
+	table := writer.New(buf)
+	assert.NotNil(table)
+	err := table.Write([]TestAB{
+		{A: "hello", B: "world"},
+		{A: "goodbye", B: "world"},
+	})
 	assert.NoError(err)
+	assert.Equal("a,b\nhello,world\ngoodbye,world\n", buf.String())
+}
+
+func Test_writer_002(t *testing.T) {
+	assert := assert.New(t)
+	buf := new(strings.Builder)
+	table := writer.New(buf)
+	assert.NotNil(table)
+	err := table.Write([]*TestAB{
+		{A: "hello", B: "world"},
+		{A: "goodbye", B: "world"},
+	})
+	assert.NoError(err)
+	assert.Equal("a,b\nhello,world\ngoodbye,world\n", buf.String())
+}
+
+func Test_writer_003(t *testing.T) {
+	assert := assert.New(t)
+	buf := new(strings.Builder)
+	table := writer.New(buf)
+	assert.NotNil(table)
+	err := table.Write([]*TestAB{
+		{A: "hello", B: "world"},
+		{A: "goodbye", B: "world"},
+	}, writer.OptCSV(';', false))
+	assert.NoError(err)
+	assert.Equal("hello;world\ngoodbye;world\n", buf.String())
 }

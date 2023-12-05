@@ -1,6 +1,7 @@
 package writer_test
 
 import (
+	"os"
 	"reflect"
 	"testing"
 
@@ -27,7 +28,8 @@ type TestCD struct {
 
 func Test_table_000(t *testing.T) {
 	assert := assert.New(t)
-	meta, err := writer.NewTableMeta(TestAB{})
+	w := writer.New(os.Stdout)
+	meta, err := w.NewMeta(TestAB{})
 	assert.NoError(err)
 	assert.NotNil(meta)
 	assert.Equal(reflect.TypeOf(TestAB{}), meta.Type)
@@ -35,27 +37,31 @@ func Test_table_000(t *testing.T) {
 
 func Test_table_001(t *testing.T) {
 	assert := assert.New(t)
-	_, err := writer.NewTableMeta(nil)
+	w := writer.New(os.Stdout)
+	_, err := w.NewMeta(nil)
 	assert.Error(err)
 }
 
 func Test_table_002(t *testing.T) {
 	assert := assert.New(t)
-	meta, err := writer.NewTableMeta([]TestAB{{}, {}})
+	w := writer.New(os.Stdout)
+	meta, err := w.NewMeta([]TestAB{{}, {}})
 	assert.NoError(err)
 	assert.Equal(reflect.TypeOf(TestAB{}), meta.Type)
 }
 
 func Test_table_003(t *testing.T) {
 	assert := assert.New(t)
-	meta, err := writer.NewTableMeta(&TestAB{})
+	w := writer.New(os.Stdout)
+	meta, err := w.NewMeta(&TestAB{})
 	assert.NoError(err)
 	assert.Equal(reflect.TypeOf(TestAB{}), meta.Type)
 }
 
 func Test_table_004(t *testing.T) {
 	assert := assert.New(t)
-	meta, err := writer.NewTableMeta(&TestAB{})
+	w := writer.New(os.Stdout)
+	meta, err := w.NewMeta(&TestAB{})
 	assert.NoError(err)
 	assert.Equal(reflect.TypeOf(TestAB{}), meta.Type)
 	assert.Equal([]writer.ColumnMeta{
@@ -66,7 +72,8 @@ func Test_table_004(t *testing.T) {
 
 func Test_table_005(t *testing.T) {
 	assert := assert.New(t)
-	meta, err := writer.NewTableMeta(&TestCD{})
+	w := writer.New(os.Stdout)
+	meta, err := w.NewMeta(&TestCD{})
 	assert.NoError(err)
 	assert.Equal(reflect.TypeOf(TestCD{}), meta.Type)
 	assert.Equal([]writer.ColumnMeta{
@@ -77,7 +84,8 @@ func Test_table_005(t *testing.T) {
 
 func Test_table_006(t *testing.T) {
 	assert := assert.New(t)
-	meta, err := writer.NewTableMeta([]TestCD{
+	w := writer.New(os.Stdout)
+	meta, err := w.NewMeta([]TestCD{
 		{C: "1", D: ""},
 		{C: "3", D: ""},
 	})

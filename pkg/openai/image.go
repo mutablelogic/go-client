@@ -4,6 +4,8 @@ import (
 	"encoding/base64"
 	"io"
 	"net/http"
+	"net/url"
+	"path/filepath"
 
 	// Packages
 	"github.com/mutablelogic/go-client/pkg/client"
@@ -84,6 +86,17 @@ func (c *Client) ImageGenerate(prompt string, opts ...ImageOpt) ([]Image, error)
 
 	// Return success
 	return response.Data, nil
+}
+
+// Return the filename from the image
+func (i Image) Filename() (string, error) {
+	if i.Url == "" {
+		return "", ErrBadParameter.With("Missing URL in image")
+	} else if url, err := url.Parse(i.Url); err != nil {
+		return "", err
+	} else {
+		return filepath.Base(url.Path), nil
+	}
 }
 
 // Write an image to a writer object and return the mimetype

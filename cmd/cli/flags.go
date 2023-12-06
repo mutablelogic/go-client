@@ -2,8 +2,10 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"os"
-	"strings"
+	"path/filepath"
+	"strconv"
 	"time"
 
 	// Packages
@@ -31,7 +33,7 @@ func NewFlags(name string, args []string, register ...FlagsRegister) (*Flags, er
 	// Register flags
 	flags.Bool("debug", false, "Enable debug logging")
 	flags.Duration("timeout", 0, "Timeout")
-	flags.String("out", "", "Output format (text, csv, json) or file name (.txt, .csv, .tsv, .json)")
+	flags.String("out", "txt", "Output format (txt, csv, tsv, json) or file name (.txt, .csv, .tsv, .json)")
 	for _, fn := range register {
 		fn(flags)
 	}
@@ -61,7 +63,29 @@ func (flags *Flags) Timeout() time.Duration {
 
 func (flags *Flags) GetOut() string {
 	v, _ := flags.GetString("out")
-	return strings.ToLower(v)
+	return v
+}
+
+// Return a filename for output, returns an empty string if the output
+// argument is not a filename (it requires an extension)
+func (flags *Flags) GetOutFilename(def string, n uint) string {
+	filename := flags.GetOut()
+	if filename == "" {
+		filename = filepath.Base(def)
+	}
+	if filename == "" {
+		return ""
+	}
+	ext := filepath.Ext(filename)
+	if ext == "" {
+		return ""
+	}
+	if n > 0 {
+		filename = filename[:len(filename)-len(ext)] + "-" + fmt.Sprint(n) + ext
+	} else {
+		filename = filename[:len(filename)-len(ext)] + ext
+	}
+	return filepath.Clean(filename)
 }
 
 func (flags *Flags) GetString(key string) (string, error) {
@@ -69,6 +93,16 @@ func (flags *Flags) GetString(key string) (string, error) {
 		return "", errors.ErrNotFound.With(key)
 	} else {
 		return os.ExpandEnv(flag.Value.String()), nil
+	}
+}
+
+func (flags *Flags) GetUint(key string) (uint, error) {
+	if flag := flags.Lookup(key); flag == nil {
+		return 0, errors.ErrNotFound.With(key)
+	} else if v, err := strconv.ParseUint(os.ExpandEnv(flag.Value.String()), 10, 64); err != nil {
+		return 0, errors.ErrBadParameter.With(key)
+	} else {
+		return uint(v), nil
 	}
 }
 

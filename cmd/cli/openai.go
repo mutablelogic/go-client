@@ -2,6 +2,9 @@ package main
 
 import (
 	// Packages
+
+	"fmt"
+
 	"github.com/mutablelogic/go-client/pkg/client"
 	"github.com/mutablelogic/go-client/pkg/openai"
 
@@ -15,6 +18,7 @@ import (
 func OpenAIFlags(flags *Flags) {
 	flags.String("openai-api-key", "${OPENAI_API_KEY}", "OpenAI API key")
 	flags.String("openai-model", "", "OpenAI Model")
+	flags.Uint("openai-count", 0, "Number of results to return")
 }
 
 func OpenAIRegister(cmd []Client, opts []client.ClientOpt, flags *Flags) ([]Client, error) {
@@ -76,8 +80,15 @@ func openaiImage(client *openai.Client, flags *Flags) CommandFn {
 		opts := []openai.ImageOpt{
 			openai.OptImageModel("dall-e-3"),
 		}
-		if model, err := flags.GetString("openai-model"); err != nil && model != "" {
+		if model, err := flags.GetString("openai-model"); err != nil {
+			return err
+		} else if model != "" {
 			opts = append(opts, openai.OptImageModel(model))
+		}
+		if count, err := flags.GetUint("openai-count"); err != nil {
+			return err
+		} else if count > 0 {
+			opts = append(opts, openai.OptImageCount(int(count)))
 		}
 
 		// Call API
@@ -90,10 +101,16 @@ func openaiImage(client *openai.Client, flags *Flags) CommandFn {
 		}
 
 		// Write images out
-		for _, image := range images {
-			if _, err := image.Write(client, flags.Output()); err != nil {
+		for i, image := range images {
+			if filename, err := image.Filename(); err != nil {
 				return err
+			} else {
+				filename := flags.GetOutFilename(filename, uint(i))
+				fmt.Println(i, filename)
 			}
+			//if _, err := image.Write(client, flags.Output()); err != nil {
+			//	return err
+			//}
 		}
 		// Return success
 		return nil

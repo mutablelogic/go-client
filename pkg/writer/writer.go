@@ -2,6 +2,7 @@ package writer
 
 import (
 	"encoding/csv"
+	"fmt"
 	"io"
 )
 
@@ -73,6 +74,7 @@ func (self *TableWriter) writeText(meta *TableMeta, w io.Writer) error {
 		// Set the format string
 		if pass > 0 {
 			format = text.Formatln('|')
+			fmt.Println(format)
 		}
 		// Write header
 		if meta.header {

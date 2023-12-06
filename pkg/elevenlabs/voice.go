@@ -153,13 +153,13 @@ func (voiceAddRequest) Accept() string {
 
 func (v VoiceSettings) Marshal() ([]byte, error) {
 	data := new(bytes.Buffer)
-	data.Write([]byte(fmt.Sprintf("similarity_boost=%v", v.SimilarityBoost)))
-	data.Write([]byte(fmt.Sprintf("stability=%v", v.Stability)))
+	data.Write([]byte(fmt.Sprintf("similarity_boost=%v\n", v.SimilarityBoost)))
+	data.Write([]byte(fmt.Sprintf("stability=%v\n", v.Stability)))
 	if v.Style != 0 {
-		data.Write([]byte(fmt.Sprintf("style=%v", v.Style)))
+		data.Write([]byte(fmt.Sprintf("style=%v\n", v.Style)))
 	}
 	if v.UseSpeakerBoost {
-		data.Write([]byte(fmt.Sprintf("use_speaker_boost=%v", v.UseSpeakerBoost)))
+		data.Write([]byte(fmt.Sprintf("use_speaker_boost=%v\n", v.UseSpeakerBoost)))
 	}
 	return data.Bytes(), nil
 }

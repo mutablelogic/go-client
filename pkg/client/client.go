@@ -49,7 +49,7 @@ type RequestOpt func(*http.Request) error
 // GLOBALS
 
 const (
-	DefaultTimeout            = time.Second * 10
+	DefaultTimeout            = time.Second * 30
 	DefaultUserAgent          = "github.com/mutablelogic/go-client"
 	PathSeparator             = string(os.PathSeparator)
 	ContentTypeJson           = "application/json"

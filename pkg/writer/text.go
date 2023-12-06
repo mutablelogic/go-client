@@ -50,7 +50,6 @@ func (self *TextWriter) Formatln(delim rune) string {
 		f.WriteRune('s')
 		f.WriteRune(delim)
 	}
-	fmt.Println(f.String())
 	return f.String()
 }
 
@@ -59,9 +58,11 @@ func (self *TextWriter) Sizeln(elems []string) {
 	for i, elem := range elems {
 		w, _ := textSize(elem)
 		if self.meta[i].Width == 0 {
-			self.meta[i].Width = w
-		} else if w > 0 && w > -self.meta[i].Width {
 			self.meta[i].Width = -w
+		} else if self.meta[i].Width < 0 {
+			if w > -self.meta[i].Width {
+				self.meta[i].Width = -w
+			}
 		}
 	}
 }

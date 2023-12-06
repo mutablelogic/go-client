@@ -33,7 +33,8 @@ func NewFlags(name string, args []string, register ...FlagsRegister) (*Flags, er
 	// Register flags
 	flags.Bool("debug", false, "Enable debug logging")
 	flags.Duration("timeout", 0, "Timeout")
-	flags.String("out", "txt", "Output format (txt, csv, tsv, json) or file name (.txt, .csv, .tsv, .json)")
+	flags.String("out", "txt", "Output format <txt|csv|tsv|json> or file name <filename>.<txt|csv|tsv|json>")
+	flags.String("cols", "", "Comma-separated list of columns to output")
 	for _, fn := range register {
 		fn(flags)
 	}

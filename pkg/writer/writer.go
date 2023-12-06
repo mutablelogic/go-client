@@ -38,18 +38,6 @@ func (meta *TableMeta) toString(elems []any, quote bool) ([]string, error) {
 	return meta.rowstr, nil
 }
 
-// Create an array of strings representing the row
-func (meta *TableMeta) toStringAny(elems []any, quote bool) ([]any, error) {
-	for i, elem := range elems {
-		if bytes, err := Marshal(elem, quote); err != nil {
-			return nil, err
-		} else {
-			meta.row[i] = string(bytes)
-		}
-	}
-	return meta.row, nil
-}
-
 func (self *TableWriter) writeCSV(meta *TableMeta, w io.Writer) error {
 	csv := csv.NewWriter(w)
 	csv.Comma = meta.delim
@@ -78,27 +66,36 @@ func (self *TableWriter) writeCSV(meta *TableMeta, w io.Writer) error {
 }
 
 func (self *TableWriter) writeText(meta *TableMeta, w io.Writer) error {
-	text := NewTextWriter(meta.Columns, meta.delim)
+	text := NewTextWriter(meta.Columns)
 
+	var format string
 	for pass := int(0); pass < 2; pass++ {
+		// Set the format string
+		if pass > 0 {
+			format = text.Formatln('|')
+		}
 		// Write header
 		if meta.header {
+			header := meta.Header()
 			if pass == 0 {
-				// TODO: Adjust the column widths
-			} else if err := text.Writeln(w, meta.HeaderAny()); err != nil {
+				// Set maximal widths
+				text.Sizeln(header)
+			} else if err := text.Writeln(w, format, header); err != nil {
 				return err
 			}
 		}
 
 		// Write rows
+		meta.Reset()
 		for elems := meta.NextRow(); elems != nil; elems = meta.NextRow() {
-			row, err := meta.toStringAny(elems, false)
+			row, err := meta.toString(elems, false)
 			if err != nil {
 				return err
 			}
 			if pass == 0 {
-				// TODO: Adjust the column widths
-			} else if err := text.Writeln(w, row); err != nil {
+				// Set maximal widths
+				text.Sizeln(row)
+			} else if err := text.Writeln(w, format, row); err != nil {
 				return err
 			}
 		}

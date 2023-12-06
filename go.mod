@@ -6,6 +6,7 @@ require (
 	github.com/djthorpe/go-errors v1.0.3
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.8.4
+	golang.org/x/exp v0.0.0-20231127185646-65229373498e
 	golang.org/x/term v0.15.0
 )
 

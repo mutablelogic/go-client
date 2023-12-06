@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	// Packages
+	"golang.org/x/exp/slices"
 
 	// Namespace imports
 	. "github.com/djthorpe/go-errors"
@@ -35,16 +36,13 @@ type TableMeta struct {
 }
 
 type ColumnMeta struct {
-	Key     string     // the unique key of the field
-	Name    string     // the name of the field
-	Index   []int      // the index of the field
-	Tuples  []string   // the tuples from the tag
-	NonZero bool       // true if there is a non-zero value in this column
-	Width   int        // the maximum we column
-	Flags   FormatFlag // the formatting for the column
+	Key     string   // the unique key of the field
+	Name    string   // the name of the field
+	Index   []int    // the index of the field
+	Tuples  []string // the tuples from the tag
+	NonZero bool     // true if there is a non-zero value in this column
+	Width   int      // the maximum we column
 }
-
-type FormatFlag uint
 
 ///////////////////////////////////////////////////////////////////////////////
 // GLBOALS
@@ -54,10 +52,7 @@ const (
 	tagWriter        = "writer"
 	nilValue         = "<nil>"
 	defaultTextWidth = 70
-)
-
-const (
-	FormatAlignLeft FormatFlag = 1 << iota
+	tagAlignRight    = "alignright"
 )
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -144,13 +139,9 @@ func (t *TableMeta) Header() []string {
 	return names
 }
 
-// Returns a header for Text output
-func (t *TableMeta) HeaderAny() []any {
-	names := make([]any, len(t.Columns))
-	for i, col := range t.Columns {
-		names[i] = col.Name
-	}
-	return names
+// Reset the iterator
+func (t *TableMeta) Reset() {
+	t.Iterator.Reset()
 }
 
 // Returns the next row of values, or nil if there are no more rows
@@ -172,6 +163,10 @@ func (t *TableMeta) NextRow() []any {
 		t.row[i] = rv.FieldByIndex(col.Index).Interface()
 	}
 	return t.row
+}
+
+func (m ColumnMeta) IsAlignRight() bool {
+	return slices.Contains(m.Tuples, tagAlignRight)
 }
 
 ///////////////////////////////////////////////////////////////////////////////

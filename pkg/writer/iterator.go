@@ -59,6 +59,11 @@ func (i *iterator) String() string {
 // PUBLIC METHODS
 
 // Return the number of elements
+func (i *iterator) Reset() {
+	i.index = 0
+}
+
+// Return the number of elements
 func (i *iterator) Len() int {
 	return i.slice.Len()
 }

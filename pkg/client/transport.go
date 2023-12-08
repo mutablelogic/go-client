@@ -48,10 +48,10 @@ func (transport *logtransport) Payload(v interface{}) {
 
 // RoundTrip is called as part of the request/response cycle
 func (transport *logtransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	fmt.Fprintln(transport.w, "req:", req.Method, redactedUrl(req.URL))
+	fmt.Fprintln(transport.w, "request:", req.Method, redactedUrl(req.URL))
 	if transport.v {
 		for key := range req.Header {
-			fmt.Fprintf(transport.w, "  <= %v: %q\n", key, req.Header.Get(key))
+			fmt.Fprintf(transport.w, "  => %v: %q\n", key, req.Header.Get(key))
 		}
 	}
 	then := time.Now()
@@ -60,11 +60,11 @@ func (transport *logtransport) RoundTrip(req *http.Request) (*http.Response, err
 	}()
 	resp, err := transport.RoundTripper.RoundTrip(req)
 	if err != nil {
-		fmt.Fprintln(transport.w, "  => Error:", err)
+		fmt.Fprintln(transport.w, "error:", err)
 	} else {
-		fmt.Fprintln(transport.w, "  =>", resp.Status)
+		fmt.Fprintln(transport.w, "response:", resp.Status)
 		for k, v := range resp.Header {
-			fmt.Fprintf(transport.w, "  => %v: %q\n", k, v)
+			fmt.Fprintf(transport.w, "  <= %v: %q\n", k, v)
 		}
 		// If verbose is switched on, read the body
 		if transport.v && resp.Body != nil {

@@ -1,48 +1,46 @@
 package openai
 
 import (
-
 	// Packages
-
 	"github.com/mutablelogic/go-client/pkg/client"
 )
 
 ///////////////////////////////////////////////////////////////////////////////
-// SCHEMA
+// API CALLS
 
-type Model struct {
-	Id      string `json:"id"`
-	Object  string `json:"object"`
-	Created int64  `json:"created"`
-	Owner   string `json:"owned_by"`
-}
-
-///////////////////////////////////////////////////////////////////////////////
-// RESPONSES
-
-type modelsResponse struct {
-	Models []Model `json:"data"`
-}
-
-///////////////////////////////////////////////////////////////////////////////
-// PUBLIC METHODS
-
-// Return current set of models
-func (c *Client) Models() ([]Model, error) {
-	var request client.Payload
-	var response modelsResponse
-	if err := c.Do(request, &response, client.OptPath("models")); err != nil {
+// ListModels returns all the models
+func (c *Client) ListModels() ([]Model, error) {
+	// Return the response
+	var response responseListModels
+	payload := client.NewRequest(client.ContentTypeJson)
+	if err := c.Do(payload, &response, client.OptPath("models")); err != nil {
 		return nil, err
 	}
-	return response.Models, nil
+
+	// Return success
+	return response.Data, nil
 }
 
-// Return information on a specific model
-func (c *Client) Model(Id string) (Model, error) {
-	var request client.Payload
+// GetModel returns one model
+func (c *Client) GetModel(model string) (Model, error) {
+	// Return the response
 	var response Model
-	if err := c.Do(request, &response, client.OptPath("models", Id)); err != nil {
+	payload := client.NewRequest(client.ContentTypeJson)
+	if err := c.Do(payload, &response, client.OptPath("models", model)); err != nil {
 		return Model{}, err
 	}
+
+	// Return success
 	return response, nil
+}
+
+// Delete a fine-tuned model. You must have the Owner role in your organization to delete a model.
+func (c *Client) DeleteModel(model string) error {
+	payload := client.NewRequest(client.ContentTypeJson)
+	if err := c.Do(payload.Delete(), nil, client.OptPath("models", model)); err != nil {
+		return err
+	}
+
+	// Return success
+	return nil
 }

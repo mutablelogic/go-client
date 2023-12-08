@@ -1,17 +1,40 @@
 package openai
 
 import (
-	// Packages
-	"fmt"
-
 	"github.com/mutablelogic/go-client/pkg/client"
+
+	// Namespace imports
+	. "github.com/djthorpe/go-errors"
 )
 
 ///////////////////////////////////////////////////////////////////////////////
 // TYPES
 
-type ChatCompletionOpt func(*chatRequest) error
-type ImageOpt func(*imageRequest) error
+// type ChatCompletionOpt func(*chatRequest) error
+// type ImageOpt func(*imageRequest) error
+type Opt func(Request) error
+
+///////////////////////////////////////////////////////////////////////////////
+// CreateEmbedding request options
+
+// Set the model identifier
+func (req *reqCreateEmbedding) setModel(value string) error {
+	if value == "" {
+		return ErrBadParameter.With("Model")
+	} else {
+		req.Model = value
+		return nil
+	}
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// PUBLIC METHODS
+
+func OptModel(value string) Opt {
+	return func(r Request) error {
+		return r.setModel(value)
+	}
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 // PUBLIC METHODS - CLIENT
@@ -21,6 +44,7 @@ func OptOrganization(value string) client.ClientOpt {
 	return client.OptHeader("OpenAI-Organization", value)
 }
 
+/*
 ///////////////////////////////////////////////////////////////////////////////
 // PUBLIC METHODS - CHAT
 
@@ -165,3 +189,4 @@ func OptImageStyle(style string) ImageOpt {
 		return nil
 	}
 }
+*/

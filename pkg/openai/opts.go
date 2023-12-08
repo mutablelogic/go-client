@@ -15,10 +15,20 @@ import (
 type Opt func(Request) error
 
 ///////////////////////////////////////////////////////////////////////////////
-// CreateEmbedding request options
+// setModel
 
 // Set the model identifier
 func (req *reqCreateEmbedding) setModel(value string) error {
+	if value == "" {
+		return ErrBadParameter.With("Model")
+	} else {
+		req.Model = value
+		return nil
+	}
+}
+
+// Set the model identifier
+func (req *reqChat) setModel(value string) error {
 	if value == "" {
 		return ErrBadParameter.With("Model")
 	} else {

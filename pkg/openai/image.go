@@ -1,23 +1,29 @@
 package openai
 
 import (
+	"encoding/base64"
+	"io"
+
 	// Packages
 	"github.com/mutablelogic/go-client/pkg/client"
+
+	// Namespace imports
+	. "github.com/djthorpe/go-errors"
 )
 
 ///////////////////////////////////////////////////////////////////////////////
 // TYPES
 
 type responseImages struct {
-	Created int64   `json:"created"`
-	Data    []Image `json:"data"`
+	Created int64    `json:"created"`
+	Data    []*Image `json:"data"`
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 // API CALLS
 
 // CreateImage generates one or more images from a prompt
-func (c *Client) CreateImages(prompt string, opts ...Opt) ([]Image, error) {
+func (c *Client) CreateImages(prompt string, opts ...Opt) ([]*Image, error) {
 	var request reqImage
 	var response responseImages
 
@@ -38,4 +44,24 @@ func (c *Client) CreateImages(prompt string, opts ...Opt) ([]Image, error) {
 
 	// Return success
 	return response.Data, nil
+}
+
+// WriteImage writes an image and returns the number of bytes written
+func (c *Client) WriteImage(w io.Writer, image *Image) (int, error) {
+	if image == nil {
+		return 0, ErrBadParameter.With("WriteImage")
+	}
+	// Handle url or data
+	switch {
+	case image.Data != "":
+		if data, err := base64.StdEncoding.DecodeString(image.Data); err != nil {
+			return 0, err
+		} else if n, err := w.Write(data); err != nil {
+			return 0, err
+		} else {
+			return n, nil
+		}
+	default:
+		return 0, ErrNotImplemented.With("WriteImage")
+	}
 }

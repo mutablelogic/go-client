@@ -1,6 +1,8 @@
 package openai
 
 import (
+	"fmt"
+
 	"github.com/mutablelogic/go-client/pkg/client"
 )
 
@@ -48,6 +50,13 @@ func OptMaxTokens(value int) Opt {
 	}
 }
 
+// How many chat choices or images to return
+func OptCount(value int) Opt {
+	return func(r Request) error {
+		return r.setCount(value)
+	}
+}
+
 // Format of the returned response, use "json_format" to enable JSON mode, which guarantees
 // the message the model generates is valid JSON.
 // Important: when using JSON mode, you must also instruct the model to produce JSON
@@ -87,6 +96,33 @@ func OptTemperature(value float64) Opt {
 func OptFunction(name, description string, parameters ...ToolParameter) Opt {
 	return func(r Request) error {
 		return r.setFunction(name, description, parameters...)
+	}
+}
+
+// The quality of the image that will be generated. hd creates images with
+// finer details and greater consistency across the image. This param is
+// only supported for dall-e-3.
+func OptQuality(value string) Opt {
+	return func(r Request) error {
+		return r.setQuality(value)
+	}
+}
+
+// The size of the generated images. Must be one of 256x256, 512x512, or 1024x1024 for
+// dall-e-2. Must be one of 1024x1024, 1792x1024, or 1024x1792 for dall-e-3 models.
+func OptSize(w, h uint) Opt {
+	return func(r Request) error {
+		return r.setSize(fmt.Sprintf("%dx%d", w, h))
+	}
+}
+
+// The style of the generated images. Must be one of vivid or natural. Vivid causes
+// the model to lean towards generating hyper-real and dramatic images. Natural causes
+// the model to produce more natural, less hyper-real looking images. This param is
+// only supported for dall-e-3.
+func OptStyle(style string) Opt {
+	return func(r Request) error {
+		return r.setStyle(style)
 	}
 }
 

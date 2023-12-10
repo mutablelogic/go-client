@@ -1,7 +1,8 @@
 package openai
 
 import (
-	// Namespace imports
+	"encoding/json"
+
 	. "github.com/djthorpe/go-errors"
 )
 
@@ -48,16 +49,16 @@ type Chat struct {
 
 // A message choice object
 type MessageChoice struct {
-	Index        int     `json:"index"`
-	FinishReason string  `json:"finish_reason"`
-	Message      Message `json:"message"`
+	Index        int      `json:"index"`
+	FinishReason string   `json:"finish_reason,omitempty"`
+	Message      *Message `json:"message,omitempty"`
 }
 
 // A message choice object
 type Message struct {
-	Role      string  `json:"role"`
-	Content   *string `json:"content"`
-	Name      string  `json:"name,omitempty"`
+	Role      string              `json:"role"`
+	Content   MessageContentArray `json:"content,omitempty"`
+	Name      string              `json:"name,omitempty"`
 	ToolCalls []struct {
 		Id       string `json:"id"`
 		Type     string `json:"type"`
@@ -66,7 +67,28 @@ type Message struct {
 			Arguments string `json:"arguments"`
 		} `json:"function"`
 	} `json:"tool_calls,omitempty"`
-	TollCallId string `json:"tool_call_id,omitempty"`
+	ToolCallId string `json:"tool_call_id,omitempty"`
+}
+
+// A message content array
+type MessageContentArray []MessageContent
+
+// Message content
+type MessageContent struct {
+	Type      string                   `json:"type"`
+	Text      *string                  `json:"text,omitempty"`
+	ImageFile *MessageContentImageFile `json:"image_file,omitempty"`
+	ImageUrl  *MessageContentImageUrl  `json:"image_url,omitempty"`
+}
+
+// Message content image file
+type MessageContentImageFile struct {
+	File string `json:"file_id"`
+}
+
+// Message content image url
+type MessageContentImageUrl struct {
+	Url string `json:"url"`
 }
 
 // A tool
@@ -82,20 +104,27 @@ type ToolFunction struct {
 	Parameters  *ToolParameters `json:"parameters"`
 }
 
-// A tool function parameters
+// Tool function parameters
 type ToolParameters struct {
 	Type       string                   `json:"type"`
 	Properties map[string]ToolParameter `json:"properties"`
 	Required   []string                 `json:"required"`
 }
 
-// A tool function call parameter
+// Tool function call parameter
 type ToolParameter struct {
 	Name        string   `json:"-"`
 	Type        string   `json:"type"`
 	Enum        []string `json:"enum,omitempty"`
 	Description string   `json:"description"`
 	Required    bool     `json:"-"`
+}
+
+// An image
+type Image struct {
+	Url           string `json:"url,omitempty"`
+	Data          string `json:"b64_json,omitempty"`
+	RevisedPrompt string `json:"revised_prompt,omitempty"`
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -108,10 +137,15 @@ type Request interface {
 	setPresencePenalty(float64) error
 	setMaxTokens(int) error
 	setResponseFormat(string) error
+	setCount(int) error
 	setSeed(int) error
 	setStream(bool) error
 	setTemperature(float64) error
 	setFunction(string, string, ...ToolParameter) error
+	setQuality(string) error
+	setSize(string) error
+	setStyle(string) error
+	setUser(string) error
 }
 
 // A request to create embeddings
@@ -125,7 +159,7 @@ type reqCreateEmbedding struct {
 // A request for a chat completion
 type reqChat struct {
 	Model            string             `json:"model"`
-	Messages         []Message          `json:"messages"`
+	Messages         []*Message         `json:"messages,omitempty"`
 	FrequencyPenalty float64            `json:"frequency_penalty,omitempty"`
 	PresencePenalty  float64            `json:"presence_penalty,omitempty"`
 	MaxTokens        int                `json:"max_tokens,omitempty"`
@@ -142,6 +176,18 @@ type reqResponseFormat struct {
 	Type string `json:"type"`
 }
 
+// A request for an image
+type reqImage struct {
+	Prompt         string `json:"prompt"`
+	Model          string `json:"model,omitempty"`
+	Count          int    `json:"n,omitempty"`
+	Quality        string `json:"quality,omitempty"`
+	ResponseFormat string `json:"response_format,omitempty"`
+	Size           string `json:"size,omitempty"`
+	Style          string `json:"style,omitempty"`
+	User           string `json:"user,omitempty"`
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 // RESPONSES
 
@@ -155,6 +201,7 @@ type responseListModels struct {
 var (
 	_ Request = (*reqCreateEmbedding)(nil)
 	_ Request = (*reqChat)(nil)
+	_ Request = (*reqImage)(nil)
 )
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -181,6 +228,10 @@ func (req *reqCreateEmbedding) setMaxTokens(int) error {
 	return ErrBadParameter.With("max_tokens")
 }
 
+func (req *reqCreateEmbedding) setCount(int) error {
+	return ErrBadParameter.With("count")
+}
+
 func (req *reqCreateEmbedding) setResponseFormat(string) error {
 	return ErrBadParameter.With("response_format")
 }
@@ -199,6 +250,22 @@ func (req *reqCreateEmbedding) setTemperature(float64) error {
 
 func (req *reqCreateEmbedding) setFunction(string, string, ...ToolParameter) error {
 	return ErrBadParameter.With("tools")
+}
+
+func (req *reqCreateEmbedding) setQuality(string) error {
+	return ErrBadParameter.With("quality")
+}
+
+func (req *reqCreateEmbedding) setSize(string) error {
+	return ErrBadParameter.With("size")
+}
+
+func (req *reqCreateEmbedding) setStyle(string) error {
+	return ErrBadParameter.With("style")
+}
+
+func (req *reqCreateEmbedding) setUser(string) error {
+	return ErrBadParameter.With("user")
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -227,6 +294,15 @@ func (req *reqChat) setPresencePenalty(value float64) error {
 func (req *reqChat) setMaxTokens(value int) error {
 	req.MaxTokens = value
 	return nil
+}
+
+func (req *reqChat) setCount(value int) error {
+	if value >= 1 {
+		req.Count = value
+		return nil
+	} else {
+		return ErrBadParameter.With("count")
+	}
 }
 
 func (req *reqChat) setResponseFormat(value string) error {
@@ -265,6 +341,22 @@ func (req *reqChat) setFunction(name, description string, parameters ...ToolPara
 	return nil
 }
 
+func (req *reqChat) setQuality(string) error {
+	return ErrBadParameter.With("quality")
+}
+
+func (req *reqChat) setSize(string) error {
+	return ErrBadParameter.With("size")
+}
+
+func (req *reqChat) setStyle(string) error {
+	return ErrBadParameter.With("style")
+}
+
+func (req *reqChat) setUser(string) error {
+	return ErrBadParameter.With("user")
+}
+
 func newToolFunction(name, description string, parameters ...ToolParameter) (*ToolFunction, error) {
 	if name == "" {
 		return nil, ErrBadParameter.With("name")
@@ -297,97 +389,98 @@ func newToolFunction(name, description string, parameters ...ToolParameter) (*To
 	return fn, nil
 }
 
-/*
-///////////////////////////////////////////////////////////////////////////////
-// PUBLIC METHODS - CHAT
+func (c *MessageContentArray) UnmarshalJSON(data []byte) error {
+	// Make an empty array to hold the message content objects
+	*c = make(MessageContentArray, 0, 1)
 
-func OptSeed(value int64) ChatCompletionOpt {
-	return func(r *chatRequest) error {
-		r.Seed = value
+	// If the data is null
+	if string(data) == "null" {
 		return nil
 	}
-}
 
-// If set, partial message deltas will be sent. Tokens will be sent as data-only server-sent events
-// as they become available, with the stream terminated by a data: [DONE] message.
-func OptStream(value bool) ChatCompletionOpt {
-	return func(r *chatRequest) error {
-		r.Stream = value
+	// If the data is a string
+	var str string
+	if err := json.Unmarshal(data, &str); err == nil {
+		*c = append(*c, MessageContent{
+			Type: "text", Text: &str,
+		})
 		return nil
 	}
-}
 
-// What sampling temperature to use, between 0 and 2. Higher values like 0.8 will make the output
-// more random, while lower values like 0.2 will make it more focused and deterministic.
-func OptTemperature(value float32) ChatCompletionOpt {
-	return func(r *chatRequest) error {
-		r.Temperature = value
-		return nil
-	}
-}
-
-// A unique identifier representing your end-user, which can help OpenAI to monitor and detect abuse.
-func OptUser(value string) ChatCompletionOpt {
-	return func(r *chatRequest) error {
-		r.User = value
-		return nil
-	}
+	// Return an error
+	return ErrNotImplemented.Withf("UnmarshalJSON: %q", string(data))
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-// PUBLIC METHODS - IMAGE
+// PRIVATE METHODS - IMAGE
 
-// The model to use for image generation
-func OptImageModel(value string) ImageOpt {
-	return func(r *imageRequest) error {
-		r.Model = value
+func (req *reqImage) setModel(value string) error {
+	if value == "" {
+		return ErrBadParameter.With("model")
+	} else {
+		req.Model = value
 		return nil
 	}
 }
 
-// The number of images to generate
-func OptImageCount(value int) ImageOpt {
-	return func(r *imageRequest) error {
-		r.Count = value
+func (req *reqImage) setFrequencyPenalty(value float64) error {
+	return ErrBadParameter.With("frequency_penalty")
+}
+
+func (req *reqImage) setPresencePenalty(float64) error {
+	return ErrBadParameter.With("presence_penalty")
+}
+
+func (req *reqImage) setMaxTokens(int) error {
+	return ErrBadParameter.With("max_tokens")
+}
+
+func (req *reqImage) setCount(value int) error {
+	if value >= 1 {
+		req.Count = value
 		return nil
+	} else {
+		return ErrBadParameter.With("count")
 	}
 }
 
-// The quality of the image that will be generated. hd creates images with
-// finer details and greater consistency across the image. This param is
-// only supported for dall-e-3.
-func OptImageQuality(value string) ImageOpt {
-	return func(r *imageRequest) error {
-		r.Quality = value
-		return nil
-	}
+func (req *reqImage) setResponseFormat(value string) error {
+	req.ResponseFormat = value
+	return nil
 }
 
-// The format in which the generated images are returned. Must be one of url or b64_json
-func OptImageResponseFormat(value string) ImageOpt {
-	return func(r *imageRequest) error {
-		r.ResponseFormat = value
-		return nil
-	}
+func (req *reqImage) setSeed(int) error {
+	return ErrBadParameter.With("seed")
 }
 
-// The size of the generated images. Must be one of 256x256, 512x512, or 1024x1024 for
-// dall-e-2. Must be one of 1024x1024, 1792x1024, or 1024x1792 for dall-e-3 models.
-func OptImageSize(w, h uint) ImageOpt {
-	return func(r *imageRequest) error {
-		r.Size = fmt.Sprintf("%dx%d", w, h)
-		return nil
-	}
+func (req *reqImage) setStream(bool) error {
+	return ErrBadParameter.With("stream")
 }
 
-// The style of the generated images. Must be one of vivid or natural. Vivid causes
-// the model to lean towards generating hyper-real and dramatic images. Natural causes
-// the model to produce more natural, less hyper-real looking images. This param is
-// only supported for dall-e-3.
-func OptImageStyle(style string) ImageOpt {
-	return func(r *imageRequest) error {
-		r.Style = style
-		return nil
-	}
+func (req *reqImage) setTemperature(float64) error {
+	return ErrBadParameter.With("temperature")
 }
-*/
+
+func (req *reqImage) setFunction(string, string, ...ToolParameter) error {
+	return ErrBadParameter.With("tools")
+}
+
+func (req *reqImage) setQuality(value string) error {
+	req.Quality = value
+	return nil
+}
+
+func (req *reqImage) setSize(value string) error {
+	req.Size = value
+	return nil
+}
+
+func (req *reqImage) setStyle(value string) error {
+	req.Style = value
+	return nil
+}
+
+func (req *reqImage) setUser(value string) error {
+	req.User = value
+	return nil
+}

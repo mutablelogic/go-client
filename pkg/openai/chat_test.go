@@ -16,9 +16,8 @@ func Test_chat_001(t *testing.T) {
 	assert.NoError(err)
 	assert.NotNil(client)
 
-	response, err := client.Chat([]openai.Message{
-		openai.NewUserMessage("What would be the best app to use to get the weather in berlin today?"),
-	})
+	message := openai.NewMessage("user", "What would be the best app to use to get the weather in berlin today?")
+	response, err := client.Chat([]*openai.Message{message})
 	assert.NoError(err)
 	assert.NotNil(response)
 	assert.NotEmpty(response)
@@ -35,9 +34,8 @@ func Test_chat_002(t *testing.T) {
 	assert.NoError(err)
 	assert.NotNil(client)
 
-	response, err := client.Chat([]openai.Message{
-		openai.NewUserMessage("What is the weather in berlin today?"),
-	}, openai.OptFunction("get_weather", "Get the weather in a specific city and country", openai.ToolParameter{
+	message := openai.NewMessage("user", "What will the weather be like in Berlin tomorrow?")
+	response, err := client.Chat([]*openai.Message{message}, openai.OptFunction("get_weather", "Get the weather in a specific city and country", openai.ToolParameter{
 		Name:        "city",
 		Type:        "string",
 		Description: "The city to get the weather for",
@@ -69,10 +67,8 @@ func Test_chat_003(t *testing.T) {
 	assert.NoError(err)
 	assert.NotNil(client)
 
-	response, err := client.Chat([]openai.Message{
-		openai.NewUserMessage("What is in this image"),
-		openai.NewImageMessage("https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/Gfp-wisconsin-madison-the-nature-boardwalk.jpg/2560px-Gfp-wisconsin-madison-the-nature-boardwalk.jpg"),
-	}, openai.OptModel("gpt-4-vision-preview"))
+	message := openai.NewMessage("user", "What is in this image").AppendImageUrl("https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/Gfp-wisconsin-madison-the-nature-boardwalk.jpg/2560px-Gfp-wisconsin-madison-the-nature-boardwalk.jpg")
+	response, err := client.Chat([]*openai.Message{message}, openai.OptModel("gpt-4-vision-preview"))
 	assert.NoError(err)
 	assert.NotNil(response)
 	assert.NotEmpty(response)

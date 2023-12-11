@@ -107,8 +107,8 @@ func (transport *logtransport) RoundTrip(req *http.Request) (*http.Response, err
 ///////////////////////////////////////////////////////////////////////////////
 // PRIVATE METHODS
 
-func (w *readwrapper) Read(b []byte) (n int, err error) {
-	n, err = w.r.Read(b)
+func (w *readwrapper) Read(b []byte) (int, error) {
+	n, err := w.r.Read(b)
 	if err == nil {
 		_, err = w.data.Write(b[:n])
 	}

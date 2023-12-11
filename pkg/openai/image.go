@@ -3,6 +3,7 @@ package openai
 import (
 	"encoding/base64"
 	"io"
+	"net/http"
 
 	// Packages
 	"github.com/mutablelogic/go-client/pkg/client"
@@ -61,7 +62,52 @@ func (c *Client) WriteImage(w io.Writer, image *Image) (int, error) {
 		} else {
 			return n, nil
 		}
+	case image.Url != "":
+		var resp reqUrl
+		if req, err := http.NewRequest(http.MethodGet, image.Url, nil); err != nil {
+			return 0, err
+		} else if err := c.Request(req, &resp, client.OptToken(client.Token{})); err != nil {
+			return 0, err
+		} else {
+			return 0, ErrNotImplemented.With("WriteImage")
+		}
 	default:
 		return 0, ErrNotImplemented.With("WriteImage")
 	}
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// PRIVATE METHODS
+
+type reqUrl struct {
+	w io.Writer
+	n int
+}
+
+func (i *reqUrl) Unmarshal(mimetype string, r io.Reader) error {
+	defer func() {
+		// Close the reader if it's an io.ReadCloser
+		if closer, ok := r.(io.ReadCloser); ok {
+			closer.Close()
+		}
+	}()
+
+	buffer := make([]byte, 1024)
+	for {
+		// Read data from the reader into the buffer
+		bytesRead, err := r.Read(buffer)
+		if err == io.EOF {
+			// If we've reached EOF, break out of the loop
+			break
+		} else if err != nil {
+			return err
+		} else if n, err := i.w.Write(buffer[:bytesRead]); err != nil {
+			return err
+		} else {
+			i.n += n
+		}
+	}
+
+	// Return success
+	return nil
 }

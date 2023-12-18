@@ -7,23 +7,14 @@ import (
 ///////////////////////////////////////////////////////////////////////////////
 // TYPES
 
-type formatType int
 type TableOpt func(*TableMeta) error
-
-///////////////////////////////////////////////////////////////////////////////
-// GLBOALS
-
-const (
-	formatCSV formatType = iota
-	formatText
-)
 
 ///////////////////////////////////////////////////////////////////////////////
 // FUNCTIONS
 
 // Output CSV format, with a delimiter and optional header
 func OptCSV(delim rune, header bool) TableOpt {
-	return func(m *TableMeta) error {
+	return func(m *tableMeta) error {
 		m.format = formatCSV
 		m.delim = delim
 		m.header = header
@@ -39,6 +30,13 @@ func OptText(delim rune, header bool, width uint) TableOpt {
 		m.header = header
 		m.width = width
 		return nil
+	}
+}
+
+// Output columns and in which order
+func OptColumns(col ...string) TableOpt {
+	return func(m *TableMeta) error {
+		return ErrNotImplemented
 	}
 }
 

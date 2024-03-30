@@ -19,6 +19,11 @@ type logtransport struct {
 	v bool
 }
 
+type readwrapper struct {
+	r    io.ReadCloser
+	data bytes.Buffer
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 // LIFECYCLE
 
@@ -48,37 +53,82 @@ func (transport *logtransport) Payload(v interface{}) {
 
 // RoundTrip is called as part of the request/response cycle
 func (transport *logtransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	fmt.Fprintln(transport.w, "req:", req.Method, redactedUrl(req.URL))
+	fmt.Fprintln(transport.w, "request:", req.Method, redactedUrl(req.URL))
 	if transport.v {
 		for key := range req.Header {
-			fmt.Fprintf(transport.w, "  <= %v: %q\n", key, req.Header.Get(key))
+			fmt.Fprintf(transport.w, "  => %v: %q\n", key, req.Header.Get(key))
 		}
 	}
 	then := time.Now()
 	defer func() {
 		fmt.Fprintln(transport.w, "  Took", time.Since(then).Milliseconds(), "ms")
 	}()
+
+	// Wrap the request
+	req.Body = &readwrapper{r: req.Body}
+
+	// Perform the roundtrip
 	resp, err := transport.RoundTripper.RoundTrip(req)
 	if err != nil {
-		fmt.Fprintln(transport.w, "  => Error:", err)
-	} else {
-		fmt.Fprintln(transport.w, "  =>", resp.Status)
-		for k, v := range resp.Header {
-			fmt.Fprintf(transport.w, "  => %v: %q\n", k, v)
-		}
-		// If verbose is switched on, read the body
-		if transport.v && resp.Body != nil {
-			contentType := resp.Header.Get("Content-Type")
-			if contentType == ContentTypeJson || contentType == ContentTypeTextPlain {
-				defer resp.Body.Close()
-				body, err := io.ReadAll(resp.Body)
-				if err == nil {
-					fmt.Fprintln(transport.w, "    ", string(body))
-				}
-				resp.Body = io.NopCloser(bytes.NewReader(body))
-			}
+		fmt.Fprintln(transport.w, "error:", err)
+		return resp, err
+	}
+
+	// If verbose is switched on, output the payload
+	if transport.v {
+		data, err := req.Body.(*readwrapper).as(req.Header.Get("Content-Type"))
+		if err == nil {
+			fmt.Fprintln(transport.w, "   ", string(data))
 		}
 	}
 
+	fmt.Fprintln(transport.w, "response:", resp.Status)
+	for k, v := range resp.Header {
+		fmt.Fprintf(transport.w, "  <= %v: %q\n", k, v)
+	}
+
+	// If verbose is switched on, read the body
+	if transport.v && resp.Body != nil {
+		contentType := resp.Header.Get("Content-Type")
+		if contentType == ContentTypeJson || contentType == ContentTypeTextPlain {
+			defer resp.Body.Close()
+			body, err := io.ReadAll(resp.Body)
+			if err == nil {
+				fmt.Fprintln(transport.w, "    ", string(body))
+			}
+			resp.Body = io.NopCloser(bytes.NewReader(body))
+		}
+	}
+
+	// Return success
 	return resp, err
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// PRIVATE METHODS
+
+func (w *readwrapper) Read(b []byte) (int, error) {
+	n, err := w.r.Read(b)
+	if err == nil {
+		_, err = w.data.Write(b[:n])
+	}
+	return n, err
+}
+
+func (w *readwrapper) Close() error {
+	return w.r.Close()
+}
+
+func (w *readwrapper) as(mimetype string) ([]byte, error) {
+	switch mimetype {
+	case ContentTypeJson:
+		dest := bytes.NewBuffer(nil)
+		if err := json.Indent(dest, w.data.Bytes(), "    ", "  "); err != nil {
+			return nil, err
+		} else {
+			return dest.Bytes(), nil
+		}
+	default:
+		return w.data.Bytes(), nil
+	}
 }

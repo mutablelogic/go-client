@@ -1,79 +1,106 @@
-/* package writer implements a writer for the client package */
 package writer
 
 import (
 	"encoding/csv"
-	"fmt"
 	"io"
-
-	"github.com/djthorpe/go-errors"
 )
-
-///////////////////////////////////////////////////////////////////////////////
-// INTERFACES
-
-// TableWriter is an interface which can be implemented by a type to
-// output formatted table data
-type TableWriter interface {
-	// Return a list of column names
-	Columns() []string
-
-	// Return the number of rows
-	Count() int
-
-	// Return a row of values, or nil if a row does not exist
-	Row(n int) []any
-}
-
-type Writer struct {
-	w io.Writer
-}
 
 ///////////////////////////////////////////////////////////////////////////////
 // PUBLIC METHODS
 
-// Create a new writer which can be used to output data
-func New(w io.Writer) (*Writer, error) {
-	self := new(Writer)
-
-	// Check parameters
-	if w == nil {
-		return nil, errors.ErrBadParameter.With("New")
-	}
-
-	// Initialise
-	self.w = w
-
-	// Return success
-	return self, nil
-}
-
-// Write a table of values
-func (w *Writer) Write(v TableWriter) error {
-	csv := csv.NewWriter(w.w)
-	defer csv.Flush()
-
-	// Write header
-	if err := csv.Write(v.Columns()); err != nil {
+// Write outputs the table to a writer
+func (self *TableWriter) Write(v any, opts ...TableOpt) error {
+	meta, err := self.NewMeta(v, opts...)
+	if err != nil {
 		return err
 	}
 
-	for n := 0; n < v.Count(); n++ {
-		if err := csv.Write(asRowString(v.Row(n))); err != nil {
-			return err
-		}
+	switch meta.format {
+	case formatText:
+		return self.writeText(meta, self.w)
+	default:
+		return self.writeCSV(meta, self.w)
 	}
-	// Return success
-	return nil
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 // PRIVATE METHODS
 
-func asRowString(v []any) []string {
-	str := make([]string, len(v))
-	for n, val := range v {
-		str[n] = fmt.Sprint(val)
+// Create an array of strings representing the row
+func (meta *TableMeta) toString(elems []any, quote bool) ([]string, error) {
+	for i, elem := range elems {
+		if bytes, err := Marshal(elem, quote); err != nil {
+			return nil, err
+		} else {
+			meta.rowstr[i] = string(bytes)
+		}
 	}
-	return str
+	return meta.rowstr, nil
+}
+
+func (self *TableWriter) writeCSV(meta *TableMeta, w io.Writer) error {
+	csv := csv.NewWriter(w)
+	csv.Comma = meta.delim
+
+	// Write header
+	if meta.header {
+		if err := csv.Write(meta.Header()); err != nil {
+			return err
+		}
+	}
+
+	// Write rows
+	for elems := meta.NextRow(); elems != nil; elems = meta.NextRow() {
+		if row, err := meta.toString(elems, false); err != nil {
+			return err
+		} else if err := csv.Write(row); err != nil {
+			return err
+		}
+	}
+
+	// Flush
+	csv.Flush()
+
+	// Return success
+	return nil
+}
+
+func (self *TableWriter) writeText(meta *TableMeta, w io.Writer) error {
+	text := NewTextWriter(meta.Columns)
+
+	var format string
+	for pass := int(0); pass < 2; pass++ {
+		// Set the format string
+		if pass > 0 {
+			format = text.Formatln('|')
+		}
+		// Write header
+		if meta.header {
+			header := meta.Header()
+			if pass == 0 {
+				// Set maximal widths
+				text.Sizeln(header)
+			} else if err := text.Writeln(w, format, header); err != nil {
+				return err
+			}
+		}
+
+		// Write rows
+		meta.Reset()
+		for elems := meta.NextRow(); elems != nil; elems = meta.NextRow() {
+			row, err := meta.toString(elems, false)
+			if err != nil {
+				return err
+			}
+			if pass == 0 {
+				// Set maximal widths
+				text.Sizeln(row)
+			} else if err := text.Writeln(w, format, row); err != nil {
+				return err
+			}
+		}
+	}
+
+	// Return success
+	return nil
 }

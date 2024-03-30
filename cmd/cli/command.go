@@ -1,22 +1,23 @@
 package main
 
 import (
+	"flag"
 	"fmt"
-
-	"golang.org/x/exp/maps"
 )
 
 ///////////////////////////////////////////////////////////////////////////////
 // TYPES
 
 type Client struct {
-	ns  string
-	cmd []Command
+	ns          string
+	description string
+	cmd         []Command
 }
 
 type Command struct {
 	Name        string
 	Description string
+	Syntax      string
 	MinArgs     int
 	MaxArgs     int
 	Fn          CommandFn
@@ -34,11 +35,11 @@ func Run(clients []Client, flags *Flags) error {
 	}
 
 	if flags.NArg() == 0 {
-		return fmt.Errorf("no command specified, available commands are: %q", maps.Keys(ns))
+		return flag.ErrHelp
 	}
 	cmd, exists := ns[flags.Arg(0)]
 	if !exists {
-		return fmt.Errorf("unknown command: %q, available commands are: %q", flags.Arg(0), maps.Keys(ns))
+		return flag.ErrHelp
 	}
 
 	var fn CommandFn
@@ -66,5 +67,34 @@ func Run(clients []Client, flags *Flags) error {
 		return fmt.Errorf("no command matched for: %q", flags.Args())
 	} else {
 		return fn()
+	}
+}
+
+func PrintCommands(flags *Flags, clients []Client) {
+	for i, client := range clients {
+		if len(client.cmd) == 0 {
+			continue
+		}
+		if i > 0 {
+			fmt.Fprintln(flags.Output())
+		}
+		fmt.Fprintf(flags.Output(), "  %s:\n", client.ns)
+		if client.description != "" {
+			fmt.Fprintf(flags.Output(), "   %s\n", client.description)
+		}
+		for _, cmd := range client.cmd {
+			if cmd.MinArgs == 0 && cmd.MaxArgs == 0 {
+				fmt.Fprintf(flags.Output(), "    %s %s", flags.Name(), client.ns)
+			} else {
+				fmt.Fprintf(flags.Output(), "    %s %s %s", flags.Name(), client.ns, cmd.Name)
+			}
+			if cmd.Syntax != "" {
+				fmt.Fprintf(flags.Output(), " %s", cmd.Syntax)
+			}
+			if cmd.Description != "" {
+				fmt.Fprintf(flags.Output(), "\n      %s", cmd.Description)
+			}
+			fmt.Fprintln(flags.Output())
+		}
 	}
 }

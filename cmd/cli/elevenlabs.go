@@ -1,14 +1,28 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
+	"regexp"
+	"strings"
 
 	// Packages
 	"github.com/mutablelogic/go-client/pkg/client"
 	"github.com/mutablelogic/go-client/pkg/elevenlabs"
+
+	// Namespace imports
+	. "github.com/djthorpe/go-errors"
 )
+
+/////////////////////////////////////////////////////////////////////
+// GLOBALS
+
+var (
+	reVoiceId = regexp.MustCompile("^[a-zA-Z0-9]{20}$")
+)
+
+/////////////////////////////////////////////////////////////////////
+// REGISTER FUNCTIONS
 
 func ElevenlabsFlags(flags *Flags) {
 	flags.String("elevenlabs-api-key", "${ELEVENLABS_API_KEY}", "ElevenLabs API key")
@@ -32,9 +46,10 @@ func ElevenlabsRegister(cmd []Client, opts []client.ClientOpt, flags *Flags) ([]
 	cmd = append(cmd, Client{
 		ns: "elevenlabs",
 		cmd: []Command{
-			{Name: "voices", Description: "Return registered voices", MinArgs: 2, MaxArgs: 2, Fn: ElevenlabsVoices(elevenlabs, flags)},
-			{Name: "voice", Description: "Return a voice", MinArgs: 3, MaxArgs: 3, Fn: ElevenlabsVoice(elevenlabs, flags)},
-			{Name: "tts", Description: "Text-to-speech", MinArgs: 3, MaxArgs: 3, Fn: ElevenlabsTextToSpeech(elevenlabs, flags)},
+			{Name: "voices", Description: "Return registered voices", MinArgs: 2, MaxArgs: 2, Fn: elevenlabsVoices(elevenlabs, flags)},
+			{Name: "voice", Description: "Return a voice", Syntax: "<voice>", MinArgs: 3, MaxArgs: 3, Fn: elevenlabsVoice(elevenlabs, flags)},
+			{Name: "preview", Description: "Preview a voice", Syntax: "<voice>", MinArgs: 3, MaxArgs: 3, Fn: elevenlabsVoicePreview(elevenlabs, flags)},
+			{Name: "say", Description: "Text-to-speech", Syntax: "<voice> <text>", MinArgs: 3, MaxArgs: 3, Fn: elevenlabsTextToSpeech(elevenlabs, flags)},
 		},
 	})
 
@@ -42,33 +57,49 @@ func ElevenlabsRegister(cmd []Client, opts []client.ClientOpt, flags *Flags) ([]
 	return cmd, nil
 }
 
-func ElevenlabsVoices(client *elevenlabs.Client, flags *Flags) CommandFn {
+/////////////////////////////////////////////////////////////////////
+// API CALL FUNCTIONS
+
+func elevenlabsVoices(client *elevenlabs.Client, flags *Flags) CommandFn {
 	return func() error {
 		if voices, err := client.Voices(); err != nil {
 			return err
-		} else if data, err := json.MarshalIndent(voices, "", "  "); err != nil {
-			return err
 		} else {
-			fmt.Printf("Voices: %s\n", data)
+			return flags.Write(voices)
 		}
-		return nil
 	}
 }
 
-func ElevenlabsVoice(client *elevenlabs.Client, flags *Flags) CommandFn {
+func elevenlabsVoice(client *elevenlabs.Client, flags *Flags) CommandFn {
 	return func() error {
-		if voice, err := client.Voice(flags.Arg(2)); err != nil {
+		voice, err := elevenlabsGetVoiceId(client, flags.Arg(2))
+		if err != nil {
 			return err
-		} else if data, err := json.MarshalIndent(voice, "", "  "); err != nil {
+		} else if voice, err := client.Voice(voice); err != nil {
 			return err
 		} else {
-			fmt.Printf("%s\n", data)
+			return flags.Write(voice)
 		}
-		return nil
 	}
 }
 
-func ElevenlabsTextToSpeech(client *elevenlabs.Client, flags *Flags) CommandFn {
+func elevenlabsVoicePreview(client *elevenlabs.Client, flags *Flags) CommandFn {
+	return func() error {
+		voice, err := elevenlabsGetVoiceId(client, flags.Arg(2))
+		if err != nil {
+			return err
+		} else if voice, err := client.Voice(voice); err != nil {
+			return err
+		} else if voice.PreviewUrl == "" {
+			return ErrNotFound.Withf("%q", flags.Arg(2))
+		} else {
+			fmt.Println(voice.PreviewUrl)
+			return nil
+		}
+	}
+}
+
+func elevenlabsTextToSpeech(client *elevenlabs.Client, flags *Flags) CommandFn {
 	return func() error {
 		// Determine the voice to use
 		voice, err := flags.GetString("elevenlabs-voice")
@@ -76,6 +107,10 @@ func ElevenlabsTextToSpeech(client *elevenlabs.Client, flags *Flags) CommandFn {
 			return err
 		} else if voice == "" {
 			return fmt.Errorf("missing argument: -elevenlabs-voice")
+		}
+		voice, err = elevenlabsGetVoiceId(client, voice)
+		if err != nil {
+			return err
 		}
 
 		data, err := client.TextToSpeech(flags.Arg(2), voice)
@@ -86,4 +121,23 @@ func ElevenlabsTextToSpeech(client *elevenlabs.Client, flags *Flags) CommandFn {
 		}
 		return nil
 	}
+}
+
+/////////////////////////////////////////////////////////////////////
+// PRIVATE METHODS
+
+// return a voice-id given a parameter, which can be a voice-id or name
+func elevenlabsGetVoiceId(client *elevenlabs.Client, voice string) (string, error) {
+	if reVoiceId.MatchString(voice) {
+		return voice, nil
+	} else if voices, err := client.Voices(); err != nil {
+		return "", err
+	} else {
+		for _, v := range voices {
+			if strings.EqualFold(v.Name, voice) || v.Id == voice {
+				return v.Id, nil
+			}
+		}
+	}
+	return "", ErrNotFound.Withf("%q", voice)
 }

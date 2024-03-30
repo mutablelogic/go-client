@@ -1,16 +1,24 @@
 package main
 
 import (
-	"encoding/json"
+	// Packages
+
 	"fmt"
 
-	// Packages
 	"github.com/mutablelogic/go-client/pkg/client"
 	"github.com/mutablelogic/go-client/pkg/openai"
+
+	// Namespace imports
+	. "github.com/djthorpe/go-errors"
 )
+
+/////////////////////////////////////////////////////////////////////
+// REGISTER FUNCTIONS
 
 func OpenAIFlags(flags *Flags) {
 	flags.String("openai-api-key", "${OPENAI_API_KEY}", "OpenAI API key")
+	flags.String("openai-model", "", "OpenAI Model")
+	flags.Uint("openai-count", 0, "Number of results to return")
 }
 
 func OpenAIRegister(cmd []Client, opts []client.ClientOpt, flags *Flags) ([]Client, error) {
@@ -30,8 +38,9 @@ func OpenAIRegister(cmd []Client, opts []client.ClientOpt, flags *Flags) ([]Clie
 	cmd = append(cmd, Client{
 		ns: "openai",
 		cmd: []Command{
-			{Name: "models", Description: "Return registered models", MinArgs: 2, MaxArgs: 2, Fn: OpenAIModels(openai, flags)},
-			{Name: "model", Description: "Return model information", MinArgs: 3, MaxArgs: 3, Fn: OpenAIModel(openai, flags)},
+			{Name: "models", Description: "Return registered models", MinArgs: 2, MaxArgs: 2, Fn: openaiModels(openai, flags)},
+			{Name: "model", Description: "Return model information", Syntax: "<model>", MinArgs: 3, MaxArgs: 3, Fn: openaiModel(openai, flags)},
+			{Name: "image", Description: "Generate an image", Syntax: "<prompt>", MinArgs: 3, MaxArgs: 3, Fn: openaiImage(openai, flags)},
 		},
 	})
 
@@ -39,28 +48,71 @@ func OpenAIRegister(cmd []Client, opts []client.ClientOpt, flags *Flags) ([]Clie
 	return cmd, nil
 }
 
-func OpenAIModels(client *openai.Client, flags *Flags) CommandFn {
+/////////////////////////////////////////////////////////////////////
+// API CALLS
+
+func openaiModels(client *openai.Client, flags *Flags) CommandFn {
 	return func() error {
 		if models, err := client.Models(); err != nil {
 			return err
-		} else if data, err := json.MarshalIndent(models, "", "  "); err != nil {
+		} else if err := flags.Write(models); err != nil {
 			return err
-		} else {
-			fmt.Printf("Models: %s\n", data)
 		}
 		return nil
 	}
 }
 
-func OpenAIModel(client *openai.Client, flags *Flags) CommandFn {
+func openaiModel(client *openai.Client, flags *Flags) CommandFn {
 	return func() error {
 		if model, err := client.Model(flags.Arg(2)); err != nil {
 			return err
-		} else if data, err := json.MarshalIndent(model, "", "  "); err != nil {
+		} else if err := flags.Write(model); err != nil {
 			return err
-		} else {
-			fmt.Printf("%s\n", data)
 		}
+		return nil
+	}
+}
+
+// generate an image
+func openaiImage(client *openai.Client, flags *Flags) CommandFn {
+	return func() error {
+		// Set options
+		opts := []openai.ImageOpt{
+			openai.OptImageModel("dall-e-3"),
+		}
+		if model, err := flags.GetString("openai-model"); err != nil {
+			return err
+		} else if model != "" {
+			opts = append(opts, openai.OptImageModel(model))
+		}
+		if count, err := flags.GetUint("openai-count"); err != nil {
+			return err
+		} else if count > 0 {
+			opts = append(opts, openai.OptImageCount(int(count)))
+		}
+
+		// Call API
+		prompt := flags.Arg(2)
+		images, err := client.ImageGenerate(prompt, opts...)
+		if err != nil {
+			return err
+		} else if len(images) == 0 {
+			return ErrInternalAppError.With("No images returned")
+		}
+
+		// Write images out
+		for i, image := range images {
+			if filename, err := image.Filename(); err != nil {
+				return err
+			} else {
+				filename := flags.GetOutFilename(filename, uint(i))
+				fmt.Println(i, filename)
+			}
+			//if _, err := image.Write(client, flags.Output()); err != nil {
+			//	return err
+			//}
+		}
+		// Return success
 		return nil
 	}
 }

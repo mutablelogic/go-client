@@ -1,4 +1,4 @@
-package writer
+package tablewriter
 
 import (
 	"fmt"
@@ -21,18 +21,15 @@ type TableWriter struct {
 	w io.Writer
 }
 
-type TableMeta struct {
+type tableMeta struct {
 	Type     reflect.Type // The underlying type
 	Columns  []ColumnMeta // The columns for the table
 	Iterator *iterator    // The iterator for the rows
 
-	format formatType // The output format for the table
-	delim  rune       // The delimiter for CSV or text format
-	header bool       // True if a header should be output
-	width  uint       // The width of the table
-	row    []any      // The current row
-	rowstr []string   // The current row as strings
-	nilstr string     // The string to output for nil values
+	delim  rune  // The delimiter for CSV or text format
+	header bool  // True if a header should be output
+	width  uint  // The width of the table
+	row    []any // The current row
 }
 
 type ColumnMeta struct {
@@ -73,8 +70,8 @@ func New(w io.Writer) *TableWriter {
 
 // returns a new metadata object, from a single struct
 // value or an array of one or more struct values which are of the same type
-func (t *TableWriter) NewMeta(v any, opts ...TableOpt) (*TableMeta, error) {
-	self := new(TableMeta)
+func (t *TableWriter) NewMeta(v any, opts ...TableOpt) (*tableMeta, error) {
+	self := new(tableMeta)
 
 	// Set parameters
 	if rt, _, err := typeOf(v); err != nil {
@@ -90,10 +87,8 @@ func (t *TableWriter) NewMeta(v any, opts ...TableOpt) (*TableMeta, error) {
 	}
 
 	// Set defaults
-	self.format = formatCSV
-	self.delim = ','
+	self.delim = '|'
 	self.header = true
-	self.nilstr = nilValue
 
 	// Set options
 	for _, opt := range opts {
@@ -102,9 +97,8 @@ func (t *TableWriter) NewMeta(v any, opts ...TableOpt) (*TableMeta, error) {
 		}
 	}
 
-	// We allocate a row of values and strings so we can reuse them
+	// Allocate row
 	self.row = make([]any, len(self.Columns))
-	self.rowstr = make([]string, len(self.Columns))
 
 	// Return success
 	return self, nil
@@ -118,7 +112,7 @@ func (t *TableWriter) String() string {
 	return str + ">"
 }
 
-func (t *TableMeta) String() string {
+func (t *tableMeta) String() string {
 	str := "<tablemeta"
 	str += " type=" + t.Type.String()
 	str += " columns=" + fmt.Sprint(t.Columns)
@@ -130,22 +124,8 @@ func (t *TableMeta) String() string {
 ///////////////////////////////////////////////////////////////////////////////
 // PUBLIC METHODS
 
-// Returns a header for CSV output
-func (t *TableMeta) Header() []string {
-	names := make([]string, len(t.Columns))
-	for i, col := range t.Columns {
-		names[i] = col.Name
-	}
-	return names
-}
-
-// Reset the iterator
-func (t *TableMeta) Reset() {
-	t.Iterator.Reset()
-}
-
 // Returns the next row of values, or nil if there are no more rows
-func (t *TableMeta) NextRow() []any {
+func (t *tableMeta) NextRow() []any {
 	value := t.Iterator.Next()
 	if value == nil {
 		return nil
@@ -163,6 +143,27 @@ func (t *TableMeta) NextRow() []any {
 		t.row[i] = rv.FieldByIndex(col.Index).Interface()
 	}
 	return t.row
+}
+
+// Create a format string for the writer
+func (t *tableMeta) Formatln(delim rune) string {
+	// Create the format from the column metadata
+	f := new(strings.Builder)
+	f.WriteRune(delim)
+	for _, column := range t.Columns {
+		f.WriteRune('%')
+		if !column.IsAlignRight() {
+			f.WriteRune('-')
+		}
+		if column.Width > 0 {
+			f.WriteString(fmt.Sprint(column.Width))
+		} else if column.Width < 0 {
+			f.WriteString(fmt.Sprint(-column.Width))
+		}
+		f.WriteRune('s')
+		f.WriteRune(delim)
+	}
+	return f.String()
 }
 
 func (m ColumnMeta) IsAlignRight() bool {

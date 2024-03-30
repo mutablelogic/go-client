@@ -1,6 +1,8 @@
 package elevenlabs
 
 import (
+	"bytes"
+	"fmt"
 	"net/http"
 
 	// Packages
@@ -144,4 +146,20 @@ func (voiceAddRequest) Type() string {
 
 func (voiceAddRequest) Accept() string {
 	return client.ContentTypeForm
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// MARSHAL
+
+func (v VoiceSettings) Marshal() ([]byte, error) {
+	data := new(bytes.Buffer)
+	data.Write([]byte(fmt.Sprintf("similarity_boost=%v\n", v.SimilarityBoost)))
+	data.Write([]byte(fmt.Sprintf("stability=%v\n", v.Stability)))
+	if v.Style != 0 {
+		data.Write([]byte(fmt.Sprintf("style=%v\n", v.Style)))
+	}
+	if v.UseSpeakerBoost {
+		data.Write([]byte(fmt.Sprintf("use_speaker_boost=%v\n", v.UseSpeakerBoost)))
+	}
+	return data.Bytes(), nil
 }

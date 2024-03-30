@@ -5,7 +5,6 @@ to test the client package.
 package ipify
 
 import (
-	"net/http"
 	"net/url"
 
 	// Packages
@@ -19,35 +18,20 @@ type Client struct {
 	*client.Client
 }
 
-///////////////////////////////////////////////////////////////////////////////
-// GLOBALS
-
-const (
-	endPoint = "https://api.ipify.org/"
-)
-
-///////////////////////////////////////////////////////////////////////////////
-// SCHEMA
-
 type Request struct {
-	client.Payload `json:"-"`
+	client.Request
 }
 
 type Response struct {
 	IP string `json:"ip"`
 }
 
-func (r Request) Method() string {
-	return http.MethodGet
-}
+///////////////////////////////////////////////////////////////////////////////
+// GLOBALS
 
-func (r Request) Type() string {
-	return ""
-}
-
-func (r Request) Accept() string {
-	return client.ContentTypeJson
-}
+const (
+	endPoint = "https://api.ipify.org/"
+)
 
 ///////////////////////////////////////////////////////////////////////////////
 // LIFECYCLE
@@ -70,30 +54,8 @@ func New(opts ...client.ClientOpt) (*Client, error) {
 // Get returns the current IP address from the API
 func (c *Client) Get() (Response, error) {
 	var response Response
-	if err := c.Do(nil, &response, client.OptQuery(url.Values{"format": []string{"json"}})); err != nil {
+	if err := c.Do(client.NewRequest(client.ContentTypeJson), &response, client.OptQuery(url.Values{"format": []string{"json"}})); err != nil {
 		return Response{}, err
 	}
 	return response, nil
-}
-
-///////////////////////////////////////////////////////////////////////////////
-// WRITER IMPLEMENTATION
-
-func (Response) Columns() []string {
-	return []string{"IP"}
-}
-
-func (r Response) Count() int {
-	if r.IP == "" {
-		return 0
-	} else {
-		return 1
-	}
-}
-
-func (r Response) Row(n int) []any {
-	if n != 0 {
-		return nil
-	}
-	return []any{r.IP}
 }

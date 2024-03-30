@@ -7,11 +7,12 @@ import (
 	"path"
 
 	"github.com/mutablelogic/go-client/pkg/client"
+	"github.com/pkg/errors"
 )
 
 func main() {
 	name := path.Base(os.Args[0])
-	flags, err := NewFlags(name, os.Args[1:], ElevenlabsFlags, OpenAIFlags)
+	flags, err := NewFlags(name, os.Args[1:], OpenAIFlags)
 	if err != nil {
 		if err != flag.ErrHelp {
 			fmt.Fprintln(os.Stderr, err)
@@ -37,11 +38,11 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	cmd, err = ElevenlabsRegister(cmd, opts, flags)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
+	/*	cmd, err = ElevenlabsRegister(cmd, opts, flags)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}*/
 	cmd, err = OpenAIRegister(cmd, opts, flags)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -50,7 +51,11 @@ func main() {
 
 	// Run command
 	if err := Run(cmd, flags); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		if errors.Is(err, flag.ErrHelp) {
+			PrintCommands(flags, cmd)
+		} else {
+			fmt.Fprintln(os.Stderr, err)
+		}
 		os.Exit(1)
 	}
 }

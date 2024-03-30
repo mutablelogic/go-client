@@ -1,11 +1,11 @@
-package writer_test
+package tablewriter_test
 
 import (
 	"encoding/json"
 	"testing"
 
 	// Packages
-	writer "github.com/mutablelogic/go-client/pkg/writer"
+	writer "github.com/mutablelogic/go-client/pkg/tablewriter"
 	assert "github.com/stretchr/testify/assert"
 )
 

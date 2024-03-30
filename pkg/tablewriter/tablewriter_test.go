@@ -1,4 +1,4 @@
-package writer_test
+package tablewriter_test
 
 import (
 	"os"
@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	// Packages
-	writer "github.com/mutablelogic/go-client/pkg/writer"
+	writer "github.com/mutablelogic/go-client/pkg/tablewriter"
 	assert "github.com/stretchr/testify/assert"
 )
 
@@ -26,7 +26,7 @@ type TestCD struct {
 ///////////////////////////////////////////////////////////////////////////////
 // TEST CASES
 
-func Test_table_000(t *testing.T) {
+func Test_tablewriter_000(t *testing.T) {
 	assert := assert.New(t)
 	w := writer.New(os.Stdout)
 	meta, err := w.NewMeta(TestAB{})
@@ -35,14 +35,14 @@ func Test_table_000(t *testing.T) {
 	assert.Equal(reflect.TypeOf(TestAB{}), meta.Type)
 }
 
-func Test_table_001(t *testing.T) {
+func Test_tablewriter_001(t *testing.T) {
 	assert := assert.New(t)
 	w := writer.New(os.Stdout)
 	_, err := w.NewMeta(nil)
 	assert.Error(err)
 }
 
-func Test_table_002(t *testing.T) {
+func Test_tablewriter_002(t *testing.T) {
 	assert := assert.New(t)
 	w := writer.New(os.Stdout)
 	meta, err := w.NewMeta([]TestAB{{}, {}})
@@ -50,7 +50,7 @@ func Test_table_002(t *testing.T) {
 	assert.Equal(reflect.TypeOf(TestAB{}), meta.Type)
 }
 
-func Test_table_003(t *testing.T) {
+func Test_tablewriter_003(t *testing.T) {
 	assert := assert.New(t)
 	w := writer.New(os.Stdout)
 	meta, err := w.NewMeta(&TestAB{})
@@ -58,7 +58,7 @@ func Test_table_003(t *testing.T) {
 	assert.Equal(reflect.TypeOf(TestAB{}), meta.Type)
 }
 
-func Test_table_004(t *testing.T) {
+func Test_tablewriter_004(t *testing.T) {
 	assert := assert.New(t)
 	w := writer.New(os.Stdout)
 	meta, err := w.NewMeta(&TestAB{})
@@ -70,7 +70,7 @@ func Test_table_004(t *testing.T) {
 	}, meta.Columns)
 }
 
-func Test_table_005(t *testing.T) {
+func Test_tablewriter_005(t *testing.T) {
 	assert := assert.New(t)
 	w := writer.New(os.Stdout)
 	meta, err := w.NewMeta(&TestCD{})
@@ -82,7 +82,7 @@ func Test_table_005(t *testing.T) {
 	}, meta.Columns)
 }
 
-func Test_table_006(t *testing.T) {
+func Test_tablewriter_006(t *testing.T) {
 	assert := assert.New(t)
 	w := writer.New(os.Stdout)
 	meta, err := w.NewMeta([]TestCD{

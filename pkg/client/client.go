@@ -1,7 +1,6 @@
 package client
 
 import (
-	"bytes"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
@@ -49,7 +48,7 @@ type RequestOpt func(*http.Request) error
 // GLOBALS
 
 const (
-	DefaultTimeout            = time.Second * 10
+	DefaultTimeout            = time.Second * 30
 	DefaultUserAgent          = "github.com/mutablelogic/go-client"
 	PathSeparator             = string(os.PathSeparator)
 	ContentTypeJson           = "application/json"
@@ -129,32 +128,24 @@ func (client *Client) Do(in Payload, out any, opts ...RequestOpt) error {
 	}(now)
 
 	// Make a request
-	var body io.Reader
 	var method string = http.MethodGet
 	var accept, mimetype string
 	if in != nil {
-		if in.Type() != "" {
-			data, err := json.Marshal(in)
-			if err != nil {
-				return err
-			}
-			body = bytes.NewReader(data)
-		}
 		method = in.Method()
 		accept = in.Accept()
 		mimetype = in.Type()
 	}
-	req, err := client.request(method, accept, mimetype, body)
+	req, err := client.request(method, accept, mimetype, in)
 	if err != nil {
 		return err
 	}
 
 	// If debug, then log the payload
-	if debug, ok := client.Client.Transport.(*logtransport); ok {
-		if body != nil {
-			debug.Payload(in)
-		}
-	}
+	//if debug, ok := client.Client.Transport.(*logtransport); ok {
+	//	if body != nil {
+	//		debug.Payload(in)
+	//	}
+	//}
 
 	// If client token is set, then add to request
 	if client.token.Scheme != "" && client.token.Value != "" {

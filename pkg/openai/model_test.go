@@ -16,7 +16,7 @@ func Test_models_001(t *testing.T) {
 	client, err := openai.New(GetApiKey(t), opts.OptTrace(os.Stderr, true))
 	assert.NoError(err)
 	assert.NotNil(client)
-	response, err := client.Models()
+	response, err := client.ListModels()
 	assert.NoError(err)
 	assert.NotEmpty(response)
 	data, err := json.MarshalIndent(response, "", "  ")
@@ -29,12 +29,12 @@ func Test_models_002(t *testing.T) {
 	client, err := openai.New(GetApiKey(t), opts.OptTrace(os.Stderr, true))
 	assert.NoError(err)
 	assert.NotNil(client)
-	response, err := client.Models()
+	response, err := client.ListModels()
 	assert.NoError(err)
 	assert.NotEmpty(response)
 
 	for _, model := range response {
-		model, err := client.Model(model.Id)
+		model, err := client.GetModel(model.Id)
 		assert.NoError(err)
 		assert.NotEmpty(model)
 		data, err := json.MarshalIndent(model, "", "  ")

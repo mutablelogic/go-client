@@ -2,6 +2,8 @@ package openai
 
 import (
 	// Packages
+	"strings"
+
 	"github.com/mutablelogic/go-client/pkg/client"
 )
 
@@ -48,6 +50,17 @@ func (msg *Message) AppendImageFile(file ...string) *Message {
 		})
 	}
 	return msg
+}
+
+// Return the text of the message
+func (arr MessageContentArray) Flatten() string {
+	var content []string
+	for _, v := range arr {
+		if v.Text != nil {
+			content = append(content, *v.Text)
+		}
+	}
+	return strings.Join(content, "\n")
 }
 
 ///////////////////////////////////////////////////////////////////////////////

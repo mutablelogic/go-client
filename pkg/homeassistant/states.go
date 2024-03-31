@@ -19,13 +19,12 @@ type State struct {
 }
 
 type Sensor struct {
-	Type        string    `json:"type"`
-	Entity      string    `json:"entity_id"`
-	Name        string    `json:"friendly_name"`
-	Value       string    `json:"state,omitempty"`
-	Unit        string    `json:"unit_of_measurement,omitempty"`
-	Class       string    `json:"device_class,omitempty"`
-	LastChanged time.Time `json:"last_changed"`
+	Type   string `json:"type"`
+	Entity string `json:"entity_id"`
+	Name   string `json:"friendly_name"`
+	Value  string `json:"state,omitempty"`
+	Unit   string `json:"unit_of_measurement,omitempty"`
+	Class  string `json:"device_class,omitempty"`
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -60,13 +59,12 @@ func (c *Client) Sensors() ([]Sensor, error) {
 			continue
 		}
 		sensors = append(sensors, Sensor{
-			Type:        "sensor",
-			Entity:      state.Entity,
-			Name:        state.Name(),
-			Value:       state.State,
-			Unit:        state.UnitOfMeasurement(),
-			Class:       state.DeviceClass(),
-			LastChanged: state.LastChanged,
+			Type:   "sensor",
+			Entity: state.Entity,
+			Name:   state.Name(),
+			Value:  state.State,
+			Unit:   state.UnitOfMeasurement(),
+			Class:  state.DeviceClass(),
 		})
 	}
 
@@ -90,12 +88,11 @@ func (c *Client) Actuators() ([]Sensor, error) {
 			continue
 		}
 		sensors = append(sensors, Sensor{
-			Type:        "actuator",
-			Entity:      state.Entity,
-			Name:        state.Name(),
-			Value:       state.State,
-			Class:       state.DeviceClass(),
-			LastChanged: state.LastChanged,
+			Type:   "actuator",
+			Entity: state.Entity,
+			Name:   state.Name(),
+			Value:  state.State,
+			Class:  state.DeviceClass(),
 		})
 	}
 
@@ -119,11 +116,10 @@ func (c *Client) Lights() ([]Sensor, error) {
 			continue
 		}
 		lights = append(lights, Sensor{
-			Type:        "light",
-			Entity:      state.Entity,
-			Name:        state.Name(),
-			Value:       state.State,
-			LastChanged: state.LastChanged,
+			Type:   "light",
+			Entity: state.Entity,
+			Name:   state.Name(),
+			Value:  state.State,
 		})
 	}
 

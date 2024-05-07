@@ -21,7 +21,7 @@ type Client struct {
 
 func New(endPoint, apiKey string, opts ...client.ClientOpt) (*Client, error) {
 	// Add a final slash to the endpoint
-	if endPoint[len(endPoint)-1] != '/' {
+	if len(endPoint) > 0 && endPoint[len(endPoint)-1] != '/' {
 		endPoint += "/"
 	}
 

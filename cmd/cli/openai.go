@@ -1,8 +1,6 @@
 package main
 
 import (
-	"fmt"
-
 	"github.com/mutablelogic/go-client/pkg/client"
 	"github.com/mutablelogic/go-client/pkg/openai"
 )
@@ -29,14 +27,28 @@ func OpenAIRegister(cmd []Client, opts []client.ClientOpt, flags *Flags) ([]Clie
 		return nil, err
 	}
 
-	fmt.Println(openai)
-
 	// Register commands
 	cmd = append(cmd, Client{
-		ns:  "openai",
-		cmd: []Command{},
+		ns: "openai",
+		cmd: []Command{
+			{Name: "models", Description: "Return registered models", MinArgs: 2, MaxArgs: 2, Fn: openaiModels(openai, flags)},
+		},
 	})
 
 	// Return success
 	return cmd, nil
+}
+
+/////////////////////////////////////////////////////////////////////
+// API CALLS
+
+func openaiModels(client *openai.Client, flags *Flags) CommandFn {
+	return func() error {
+		if models, err := client.ListModels(); err != nil {
+			return err
+		} else if err := flags.Write(models); err != nil {
+			return err
+		}
+		return nil
+	}
 }

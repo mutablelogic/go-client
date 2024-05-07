@@ -2,7 +2,7 @@
 GO := $(shell which go)
 
 # Build flags
-BUILD_MODULE := $(shell go list -m)
+BUILD_MODULE := $(shell cat go.mod | head -1 | cut -d ' ' -f 2)
 BUILD_LD_FLAGS += -X $(BUILD_MODULE)/pkg/version.GitSource=${BUILD_MODULE}
 BUILD_LD_FLAGS += -X $(BUILD_MODULE)/pkg/version.GitTag=$(shell git describe --tags --always)
 BUILD_LD_FLAGS += -X $(BUILD_MODULE)/pkg/version.GitBranch=$(shell git name-rev HEAD --name-only --always)

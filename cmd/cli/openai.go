@@ -2,7 +2,6 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -189,7 +188,7 @@ func openaiSpeak(client *openai.Client, flags *Flags) CommandFn {
 			prompt = flags.Arg(2)
 		}
 
-		// Determine the filename
+		// Determine the filename // TODO
 		w, err := os.Create("output.mp3")
 		if err != nil {
 			return err
@@ -197,19 +196,16 @@ func openaiSpeak(client *openai.Client, flags *Flags) CommandFn {
 		defer w.Close()
 
 		// Create the audio
-		response, err := client.Speech(w, voice, prompt, opts...)
-		if err != nil {
+		if _, err := client.Speech(w, voice, prompt, opts...); err != nil {
 			return err
 		}
 
-		// Open images
+		// Open the audio
 		if flags.GetBool("open") {
 			if err := open("output.mp3"); err != nil {
 				return err
 			}
 		}
-
-		fmt.Println(response, "bytes written")
 
 		// Return any errors
 		return nil

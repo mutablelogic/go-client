@@ -109,6 +109,9 @@ func (transport *logtransport) RoundTrip(req *http.Request) (*http.Response, err
 // PRIVATE METHODS
 
 func (w *readwrapper) Read(b []byte) (int, error) {
+	if w.r == nil {
+		return 0, io.EOF
+	}
 	n, err := w.r.Read(b)
 	if err == nil {
 		_, err = w.data.Write(b[:n])
@@ -117,7 +120,11 @@ func (w *readwrapper) Read(b []byte) (int, error) {
 }
 
 func (w *readwrapper) Close() error {
-	return w.r.Close()
+	if w.r != nil {
+		return w.r.Close()
+	} else {
+		return nil
+	}
 }
 
 func (w *readwrapper) as(mimetype string) ([]byte, error) {

@@ -1,11 +1,9 @@
 package elevenlabs
 
 import (
-	"bytes"
-	"fmt"
-	"net/http"
 
 	// Packages
+
 	"github.com/djthorpe/go-errors"
 	"github.com/mutablelogic/go-client/pkg/client"
 )
@@ -70,6 +68,8 @@ func (c *Client) Voice(Id string) (Voice, error) {
 	}
 	return response, nil
 }
+
+/*
 
 // Return voice settings. If Id is empty, then return the default voice settings
 func (c *Client) VoiceSettings(Id string) (VoiceSettings, error) {
@@ -163,3 +163,4 @@ func (v VoiceSettings) Marshal() ([]byte, error) {
 	}
 	return data.Bytes(), nil
 }
+*/

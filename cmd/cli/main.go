@@ -6,13 +6,14 @@ import (
 	"os"
 	"path"
 
+	// Packages
 	"github.com/mutablelogic/go-client/pkg/client"
 	"github.com/pkg/errors"
 )
 
 func main() {
 	name := path.Base(os.Args[0])
-	flags, err := NewFlags(name, os.Args[1:], OpenAIFlags, HomeAssistantFlags)
+	flags, err := NewFlags(name, os.Args[1:], OpenAIFlags, ElevenlabsFlags, HomeAssistantFlags)
 	if err != nil {
 		if err != flag.ErrHelp {
 			fmt.Fprintln(os.Stderr, err)
@@ -33,21 +34,25 @@ func main() {
 
 	// Register commands
 	var cmd []Client
+
 	cmd, err = IpifyRegister(cmd, opts, flags)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	/*	cmd, err = ElevenlabsRegister(cmd, opts, flags)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
-		}*/
+
+	cmd, err = ElevenlabsRegister(cmd, opts, flags)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+
 	cmd, err = OpenAIRegister(cmd, opts, flags)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+
 	cmd, err = HomeAssistantRegister(cmd, opts, flags)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)

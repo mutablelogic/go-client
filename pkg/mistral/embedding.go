@@ -1,4 +1,4 @@
-package openai
+package mistral
 
 import (
 	// Packages
@@ -10,18 +10,21 @@ import (
 )
 
 ///////////////////////////////////////////////////////////////////////////////
+// TYPES
+
+// A request to create embeddings
+type reqCreateEmbedding struct {
+	Input          []string `json:"input"`
+	Model          string   `json:"model"`
+	EncodingFormat string   `json:"encoding_format,omitempty"`
+}
+
+///////////////////////////////////////////////////////////////////////////////
 // API CALLS
 
 // CreateEmbedding creates an embedding from a string or array of strings
-func (c *Client) CreateEmbedding(content any, opts ...Opt) (Embeddings, error) {
-
-	// Apply the options
+func (c *Client) CreateEmbedding(content any) (Embeddings, error) {
 	var request reqCreateEmbedding
-	for _, opt := range opts {
-		if err := opt(&request); err != nil {
-			return Embeddings{}, err
-		}
-	}
 
 	// Set the input, which is either a string or array of strings
 	switch v := content.(type) {

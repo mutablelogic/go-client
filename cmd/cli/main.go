@@ -13,7 +13,7 @@ import (
 
 func main() {
 	name := path.Base(os.Args[0])
-	flags, err := NewFlags(name, os.Args[1:], OpenAIFlags, ElevenlabsFlags, HomeAssistantFlags)
+	flags, err := NewFlags(name, os.Args[1:], OpenAIFlags, MistralFlags, ElevenlabsFlags, HomeAssistantFlags)
 	if err != nil {
 		if err != flag.ErrHelp {
 			fmt.Fprintln(os.Stderr, err)
@@ -48,6 +48,12 @@ func main() {
 	}
 
 	cmd, err = OpenAIRegister(cmd, opts, flags)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+
+	cmd, err = MistralRegister(cmd, opts, flags)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

@@ -3,6 +3,9 @@ package openai
 import (
 	// Packages
 	"github.com/mutablelogic/go-client/pkg/client"
+
+	// Namespace imports
+	. "github.com/mutablelogic/go-client/pkg/openai/schema"
 )
 
 ///////////////////////////////////////////////////////////////////////////////

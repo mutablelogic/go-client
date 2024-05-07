@@ -5,33 +5,11 @@ import (
 
 	// Namespace imports
 	. "github.com/djthorpe/go-errors"
+	. "github.com/mutablelogic/go-client/pkg/openai/schema"
 )
 
 ///////////////////////////////////////////////////////////////////////////////
 // TYPES
-
-// A model object
-type Model struct {
-	Id      string `json:"id"`
-	Created int64  `json:"created"`
-	Owner   string `json:"owned_by"`
-}
-
-// An embedding object
-type Embedding struct {
-	Embedding []float64 `json:"embedding"`
-	Index     int       `json:"index"`
-}
-
-// An set of created embeddings
-type Embeddings struct {
-	Data  []Embedding `json:"data"`
-	Model string      `json:"model"`
-	Usage struct {
-		PromptTokerns int `json:"prompt_tokens"`
-		TotalTokens   int `json:"total_tokens"`
-	} `json:"usage"`
-}
 
 // A chat completion object
 type Chat struct {

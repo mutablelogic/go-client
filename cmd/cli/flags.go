@@ -6,11 +6,14 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	// Packages
-	"github.com/djthorpe/go-errors"
-	"github.com/mutablelogic/go-client/pkg/writer"
+	tablewriter "github.com/djthorpe/go-tablewriter"
+
+	// Namespace imports
+	. "github.com/djthorpe/go-errors"
 )
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -18,7 +21,7 @@ import (
 
 type Flags struct {
 	*flag.FlagSet
-	writer *writer.TableWriter
+	writer *tablewriter.TableWriter
 }
 
 type FlagsRegister func(*Flags)
@@ -33,7 +36,7 @@ func NewFlags(name string, args []string, register ...FlagsRegister) (*Flags, er
 	// Register flags
 	flags.Bool("debug", false, "Enable debug logging")
 	flags.Duration("timeout", 0, "Timeout")
-	flags.String("out", "txt", "Output format <txt|csv|tsv|json> or file name <filename>.<txt|csv|tsv|json>")
+	flags.String("out", "", "Output format or file name")
 	flags.String("cols", "", "Comma-separated list of columns to output")
 	for _, fn := range register {
 		fn(flags)
@@ -45,7 +48,7 @@ func NewFlags(name string, args []string, register ...FlagsRegister) (*Flags, er
 	}
 
 	// Create a writer
-	flags.writer = writer.New(os.Stdout)
+	flags.writer = tablewriter.New(os.Stdout)
 
 	// Return success
 	return flags, nil
@@ -63,13 +66,24 @@ func (flags *Flags) Timeout() time.Duration {
 }
 
 func (flags *Flags) GetOut() string {
-	v, _ := flags.GetString("out")
-	return v
+	return flags.GetString("out")
+}
+
+func (flags *Flags) GetOutExt() string {
+	out := flags.GetOut()
+	if out == "" {
+		return ""
+	}
+	if ext := filepath.Ext(out); ext == "" {
+		return out
+	} else {
+		return strings.TrimPrefix(ext, ".")
+	}
 }
 
 // Return a filename for output, returns an empty string if the output
 // argument is not a filename (it requires an extension)
-func (flags *Flags) GetOutFilename(def string, n uint) string {
+func (flags *Flags) GetOutFilename(def string, n int) string {
 	filename := flags.GetOut()
 	if filename == "" {
 		filename = filepath.Base(def)
@@ -89,38 +103,73 @@ func (flags *Flags) GetOutFilename(def string, n uint) string {
 	return filepath.Clean(filename)
 }
 
-func (flags *Flags) GetString(key string) (string, error) {
+func (flags *Flags) GetString(key string) string {
 	if flag := flags.Lookup(key); flag == nil {
-		return "", errors.ErrNotFound.With(key)
+		return ""
 	} else {
-		return os.ExpandEnv(flag.Value.String()), nil
+		return os.ExpandEnv(flag.Value.String())
 	}
 }
 
 func (flags *Flags) GetUint(key string) (uint, error) {
 	if flag := flags.Lookup(key); flag == nil {
-		return 0, errors.ErrNotFound.With(key)
+		return 0, ErrNotFound.With(key)
 	} else if v, err := strconv.ParseUint(os.ExpandEnv(flag.Value.String()), 10, 64); err != nil {
-		return 0, errors.ErrBadParameter.With(key)
+		return 0, ErrBadParameter.With(key)
 	} else {
 		return uint(v), nil
 	}
 }
 
+func (flags *Flags) GetInt(key string) (int, error) {
+	if flag := flags.Lookup(key); flag == nil {
+		return 0, ErrNotFound.With(key)
+	} else if v, err := strconv.ParseInt(os.ExpandEnv(flag.Value.String()), 10, 64); err != nil {
+		return 0, ErrBadParameter.With(key)
+	} else {
+		return int(v), nil
+	}
+}
+
+func (flags *Flags) GetBool(key string) bool {
+	if flag := flags.Lookup(key); flag == nil {
+		return false
+	} else if v, err := strconv.ParseBool(os.ExpandEnv(flag.Value.String())); err != nil {
+		return false
+	} else {
+		return v
+	}
+}
+
+func (flags *Flags) GetFloat64(key string) *float64 {
+	if flag := flags.Lookup(key); flag == nil {
+		return nil
+	} else if v, err := strconv.ParseFloat(os.ExpandEnv(flag.Value.String()), 64); err != nil {
+		return nil
+	} else {
+		return &v
+	}
+}
+
 func (flags *Flags) Write(v any) error {
-	opts := []writer.TableOpt{}
+	opts := []tablewriter.TableOpt{}
+
+	// Set header
+	opts = append(opts, tablewriter.OptHeader())
 
 	// Set terminal options
-	opts = append(opts, TerminalOpts(flags.Output())...)
+	//opts = append(opts, TerminalOpts(flags.Output())...)
 
 	// Set output options
-	switch flags.GetOut() {
-	case "text", "txt", "ascii":
-		opts = append(opts, writer.OptText('|', true, 0))
-	case "csv":
-		opts = append(opts, writer.OptCSV(',', true))
-	case "tsv":
-		opts = append(opts, writer.OptCSV('\t', true))
-	}
+	/*
+		switch flags.GetOut() {
+		case "text", "txt", "ascii":
+			opts = append(opts, writer.OptText('|', true, 0))
+		case "csv":
+			opts = append(opts, writer.OptCSV(',', true))
+		case "tsv":
+			opts = append(opts, writer.OptCSV('\t', true))
+		}
+	*/
 	return flags.writer.Write(v, opts...)
 }

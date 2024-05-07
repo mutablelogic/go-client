@@ -1,27 +1,30 @@
-package openai
+package mistral
 
 import (
 	// Packages
-	client "github.com/mutablelogic/go-client/pkg/client"
-	schema "github.com/mutablelogic/go-client/pkg/openai/schema"
+	"github.com/mutablelogic/go-client/pkg/client"
 
 	// Namespace imports
 	. "github.com/djthorpe/go-errors"
+	. "github.com/mutablelogic/go-client/pkg/openai/schema"
 )
+
+///////////////////////////////////////////////////////////////////////////////
+// TYPES
+
+// A request to create embeddings
+type reqCreateEmbedding struct {
+	Input          []string `json:"input"`
+	Model          string   `json:"model"`
+	EncodingFormat string   `json:"encoding_format,omitempty"`
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 // API CALLS
 
 // CreateEmbedding creates an embedding from a string or array of strings
-func (c *Client) CreateEmbedding(content any, opts ...Opt) (schema.Embeddings, error) {
-
-	// Apply the options
+func (c *Client) CreateEmbedding(content any) (Embeddings, error) {
 	var request reqCreateEmbedding
-	for _, opt := range opts {
-		if err := opt(&request); err != nil {
-			return schema.Embeddings{}, err
-		}
-	}
 
 	// Set the input, which is either a string or array of strings
 	switch v := content.(type) {
@@ -30,15 +33,15 @@ func (c *Client) CreateEmbedding(content any, opts ...Opt) (schema.Embeddings, e
 	case []string:
 		request.Input = v
 	default:
-		return schema.Embeddings{}, ErrBadParameter
+		return Embeddings{}, ErrBadParameter
 	}
 
 	// Return the response
-	var response schema.Embeddings
+	var response Embeddings
 	if payload, err := client.NewJSONRequest(request, client.ContentTypeJson); err != nil {
-		return schema.Embeddings{}, err
+		return Embeddings{}, err
 	} else if err := c.Do(payload.Post(), &response, client.OptPath("embeddings")); err != nil {
-		return schema.Embeddings{}, err
+		return Embeddings{}, err
 	}
 
 	// Return success

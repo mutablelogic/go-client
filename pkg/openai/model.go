@@ -2,14 +2,15 @@ package openai
 
 import (
 	// Packages
-	"github.com/mutablelogic/go-client/pkg/client"
+	client "github.com/mutablelogic/go-client/pkg/client"
+	schema "github.com/mutablelogic/go-client/pkg/openai/schema"
 )
 
 ///////////////////////////////////////////////////////////////////////////////
 // API CALLS
 
 // ListModels returns all the models
-func (c *Client) ListModels() ([]Model, error) {
+func (c *Client) ListModels() ([]schema.Model, error) {
 	// Return the response
 	var response responseListModels
 	payload := client.NewRequest(client.ContentTypeJson)
@@ -22,12 +23,12 @@ func (c *Client) ListModels() ([]Model, error) {
 }
 
 // GetModel returns one model
-func (c *Client) GetModel(model string) (Model, error) {
+func (c *Client) GetModel(model string) (schema.Model, error) {
 	// Return the response
-	var response Model
+	var response schema.Model
 	payload := client.NewRequest(client.ContentTypeJson)
 	if err := c.Do(payload, &response, client.OptPath("models", model)); err != nil {
-		return Model{}, err
+		return schema.Model{}, err
 	}
 
 	// Return success

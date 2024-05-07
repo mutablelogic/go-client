@@ -64,12 +64,13 @@ func (c *Client) WriteImage(w io.Writer, image *Image) (int, error) {
 		}
 	case image.Url != "":
 		var resp reqUrl
+		resp.w = w
 		if req, err := http.NewRequest(http.MethodGet, image.Url, nil); err != nil {
 			return 0, err
 		} else if err := c.Request(req, &resp, client.OptToken(client.Token{})); err != nil {
 			return 0, err
 		} else {
-			return 0, ErrNotImplemented.With("WriteImage")
+			return resp.n, nil
 		}
 	default:
 		return 0, ErrNotImplemented.With("WriteImage")

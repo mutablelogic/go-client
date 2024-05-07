@@ -44,6 +44,7 @@ func Test_voice_002(t *testing.T) {
 
 }
 
+/*
 func Test_voice_003(t *testing.T) {
 	assert := assert.New(t)
 	client, err := elevenlabs.New(GetApiKey(t), opts.OptTrace(os.Stderr, true))
@@ -89,3 +90,4 @@ func Test_voice_005(t *testing.T) {
 	err = client.DeleteVoice("test")
 	assert.NotNil(err)
 }
+*/

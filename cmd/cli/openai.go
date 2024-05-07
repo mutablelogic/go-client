@@ -62,6 +62,7 @@ func OpenAIRegister(cmd []Client, opts []client.ClientOpt, flags *Flags) ([]Clie
 			{Name: "speak", Description: "Create speech from a prompt", Syntax: "(<voice>) <prompt>", MinArgs: 3, MaxArgs: 4, Fn: openaiSpeak(openai, flags)},
 			{Name: "transcribe", Description: "Transcribe audio to text", Syntax: "<filename>", MinArgs: 3, MaxArgs: 3, Fn: openaiTranscribe(openai, flags)},
 			{Name: "translate", Description: "Translate audio to English", Syntax: "<filename>", MinArgs: 3, MaxArgs: 3, Fn: openaiTranslate(openai, flags)},
+			{Name: "caption", Description: "Provide a caption for an image", Syntax: "<filename>", MinArgs: 3, MaxArgs: 3, Fn: openaiCaption(openai, flags)},
 		},
 	})
 
@@ -280,6 +281,32 @@ func openaiImages(client *openai.Client, flags *Flags) CommandFn {
 
 		// Return any errors
 		return result
+	}
+}
+
+func openaiCaption(client *openai.Client, flags *Flags) CommandFn {
+	return func() error {
+		url, err := url.Parse(flags.Arg(2))
+		if err != nil {
+			return err
+		}
+		message := openai.NewMessage("user", "Provide a short caption for this image")
+		if url.Scheme == "" || url.Scheme == "file" {
+			// TODO: Image needs to be uploaded first
+			message.AppendImageFile(url.Path)
+		} else {
+			message.AppendImageUrl(url.String())
+		}
+		if response, err := client.Chat([]*openai.Message{message}, openai.OptModel("gpt-4-vision-preview")); err != nil {
+			return err
+		} else if len(response.Choices) == 0 {
+			return errors.New("no response from OpenAI")
+		} else if err := flags.Write(response.Choices[0].Message); err != nil {
+			return err
+		}
+
+		// Return success
+		return nil
 	}
 }
 

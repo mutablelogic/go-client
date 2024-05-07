@@ -42,6 +42,8 @@ func OpenAIFlags(flags *Flags) {
 	flags.String("size", "", "Size of output image (256x256, 512x512, 1024x1024, 1792x1024 or 1024x1792)")
 	flags.Bool("open", false, "Open images in default viewer")
 	flags.String("language", "", "Audio language")
+	flags.String("prompt", "", "Text to guide the transcription style or continue a previous audio segment")
+	flags.Float64("temperature", 0, "Sampling temperature for generation")
 }
 
 func OpenAIRegister(cmd []Client, opts []client.ClientOpt, flags *Flags) ([]Client, error) {
@@ -60,6 +62,7 @@ func OpenAIRegister(cmd []Client, opts []client.ClientOpt, flags *Flags) ([]Clie
 			{Name: "image", Description: "Create images from a prompt", Syntax: "<prompt>", MinArgs: 3, MaxArgs: 3, Fn: openaiImages(openai, flags)},
 			{Name: "speak", Description: "Create speech from a prompt", Syntax: "(<voice>) <prompt>", MinArgs: 3, MaxArgs: 4, Fn: openaiSpeak(openai, flags)},
 			{Name: "transcribe", Description: "Transcribe audio to text", Syntax: "<filename>", MinArgs: 3, MaxArgs: 3, Fn: openaiTranscribe(openai, flags)},
+			{Name: "translate", Description: "Translate audio to English", Syntax: "<filename>", MinArgs: 3, MaxArgs: 3, Fn: openaiTranslate(openai, flags)},
 		},
 	})
 
@@ -99,8 +102,50 @@ func openaiTranscribe(client *openai.Client, flags *Flags) CommandFn {
 		if model := flags.GetString("model"); model != "" {
 			opts = append(opts, openai.OptModel(model))
 		}
+		if prompt := flags.GetString("prompt"); prompt != "" {
+			opts = append(opts, openai.OptPrompt(prompt))
+		}
 		if language := flags.GetString("language"); language != "" {
 			opts = append(opts, openai.OptLanguage(language))
+		}
+		if temp := flags.GetFloat64("temperature"); temp != nil && *temp > 0 {
+			opts = append(opts, openai.OptTemperature(*temp))
+		}
+		if format := flags.GetOutExt(); format != "" {
+			opts = append(opts, openai.OptResponseFormat(format))
+		}
+
+		// Open audio file for reading
+		r, err := os.Open(flags.Arg(2))
+		if err != nil {
+			return err
+		}
+		defer r.Close()
+
+		// Perform transcription
+		if transcription, err := client.Transcribe(r, opts...); err != nil {
+			return err
+		} else if err := flags.Write(transcription); err != nil {
+			return err
+		}
+
+		// Return success
+		return nil
+	}
+}
+
+func openaiTranslate(client *openai.Client, flags *Flags) CommandFn {
+	return func() error {
+		// Set options
+		opts := []openai.Opt{}
+		if model := flags.GetString("model"); model != "" {
+			opts = append(opts, openai.OptModel(model))
+		}
+		if prompt := flags.GetString("prompt"); prompt != "" {
+			opts = append(opts, openai.OptPrompt(prompt))
+		}
+		if temp := flags.GetFloat64("temperature"); temp != nil && *temp > 0 {
+			opts = append(opts, openai.OptTemperature(*temp))
 		}
 		if format := flags.GetOutExt(); format != "" {
 			opts = append(opts, openai.OptResponseFormat(format))

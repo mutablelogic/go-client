@@ -36,7 +36,7 @@ func NewFlags(name string, args []string, register ...FlagsRegister) (*Flags, er
 	// Register flags
 	flags.Bool("debug", false, "Enable debug logging")
 	flags.Duration("timeout", 0, "Timeout")
-	flags.String("out", "txt", "Output format <txt|csv|tsv|json> or file name <filename>.<txt|csv|tsv|json>")
+	flags.String("out", "", "Output format or file name")
 	flags.String("cols", "", "Comma-separated list of columns to output")
 	for _, fn := range register {
 		fn(flags)
@@ -138,6 +138,16 @@ func (flags *Flags) GetBool(key string) bool {
 		return false
 	} else {
 		return v
+	}
+}
+
+func (flags *Flags) GetFloat64(key string) *float64 {
+	if flag := flags.Lookup(key); flag == nil {
+		return nil
+	} else if v, err := strconv.ParseFloat(os.ExpandEnv(flag.Value.String()), 64); err != nil {
+		return nil
+	} else {
+		return &v
 	}
 }
 

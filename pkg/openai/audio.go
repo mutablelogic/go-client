@@ -39,22 +39,28 @@ type reqTranscribe struct {
 	TimestampGranularities []string       `json:"timestamp_granularities,omitempty"`
 }
 
+// Represents a transcription response returned by model, based on the provided input.
 type Transcription struct {
 	Task     string  `json:"task,omitempty"`
-	Language string  `json:"language,omitempty"`
-	Duration float64 `json:"duration,omitempty"`
+	Language string  `json:"language,omitempty"` // The language of the input audio.
+	Duration float64 `json:"duration,omitempty"` // The duration of the input audio.
 	Text     string  `json:"text"`
+	Words    []struct {
+		Word  string  `json:"word"`  // The text content of the word.
+		Start float64 `json:"start"` // Start time of the word in seconds.
+		End   float64 `json:"end"`   // End time of the word in seconds.
+	} `json:"words,omitempty"` // Extracted words and their corresponding timestamps.
 	Segments []struct {
 		Id                  uint    `json:"id"`
 		Seek                uint    `json:"seek"`
 		Start               float64 `json:"start"`
 		End                 float64 `json:"end"`
 		Text                string  `json:"text"`
-		Tokens              []uint  `json:"tokens"`
-		Temperature         float64 `json:"temperature,omitempty"`
-		AvgLogProbability   float64 `json:"avg_logprob,omitempty"`
-		CompressionRatio    float64 `json:"compression_ratio,omitempty"`
-		NoSpeechProbability float64 `json:"no_speech_prob,omitempty"`
+		Tokens              []uint  `json:"tokens"`                      // Array of token IDs for the text content.
+		Temperature         float64 `json:"temperature,omitempty"`       // Temperature parameter used for generating the segment.
+		AvgLogProbability   float64 `json:"avg_logprob,omitempty"`       // Average logprob of the segment. If the value is lower than -1, consider the logprobs failed.
+		CompressionRatio    float64 `json:"compression_ratio,omitempty"` // Compression ratio of the segment. If the value is greater than 2.4, consider the compression failed.
+		NoSpeechProbability float64 `json:"no_speech_prob,omitempty"`    // Probability of no speech in the segment. If the value is higher than 1.0 and the avg_logprob is below -1, consider this segment silent.
 	} `json:"segments,omitempty"`
 }
 
@@ -107,7 +113,7 @@ func (c *Client) Transcribe(r io.Reader, opts ...Opt) (*Transcription, error) {
 	// Create the request and set up the response
 	request.Model = defaultTranscribeModel
 	request.File = multipart.File{
-		Path: "output.mp3",
+		Path: "output.mp3", // TODO: Change this
 		Body: r,
 	}
 
@@ -122,6 +128,36 @@ func (c *Client) Transcribe(r io.Reader, opts ...Opt) (*Transcription, error) {
 	if payload, err := client.NewMultipartRequest(request, client.ContentTypeJson); err != nil {
 		return nil, err
 	} else if err := c.Do(payload, response, client.OptPath("audio/transcriptions")); err != nil {
+		return nil, err
+	}
+
+	// Return success
+	return response, nil
+}
+
+// Translate audio into English
+func (c *Client) Translate(r io.Reader, opts ...Opt) (*Transcription, error) {
+	var request reqTranscribe
+	response := new(Transcription)
+
+	// Create the request and set up the response
+	request.Model = defaultTranscribeModel
+	request.File = multipart.File{
+		Path: "output.mp3", // TODO: Change this
+		Body: r,
+	}
+
+	// Set options
+	for _, opt := range opts {
+		if err := opt(&request); err != nil {
+			return nil, err
+		}
+	}
+
+	// Make a response object, write the data
+	if payload, err := client.NewMultipartRequest(request, client.ContentTypeJson); err != nil {
+		return nil, err
+	} else if err := c.Do(payload, response, client.OptPath("audio/translations")); err != nil {
 		return nil, err
 	}
 

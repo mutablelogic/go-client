@@ -26,13 +26,12 @@ type TableMeta struct {
 	Columns  []ColumnMeta // The columns for the table
 	Iterator *iterator    // The iterator for the rows
 
-	format formatType // The output format for the table
-	delim  rune       // The delimiter for CSV or text format
-	header bool       // True if a header should be output
-	width  uint       // The width of the table
-	row    []any      // The current row
-	rowstr []string   // The current row as strings
-	nilstr string     // The string to output for nil values
+	delim  rune     // The delimiter for CSV or text format
+	header bool     // True if a header should be output
+	width  uint     // The width of the table
+	row    []any    // The current row
+	rowstr []string // The current row as strings
+	nilstr string   // The string to output for nil values
 }
 
 type ColumnMeta struct {
@@ -90,7 +89,6 @@ func (t *TableWriter) NewMeta(v any, opts ...TableOpt) (*TableMeta, error) {
 	}
 
 	// Set defaults
-	self.format = formatCSV
 	self.delim = ','
 	self.header = true
 	self.nilstr = nilValue

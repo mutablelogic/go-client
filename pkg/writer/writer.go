@@ -15,12 +15,7 @@ func (self *TableWriter) Write(v any, opts ...TableOpt) error {
 		return err
 	}
 
-	switch meta.format {
-	case formatText:
-		return self.writeText(meta, self.w)
-	default:
-		return self.writeCSV(meta, self.w)
-	}
+	return self.writeText(meta, self.w)
 }
 
 ///////////////////////////////////////////////////////////////////////////////

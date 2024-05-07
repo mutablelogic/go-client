@@ -47,16 +47,3 @@ func Test_writer_002(t *testing.T) {
 	assert.NoError(err)
 	assert.Equal("a,b\nhello,world\ngoodbye,world\n", buf.String())
 }
-
-func Test_writer_003(t *testing.T) {
-	assert := assert.New(t)
-	buf := new(strings.Builder)
-	table := writer.New(buf)
-	assert.NotNil(table)
-	err := table.Write([]*TestAB{
-		{A: "hello", B: "world"},
-		{A: "goodbye", B: "world"},
-	}, writer.OptCSV(';', false))
-	assert.NoError(err)
-	assert.Equal("hello;world\ngoodbye;world\n", buf.String())
-}

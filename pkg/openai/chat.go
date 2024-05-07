@@ -1,9 +1,9 @@
 package openai
 
 import (
-	// Packages
 	"strings"
 
+	// Packages
 	"github.com/mutablelogic/go-client/pkg/client"
 )
 

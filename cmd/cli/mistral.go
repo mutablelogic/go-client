@@ -4,6 +4,7 @@ import (
 	// Package imports
 	"github.com/mutablelogic/go-client/pkg/client"
 	"github.com/mutablelogic/go-client/pkg/mistral"
+	"github.com/mutablelogic/go-client/pkg/openai/schema"
 )
 
 /////////////////////////////////////////////////////////////////////
@@ -24,6 +25,7 @@ func MistralRegister(cmd []Client, opts []client.ClientOpt, flags *Flags) ([]Cli
 		ns: "mistral",
 		cmd: []Command{
 			{Name: "models", Description: "Return registered models", MinArgs: 2, MaxArgs: 2, Fn: mistralModels(mistral, flags)},
+			{Name: "chat", Description: "Chat", Syntax: "<prompt>", MinArgs: 3, MaxArgs: 3, Fn: mistralChat(mistral, flags)},
 		},
 	})
 
@@ -41,5 +43,18 @@ func mistralModels(client *mistral.Client, flags *Flags) CommandFn {
 		} else {
 			return flags.Write(models)
 		}
+	}
+}
+
+func mistralChat(client *mistral.Client, flags *Flags) CommandFn {
+	return func() error {
+		if message, err := client.Chat([]schema.Message{
+			{Role: "user", Content: flags.Arg(2)},
+		}); err != nil {
+			return err
+		} else if err := flags.Write(message); err != nil {
+			return err
+		}
+		return nil
 	}
 }

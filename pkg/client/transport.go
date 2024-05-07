@@ -2,6 +2,7 @@ package client
 
 import (
 	"bytes"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -129,6 +130,7 @@ func (w *readwrapper) as(mimetype string) ([]byte, error) {
 			return dest.Bytes(), nil
 		}
 	default:
-		return w.data.Bytes(), nil
+		// TODO: Make this more like a hex dump
+		return []byte(hex.EncodeToString(w.data.Bytes())), nil
 	}
 }

@@ -6,6 +6,8 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+
+	"github.com/mutablelogic/go-client/pkg/multipart"
 )
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -49,6 +51,27 @@ func NewJSONRequest(payload any, accept string) (*Request, error) {
 	if err := json.NewEncoder(this.buffer).Encode(payload); err != nil {
 		return nil, err
 	}
+	return this, nil
+}
+
+// Return a new request with a Multipart Form data payload which defaults to POST. The accept
+// parameter is the accepted mime-type of the response.
+func NewMultipartRequest(payload any, accept string) (*Request, error) {
+	this := new(Request)
+	this.method = http.MethodPost
+	this.accept = accept
+	this.buffer = new(bytes.Buffer)
+
+	// Encode the payload
+	enc := multipart.NewEncoder(this.buffer)
+	defer enc.Close()
+	if err := enc.Encode(payload); err != nil {
+		return nil, err
+	} else {
+		this.mimetype = enc.ContentType()
+	}
+
+	// Return success
 	return this, nil
 }
 

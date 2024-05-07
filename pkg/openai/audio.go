@@ -1,11 +1,13 @@
 package openai
 
 import (
-	// Packages
-
+	"bytes"
+	"encoding/json"
 	"io"
 
+	// Packages
 	"github.com/mutablelogic/go-client/pkg/client"
+	"github.com/mutablelogic/go-client/pkg/multipart"
 
 	// Namespace imports
 	. "github.com/djthorpe/go-errors"
@@ -27,11 +29,41 @@ type respSpeech struct {
 	w     io.Writer
 }
 
+type reqTranscribe struct {
+	Model                  string         `json:"model"`
+	File                   multipart.File `json:"file"`
+	Language               string         `json:"language,omitempty"`
+	Prompt                 string         `json:"prompt,omitempty"`
+	ResponseFormat         string         `json:"response_format,omitempty"`
+	Temperature            float64        `json:"temperature,omitempty"`
+	TimestampGranularities []string       `json:"timestamp_granularities,omitempty"`
+}
+
+type Transcription struct {
+	Task     string  `json:"task,omitempty"`
+	Language string  `json:"language,omitempty"`
+	Duration float64 `json:"duration,omitempty"`
+	Text     string  `json:"text"`
+	Segments []struct {
+		Id                  uint    `json:"id"`
+		Seek                uint    `json:"seek"`
+		Start               float64 `json:"start"`
+		End                 float64 `json:"end"`
+		Text                string  `json:"text"`
+		Tokens              []uint  `json:"tokens"`
+		Temperature         float64 `json:"temperature,omitempty"`
+		AvgLogProbability   float64 `json:"avg_logprob,omitempty"`
+		CompressionRatio    float64 `json:"compression_ratio,omitempty"`
+		NoSpeechProbability float64 `json:"no_speech_prob,omitempty"`
+	} `json:"segments,omitempty"`
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 // GLOBALS
 
 const (
-	defaultAudioModel = "tts-1"
+	defaultAudioModel      = "tts-1"
+	defaultTranscribeModel = "whisper-1"
 )
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -67,8 +99,38 @@ func (c *Client) Speech(w io.Writer, voice, text string, opts ...Opt) (int64, er
 	return response.bytes, nil
 }
 
+// Transcribes audio from audio data
+func (c *Client) Transcribe(r io.Reader, opts ...Opt) (*Transcription, error) {
+	var request reqTranscribe
+	response := new(Transcription)
+
+	// Create the request and set up the response
+	request.Model = defaultTranscribeModel
+	request.File = multipart.File{
+		Path: "output.mp3",
+		Body: r,
+	}
+
+	// Set options
+	for _, opt := range opts {
+		if err := opt(&request); err != nil {
+			return nil, err
+		}
+	}
+
+	// Make a response object, write the data
+	if payload, err := client.NewMultipartRequest(request, client.ContentTypeJson); err != nil {
+		return nil, err
+	} else if err := c.Do(payload, response, client.OptPath("audio/transcriptions")); err != nil {
+		return nil, err
+	}
+
+	// Return success
+	return response, nil
+}
+
 ///////////////////////////////////////////////////////////////////////////////
-// Unmarshal speech
+// Unmarshal
 
 func (resp *respSpeech) Unmarshal(mimetype string, r io.Reader) error {
 	// Copy the data
@@ -82,8 +144,109 @@ func (resp *respSpeech) Unmarshal(mimetype string, r io.Reader) error {
 	return nil
 }
 
+func (resp *Transcription) Unmarshal(mimetype string, r io.Reader) error {
+	switch mimetype {
+	case client.ContentTypeTextPlain:
+		buf := bytes.NewBuffer(nil)
+		if _, err := io.Copy(buf, r); err != nil {
+			return err
+		} else {
+			resp.Text = buf.String()
+		}
+	case client.ContentTypeJson:
+		if err := json.NewDecoder(r).Decode(resp); err != nil {
+			return err
+		}
+	default:
+		return ErrNotImplemented.With("Unmarshal", mimetype)
+	}
+
+	// Return success
+	return nil
+}
+
 ///////////////////////////////////////////////////////////////////////////////
-// PRIVATE METHODS - AUDIO
+// PRIVATE METHODS - TRANSCRIBE
+
+func (req *reqTranscribe) setModel(value string) error {
+	if value == "" {
+		return ErrBadParameter.With("Model")
+	} else {
+		req.Model = value
+		return nil
+	}
+}
+
+func (req *reqTranscribe) setFrequencyPenalty(value float64) error {
+	return ErrBadParameter.With("frequency_penalty")
+}
+
+func (req *reqTranscribe) setPresencePenalty(float64) error {
+	return ErrBadParameter.With("presence_penalty")
+}
+
+func (req *reqTranscribe) setMaxTokens(int) error {
+	return ErrBadParameter.With("max_tokens")
+}
+
+func (req *reqTranscribe) setCount(int) error {
+	return ErrBadParameter.With("count")
+}
+
+func (req *reqTranscribe) setResponseFormat(value string) error {
+	req.ResponseFormat = value
+	return nil
+}
+
+func (req *reqTranscribe) setSeed(int) error {
+	return ErrBadParameter.With("seed")
+}
+
+func (req *reqTranscribe) setStream(bool) error {
+	return ErrBadParameter.With("stream")
+}
+
+func (req *reqTranscribe) setTemperature(v float64) error {
+	req.Temperature = v
+	return nil
+}
+
+func (req *reqTranscribe) setFunction(string, string, ...ToolParameter) error {
+	return ErrBadParameter.With("tools")
+}
+
+func (req *reqTranscribe) setQuality(string) error {
+	return ErrBadParameter.With("quality")
+}
+
+func (req *reqTranscribe) setSize(string) error {
+	return ErrBadParameter.With("size")
+}
+
+func (req *reqTranscribe) setStyle(string) error {
+	return ErrBadParameter.With("style")
+}
+
+func (req *reqTranscribe) setUser(string) error {
+	return ErrBadParameter.With("user")
+}
+
+func (req *reqTranscribe) setSpeed(value float32) error {
+	return ErrBadParameter.With("speed")
+}
+
+func (req *reqTranscribe) setLanguage(value string) error {
+	req.Language = value
+	return nil
+}
+
+func (req *reqTranscribe) setPrompt(value string) error {
+	req.Prompt = value
+	return nil
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// PRIVATE METHODS - SPEECH
 
 func (req *reqSpeech) setModel(value string) error {
 	if value == "" {
@@ -153,4 +316,12 @@ func (req *reqSpeech) setSpeed(value float32) error {
 	}
 	req.Speed = value
 	return nil
+}
+
+func (req *reqSpeech) setLanguage(string) error {
+	return ErrBadParameter.With("language")
+}
+
+func (req *reqSpeech) setPrompt(string) error {
+	return ErrBadParameter.With("prompt")
 }

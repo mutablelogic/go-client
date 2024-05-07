@@ -148,6 +148,8 @@ type Request interface {
 	setStyle(string) error
 	setUser(string) error
 	setSpeed(float32) error
+	setLanguage(string) error
+	setPrompt(string) error
 }
 
 // A request to create embeddings
@@ -274,6 +276,14 @@ func (req *reqCreateEmbedding) setSpeed(float32) error {
 	return ErrBadParameter.With("speed")
 }
 
+func (req *reqCreateEmbedding) setLanguage(string) error {
+	return ErrBadParameter.With("language")
+}
+
+func (req *reqCreateEmbedding) setPrompt(string) error {
+	return ErrBadParameter.With("prompt")
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 // PRIVATE METHODS - CHAT
 
@@ -365,6 +375,14 @@ func (req *reqChat) setUser(string) error {
 
 func (req *reqChat) setSpeed(float32) error {
 	return ErrBadParameter.With("speed")
+}
+
+func (req *reqChat) setLanguage(string) error {
+	return ErrBadParameter.With("language")
+}
+
+func (req *reqChat) setPrompt(string) error {
+	return ErrBadParameter.With("prompt")
 }
 
 func newToolFunction(name, description string, parameters ...ToolParameter) (*ToolFunction, error) {
@@ -497,4 +515,12 @@ func (req *reqImage) setUser(value string) error {
 
 func (req *reqImage) setSpeed(float32) error {
 	return ErrBadParameter.With("speed")
+}
+
+func (req *reqImage) setLanguage(string) error {
+	return ErrBadParameter.With("language")
+}
+
+func (req *reqImage) setPrompt(string) error {
+	return ErrBadParameter.With("prompt")
 }

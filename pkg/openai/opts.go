@@ -133,6 +133,22 @@ func OptSpeed(speed float32) Opt {
 	}
 }
 
+// The language for transcription. Supplying the input language in ISO-639-1
+// format will improve accuracy and latency.
+func OptLanguage(language string) Opt {
+	return func(r Request) error {
+		return r.setLanguage(language)
+	}
+}
+
+// An optional text to guide the model's style or continue a previous
+// audio segment. The prompt should match the audio language.
+func OptPrompt(prompt string) Opt {
+	return func(r Request) error {
+		return r.setPrompt(prompt)
+	}
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 // PUBLIC METHODS - CLIENT
 

@@ -41,6 +41,7 @@ func OpenAIFlags(flags *Flags) {
 	flags.Bool("hd", false, "Create images with finer details and greater consistency across the image")
 	flags.String("size", "", "Size of output image (256x256, 512x512, 1024x1024, 1792x1024 or 1024x1792)")
 	flags.Bool("open", false, "Open images in default viewer")
+	flags.String("language", "", "Audio language")
 }
 
 func OpenAIRegister(cmd []Client, opts []client.ClientOpt, flags *Flags) ([]Client, error) {
@@ -58,6 +59,7 @@ func OpenAIRegister(cmd []Client, opts []client.ClientOpt, flags *Flags) ([]Clie
 			{Name: "model", Description: "Return model information", Syntax: "<model>", MinArgs: 3, MaxArgs: 3, Fn: openaiModel(openai, flags)},
 			{Name: "image", Description: "Create images from a prompt", Syntax: "<prompt>", MinArgs: 3, MaxArgs: 3, Fn: openaiImages(openai, flags)},
 			{Name: "speak", Description: "Create speech from a prompt", Syntax: "(<voice>) <prompt>", MinArgs: 3, MaxArgs: 4, Fn: openaiSpeak(openai, flags)},
+			{Name: "transcribe", Description: "Transcribe audio to text", Syntax: "<filename>", MinArgs: 3, MaxArgs: 3, Fn: openaiTranscribe(openai, flags)},
 		},
 	})
 
@@ -86,6 +88,39 @@ func openaiModel(client *openai.Client, flags *Flags) CommandFn {
 		} else if err := flags.Write(model); err != nil {
 			return err
 		}
+		return nil
+	}
+}
+
+func openaiTranscribe(client *openai.Client, flags *Flags) CommandFn {
+	return func() error {
+		// Set options
+		opts := []openai.Opt{}
+		if model := flags.GetString("model"); model != "" {
+			opts = append(opts, openai.OptModel(model))
+		}
+		if language := flags.GetString("language"); language != "" {
+			opts = append(opts, openai.OptLanguage(language))
+		}
+		if format := flags.GetOutExt(); format != "" {
+			opts = append(opts, openai.OptResponseFormat(format))
+		}
+
+		// Open audio file for reading
+		r, err := os.Open(flags.Arg(2))
+		if err != nil {
+			return err
+		}
+		defer r.Close()
+
+		// Perform transcription
+		if transcription, err := client.Transcribe(r, opts...); err != nil {
+			return err
+		} else if err := flags.Write(transcription); err != nil {
+			return err
+		}
+
+		// Return success
 		return nil
 	}
 }

@@ -140,13 +140,6 @@ func (client *Client) Do(in Payload, out any, opts ...RequestOpt) error {
 		return err
 	}
 
-	// If debug, then log the payload
-	//if debug, ok := client.Client.Transport.(*logtransport); ok {
-	//	if body != nil {
-	//		debug.Payload(in)
-	//	}
-	//}
-
 	// If client token is set, then add to request
 	if client.token.Scheme != "" && client.token.Value != "" {
 		opts = append([]RequestOpt{OptToken(client.token)}, opts...)
@@ -287,6 +280,10 @@ func do(client *http.Client, req *http.Request, accept string, strict bool, out 
 	default:
 		if v, ok := out.(Unmarshaler); ok {
 			return v.Unmarshal(mimetype, response.Body)
+		} else if v, ok := out.(io.Writer); ok {
+			if _, err := io.Copy(v, response.Body); err != nil {
+				return err
+			}
 		} else {
 			return ErrInternalAppError.Withf("do: response does not implement Unmarshaler for %q", mimetype)
 		}

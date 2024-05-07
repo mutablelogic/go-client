@@ -15,20 +15,8 @@ func HomeAssistantFlags(flags *Flags) {
 }
 
 func HomeAssistantRegister(cmd []Client, opts []client.ClientOpt, flags *Flags) ([]Client, error) {
-	// Get API key
-	key, err := flags.GetString("ha-token")
-	if err != nil {
-		return nil, err
-	}
-
-	// Get endpoint
-	endPoint, err := flags.GetString("ha-endpoint")
-	if err != nil {
-		return nil, err
-	}
-
-	// Create ipify client
-	ha, err := homeassistant.New(endPoint, key, opts...)
+	// Create home assistant client
+	ha, err := homeassistant.New(flags.GetString("ha-endpoint"), flags.GetString("ha-token"), opts...)
 	if err != nil {
 		return nil, err
 	}

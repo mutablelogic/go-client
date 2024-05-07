@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	// Packages
@@ -65,13 +66,24 @@ func (flags *Flags) Timeout() time.Duration {
 }
 
 func (flags *Flags) GetOut() string {
-	v, _ := flags.GetString("out")
-	return v
+	return flags.GetString("out")
+}
+
+func (flags *Flags) GetOutExt() string {
+	out := flags.GetOut()
+	if out == "" {
+		return ""
+	}
+	if ext := filepath.Ext(out); ext == "" {
+		return out
+	} else {
+		return strings.TrimPrefix(ext, ".")
+	}
 }
 
 // Return a filename for output, returns an empty string if the output
 // argument is not a filename (it requires an extension)
-func (flags *Flags) GetOutFilename(def string, n uint) string {
+func (flags *Flags) GetOutFilename(def string, n int) string {
 	filename := flags.GetOut()
 	if filename == "" {
 		filename = filepath.Base(def)
@@ -91,11 +103,11 @@ func (flags *Flags) GetOutFilename(def string, n uint) string {
 	return filepath.Clean(filename)
 }
 
-func (flags *Flags) GetString(key string) (string, error) {
+func (flags *Flags) GetString(key string) string {
 	if flag := flags.Lookup(key); flag == nil {
-		return "", ErrNotFound.With(key)
+		return ""
 	} else {
-		return os.ExpandEnv(flag.Value.String()), nil
+		return os.ExpandEnv(flag.Value.String())
 	}
 }
 
@@ -106,6 +118,26 @@ func (flags *Flags) GetUint(key string) (uint, error) {
 		return 0, ErrBadParameter.With(key)
 	} else {
 		return uint(v), nil
+	}
+}
+
+func (flags *Flags) GetInt(key string) (int, error) {
+	if flag := flags.Lookup(key); flag == nil {
+		return 0, ErrNotFound.With(key)
+	} else if v, err := strconv.ParseInt(os.ExpandEnv(flag.Value.String()), 10, 64); err != nil {
+		return 0, ErrBadParameter.With(key)
+	} else {
+		return int(v), nil
+	}
+}
+
+func (flags *Flags) GetBool(key string) bool {
+	if flag := flags.Lookup(key); flag == nil {
+		return false
+	} else if v, err := strconv.ParseBool(os.ExpandEnv(flag.Value.String())); err != nil {
+		return false
+	} else {
+		return v
 	}
 }
 

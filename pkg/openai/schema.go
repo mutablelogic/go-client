@@ -3,6 +3,7 @@ package openai
 import (
 	"encoding/json"
 
+	// Namespace imports
 	. "github.com/djthorpe/go-errors"
 )
 
@@ -146,6 +147,7 @@ type Request interface {
 	setSize(string) error
 	setStyle(string) error
 	setUser(string) error
+	setSpeed(float32) error
 }
 
 // A request to create embeddings
@@ -268,6 +270,10 @@ func (req *reqCreateEmbedding) setUser(string) error {
 	return ErrBadParameter.With("user")
 }
 
+func (req *reqCreateEmbedding) setSpeed(float32) error {
+	return ErrBadParameter.With("speed")
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 // PRIVATE METHODS - CHAT
 
@@ -355,6 +361,10 @@ func (req *reqChat) setStyle(string) error {
 
 func (req *reqChat) setUser(string) error {
 	return ErrBadParameter.With("user")
+}
+
+func (req *reqChat) setSpeed(float32) error {
+	return ErrBadParameter.With("speed")
 }
 
 func newToolFunction(name, description string, parameters ...ToolParameter) (*ToolFunction, error) {
@@ -483,4 +493,8 @@ func (req *reqImage) setStyle(value string) error {
 func (req *reqImage) setUser(value string) error {
 	req.User = value
 	return nil
+}
+
+func (req *reqImage) setSpeed(float32) error {
+	return ErrBadParameter.With("speed")
 }

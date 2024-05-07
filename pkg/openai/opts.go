@@ -126,6 +126,13 @@ func OptStyle(style string) Opt {
 	}
 }
 
+// The speed of the generated audio. Select a value from 0.25 to 4.0. 1.0 is the default.
+func OptSpeed(speed float32) Opt {
+	return func(r Request) error {
+		return r.setSpeed(speed)
+	}
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 // PUBLIC METHODS - CLIENT
 

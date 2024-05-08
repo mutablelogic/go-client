@@ -82,6 +82,7 @@ func (enc *Encoder) Encode(v any) error {
 			}
 		}
 
+		// TODO: Check for omitting empty fields with omitempty tag, and skip
 		value := rv.FieldByIndex(field.Index).Interface()
 
 		// If this is a file, then add it to the form data

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"time"
 	// Packages
@@ -90,8 +91,8 @@ func (transport *logtransport) RoundTrip(req *http.Request) (*http.Response, err
 
 	// If verbose is switched on, read the body
 	if transport.v && resp.Body != nil {
-		contentType := resp.Header.Get("Content-Type")
-		if contentType == ContentTypeJson || contentType == ContentTypeTextPlain {
+		contentType, _, _ := mime.ParseMediaType(resp.Header.Get("Content-Type"))
+		if contentType == ContentTypeTextPlain || contentType == ContentTypeJson {
 			defer resp.Body.Close()
 			body, err := io.ReadAll(resp.Body)
 			if err == nil {

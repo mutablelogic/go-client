@@ -16,10 +16,12 @@ import (
 ///////////////////////////////////////////////////////////////////////////////
 // TYPES
 
+// Encoder is a multipart encoder object
 type Encoder struct {
 	w *multipart.Writer
 }
 
+// File is a file object, which is used to encode a file in a multipart request
 type File struct {
 	Path string
 	Body io.Reader
@@ -35,6 +37,7 @@ const (
 ///////////////////////////////////////////////////////////////////////////////
 // LIFECYCLE
 
+// NewEncoder creates a new encoder object, which writes to the io.Writer
 func NewEncoder(w io.Writer) *Encoder {
 	return &Encoder{
 		multipart.NewWriter(w),
@@ -44,6 +47,8 @@ func NewEncoder(w io.Writer) *Encoder {
 ///////////////////////////////////////////////////////////////////////////////
 // PUBLIC METHODS
 
+// Encode writes the struct to the multipart writer, including any File objects
+// which are added as form data and excluding any fields with a tag of json:"-"
 func (enc *Encoder) Encode(v any) error {
 	rv := reflect.ValueOf(v)
 	if rv.Kind() == reflect.Ptr {
@@ -82,7 +87,6 @@ func (enc *Encoder) Encode(v any) error {
 		// If this is a file, then add it to the form data
 		if field.Type == reflect.TypeOf(File{}) {
 			path := value.(File).Path
-			fmt.Println("path=", path)
 			if part, err := enc.w.CreateFormFile(name, filepath.Base(path)); err != nil {
 				result = errors.Join(result, err)
 			} else if _, err := io.Copy(part, value.(File).Body); err != nil {
@@ -97,10 +101,12 @@ func (enc *Encoder) Encode(v any) error {
 	return result
 }
 
+// Return the MIME content type of the multipart writer
 func (enc *Encoder) ContentType() string {
 	return enc.w.FormDataContentType()
 }
 
+// Close the multipart writer after writing all the data
 func (enc *Encoder) Close() error {
 	return enc.w.Close()
 }

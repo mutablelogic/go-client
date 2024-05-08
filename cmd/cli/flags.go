@@ -48,7 +48,7 @@ func NewFlags(name string, args []string, register ...FlagsRegister) (*Flags, er
 	}
 
 	// Create a writer
-	flags.writer = tablewriter.New(os.Stdout)
+	flags.writer = tablewriter.New(os.Stdout, tablewriter.OptOutputText())
 
 	// Return success
 	return flags, nil

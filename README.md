@@ -22,6 +22,8 @@ There are also some example clients which use this library:
 * [Ollama API client](https://github.com/mutablelogic/go-client/tree/main/pkg/ollama)
 * [OpenAI API client](https://github.com/mutablelogic/go-client/tree/main/pkg/openai)
 
+Aiming to have compatibility with go version 1.19 and above.
+
 ## Basic Usage
 
 The following example shows how to decode a response from a GET request

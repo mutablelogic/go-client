@@ -13,7 +13,7 @@ import (
 
 func main() {
 	name := path.Base(os.Args[0])
-	flags, err := NewFlags(name, os.Args[1:], OpenAIFlags, MistralFlags, ElevenlabsFlags, HomeAssistantFlags, NewsAPIFlags)
+	flags, err := NewFlags(name, os.Args[1:], OpenAIFlags, MistralFlags, ElevenlabsFlags, HomeAssistantFlags, NewsAPIFlags, OllamaFlags)
 	if err != nil {
 		if err != flag.ErrHelp {
 			fmt.Fprintln(os.Stderr, err)
@@ -66,6 +66,12 @@ func main() {
 	}
 
 	cmd, err = NewsAPIRegister(cmd, opts, flags)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+
+	cmd, err = OllamaRegister(cmd, opts, flags)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

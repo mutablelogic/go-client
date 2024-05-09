@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"mime"
@@ -43,7 +44,6 @@ type Client struct {
 }
 
 type ClientOpt func(*Client) error
-type RequestOpt func(*http.Request) error
 
 ///////////////////////////////////////////////////////////////////////////////
 // GLOBALS
@@ -54,6 +54,7 @@ const (
 	PathSeparator             = string(os.PathSeparator)
 	ContentTypeAny            = "*/*"
 	ContentTypeJson           = "application/json"
+	ContentTypeJsonStream     = "application/x-ndjson"
 	ContentTypeTextXml        = "text/xml"
 	ContentTypeApplicationXml = "application/xml"
 	ContentTypeTextPlain      = "text/plain"
@@ -124,12 +125,12 @@ func (client *Client) DoWithContext(ctx context.Context, in Payload, out any, op
 	now := time.Now()
 	if !client.ts.IsZero() && client.rate > 0.0 {
 		next := client.ts.Add(time.Duration(float32(time.Second) / client.rate))
-		if next.After(now) {
+		if next.After(now) { // TODO allow ctx to cancel the sleep
 			time.Sleep(next.Sub(now))
 		}
 	}
 
-	// Set timestamp at return
+	// Set timestamp at return, for rate limiting
 	defer func(now time.Time) {
 		client.ts = now
 	}(now)
@@ -164,7 +165,7 @@ func (client *Client) Request(req *http.Request, out any, opts ...RequestOpt) er
 	now := time.Now()
 	if !client.ts.IsZero() && client.rate > 0.0 {
 		next := client.ts.Add(time.Duration(float32(time.Second) / client.rate))
-		if next.After(now) {
+		if next.After(now) { // TODO allow ctx to cancel the sleep
 			time.Sleep(next.Sub(now))
 		}
 	}
@@ -235,10 +236,21 @@ func (client *Client) request(ctx context.Context, method, accept, mimetype stri
 // Do will make a JSON request, populate an object with the response and return any errors
 func do(client *http.Client, req *http.Request, accept string, strict bool, out any, opts ...RequestOpt) error {
 	// Apply request options
+	reqopts := requestOpts{
+		Request: req,
+	}
 	for _, opt := range opts {
-		if err := opt(req); err != nil {
+		if err := opt(&reqopts); err != nil {
 			return err
 		}
+	}
+
+	// NoTimeout
+	if reqopts.noTimeout {
+		defer func(v time.Duration) {
+			client.Timeout = v
+		}(client.Timeout)
+		client.Timeout = 0
 	}
 
 	// Do the request
@@ -276,15 +288,30 @@ func do(client *http.Client, req *http.Request, accept string, strict bool, out 
 		return nil
 	}
 
-	// Decode the body
+	// Decode the body - and call any callback once the body has been decoded
 	switch mimetype {
-	case ContentTypeJson:
-		if err := json.NewDecoder(response.Body).Decode(out); err != nil {
-			return err
+	case ContentTypeJson, ContentTypeJsonStream:
+		dec := json.NewDecoder(response.Body)
+		for {
+			if err := dec.Decode(out); errors.Is(err, io.EOF) {
+				break
+			} else if err != nil {
+				return err
+			}
+			if reqopts.callback != nil {
+				if err := reqopts.callback(); err != nil {
+					return err
+				}
+			}
 		}
 	case ContentTypeTextXml, ContentTypeApplicationXml:
 		if err := xml.NewDecoder(response.Body).Decode(out); err != nil {
 			return err
+		}
+		if reqopts.callback != nil {
+			if err := reqopts.callback(); err != nil {
+				return err
+			}
 		}
 	default:
 		if v, ok := out.(Unmarshaler); ok {
@@ -295,6 +322,11 @@ func do(client *http.Client, req *http.Request, accept string, strict bool, out 
 			}
 		} else {
 			return ErrInternalAppError.Withf("do: response does not implement Unmarshaler for %q", mimetype)
+		}
+		if reqopts.callback != nil {
+			if err := reqopts.callback(); err != nil {
+				return err
+			}
 		}
 	}
 

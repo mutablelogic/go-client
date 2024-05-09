@@ -13,7 +13,7 @@ import (
 ///////////////////////////////////////////////////////////////////////////////
 // TYPES
 
-type Request struct {
+type request struct {
 	method   string
 	accept   string
 	mimetype string
@@ -29,22 +29,40 @@ type Payload interface {
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+// GLOBALS
+
+var (
+	MethodGet    = NewRequestEx(http.MethodGet, ContentTypeAny)
+	MethodDelete = NewRequestEx(http.MethodDelete, ContentTypeAny)
+)
+
+///////////////////////////////////////////////////////////////////////////////
 // LIFECYCLE
 
-// Return a new empty request which defaults to GET. The accept parameter is the
-// accepted mime-type of the response.
-func NewRequest(accept string) *Request {
-	this := new(Request)
-	this.method = http.MethodGet
+// Return a new empty request which defaults to GET
+func NewRequest() Payload {
+	return NewRequestEx(http.MethodGet, ContentTypeAny)
+}
+
+// Return a new empty request. The accept parameter is the accepted mime-type
+// of the response.
+func NewRequestEx(method, accept string) Payload {
+	this := new(request)
+	this.method = method
 	this.accept = accept
 	return this
 }
 
-// Return a new request with a JSON payload which defaults to GET. The accept
+// Return a new request with a JSON payload which defaults to POST.
+func NewJSONRequest(payload any) (Payload, error) {
+	return NewJSONRequestEx(http.MethodPost, payload, ContentTypeAny)
+}
+
+// Return a new request with a JSON payload with method.  The accept
 // parameter is the accepted mime-type of the response.
-func NewJSONRequest(payload any, accept string) (*Request, error) {
-	this := new(Request)
-	this.method = http.MethodGet
+func NewJSONRequestEx(method string, payload any, accept string) (Payload, error) {
+	this := new(request)
+	this.method = method
 	this.mimetype = ContentTypeJson
 	this.accept = accept
 	this.buffer = new(bytes.Buffer)
@@ -56,8 +74,8 @@ func NewJSONRequest(payload any, accept string) (*Request, error) {
 
 // Return a new request with a Multipart Form data payload which defaults to POST. The accept
 // parameter is the accepted mime-type of the response.
-func NewMultipartRequest(payload any, accept string) (*Request, error) {
-	this := new(Request)
+func NewMultipartRequest(payload any, accept string) (Payload, error) {
+	this := new(request)
 	this.method = http.MethodPost
 	this.accept = accept
 	this.buffer = new(bytes.Buffer)
@@ -77,8 +95,8 @@ func NewMultipartRequest(payload any, accept string) (*Request, error) {
 
 // Return a new request with a Form data payload which defaults to POST. The accept
 // parameter is the accepted mime-type of the response.
-func NewFormRequest(payload any, accept string) (*Request, error) {
-	this := new(Request)
+func NewFormRequest(payload any, accept string) (Payload, error) {
+	this := new(request)
 	this.method = http.MethodPost
 	this.accept = accept
 	this.buffer = new(bytes.Buffer)
@@ -99,16 +117,16 @@ func NewFormRequest(payload any, accept string) (*Request, error) {
 ///////////////////////////////////////////////////////////////////////////////
 // STRINGIFY
 
-func (req *Request) String() string {
+func (req *request) String() string {
 	str := "<payload"
 	if req.method != "" {
-		str += " method=" + strconv.Quote(req.method)
+		str += " method=" + strconv.Quote(req.Method())
 	}
 	if req.accept != "" {
-		str += " accept=" + strconv.Quote(req.accept)
+		str += " accept=" + strconv.Quote(req.Accept())
 	}
 	if req.mimetype != "" {
-		str += " mimetype=" + strconv.Quote(req.mimetype)
+		str += " mimetype=" + strconv.Quote(req.Type())
 	}
 	return str + ">"
 }
@@ -116,35 +134,27 @@ func (req *Request) String() string {
 ///////////////////////////////////////////////////////////////////////////////
 // PAYLOAD METHODS
 
-// Set the HTTP method to POST
-func (req *Request) Post() *Request {
-	req.method = http.MethodPost
-	return req
-}
-
-// Set the HTTP method to DELETE
-func (req *Request) Delete() *Request {
-	req.method = http.MethodDelete
-	return req
-}
-
 // Return the HTTP method
-func (req *Request) Method() string {
+func (req *request) Method() string {
 	return req.method
 }
 
 // Set the request mimetype
-func (req *Request) Type() string {
+func (req *request) Type() string {
 	return req.mimetype
 }
 
 // Return the acceptable mimetype responses
-func (req *Request) Accept() string {
-	return req.accept
+func (req *request) Accept() string {
+	if req.accept == "" {
+		return ContentTypeAny
+	} else {
+		return req.accept
+	}
 }
 
 // Implements the io.Reader interface for a payload
-func (req *Request) Read(b []byte) (n int, err error) {
+func (req *request) Read(b []byte) (n int, err error) {
 	if req.buffer != nil {
 		return req.buffer.Read(b)
 	} else {

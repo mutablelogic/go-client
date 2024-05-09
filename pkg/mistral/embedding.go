@@ -48,9 +48,9 @@ func (c *Client) CreateEmbedding(content any) (schema.Embeddings, error) {
 	}
 
 	// Request->Response
-	if payload, err := client.NewJSONRequest(request, client.ContentTypeJson); err != nil {
+	if payload, err := client.NewJSONRequest(request); err != nil {
 		return response, err
-	} else if err := c.Do(payload.Post(), &response, client.OptPath("embeddings")); err != nil {
+	} else if err := c.Do(payload, &response, client.OptPath("embeddings")); err != nil {
 		return response, err
 	}
 

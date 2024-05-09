@@ -23,7 +23,7 @@ func (c *Client) ListModels() ([]Model, error) {
 	var response responseListModels
 
 	// Request the models, populate the response
-	payload := client.NewRequest(client.ContentTypeJson)
+	payload := client.NewRequest()
 	if err := c.Do(payload, &response, client.OptPath("models")); err != nil {
 		return nil, err
 	}

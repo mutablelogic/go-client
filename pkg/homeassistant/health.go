@@ -1,7 +1,5 @@
 package homeassistant
 
-import "github.com/mutablelogic/go-client/pkg/client"
-
 ///////////////////////////////////////////////////////////////////////////////
 // API CALLS
 
@@ -14,8 +12,7 @@ func (c *Client) Health() (string, error) {
 
 	// Return the response
 	var response responseHealth
-	payload := client.NewRequest(client.ContentTypeJson)
-	if err := c.Do(payload, &response); err != nil {
+	if err := c.Do(nil, &response); err != nil {
 		return "", err
 	}
 

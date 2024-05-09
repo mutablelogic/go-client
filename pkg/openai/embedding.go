@@ -35,9 +35,9 @@ func (c *Client) CreateEmbedding(content any, opts ...Opt) (schema.Embeddings, e
 
 	// Return the response
 	var response schema.Embeddings
-	if payload, err := client.NewJSONRequest(request, client.ContentTypeJson); err != nil {
+	if payload, err := client.NewJSONRequest(request); err != nil {
 		return schema.Embeddings{}, err
-	} else if err := c.Do(payload.Post(), &response, client.OptPath("embeddings")); err != nil {
+	} else if err := c.Do(payload, &response, client.OptPath("embeddings")); err != nil {
 		return schema.Embeddings{}, err
 	}
 

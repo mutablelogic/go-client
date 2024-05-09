@@ -53,9 +53,9 @@ func (c *Client) Chat(messages []schema.Message) (schema.Message, error) {
 	request.Messages = messages
 
 	// Return the response
-	if payload, err := client.NewJSONRequest(request, client.ContentTypeJson); err != nil {
+	if payload, err := client.NewJSONRequest(request); err != nil {
 		return schema.Message{}, err
-	} else if err := c.Do(payload.Post(), &response, client.OptPath("chat/completions")); err != nil {
+	} else if err := c.Do(payload, &response, client.OptPath("chat/completions")); err != nil {
 		return schema.Message{}, err
 	} else if len(response.Choices) == 0 {
 		return schema.Message{}, ErrNotFound

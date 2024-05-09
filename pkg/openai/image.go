@@ -37,9 +37,9 @@ func (c *Client) CreateImages(prompt string, opts ...Opt) ([]*Image, error) {
 	}
 
 	// Return the response
-	if payload, err := client.NewJSONRequest(request, client.ContentTypeJson); err != nil {
+	if payload, err := client.NewJSONRequest(request); err != nil {
 		return nil, err
-	} else if err := c.Do(payload.Post(), &response, client.OptPath("images/generations")); err != nil {
+	} else if err := c.Do(payload, &response, client.OptPath("images/generations")); err != nil {
 		return nil, err
 	}
 

@@ -34,8 +34,7 @@ type Sensor struct {
 func (c *Client) States() ([]State, error) {
 	// Return the response
 	var response []State
-	payload := client.NewRequest(client.ContentTypeJson)
-	if err := c.Do(payload, &response, client.OptPath("states")); err != nil {
+	if err := c.Do(nil, &response, client.OptPath("states")); err != nil {
 		return nil, err
 	}
 
@@ -47,8 +46,7 @@ func (c *Client) States() ([]State, error) {
 func (c *Client) Sensors() ([]Sensor, error) {
 	// Return the response
 	var response []State
-	payload := client.NewRequest(client.ContentTypeJson)
-	if err := c.Do(payload, &response, client.OptPath("states")); err != nil {
+	if err := c.Do(nil, &response, client.OptPath("states")); err != nil {
 		return nil, err
 	}
 
@@ -76,8 +74,7 @@ func (c *Client) Sensors() ([]Sensor, error) {
 func (c *Client) Actuators() ([]Sensor, error) {
 	// Return the response
 	var response []State
-	payload := client.NewRequest(client.ContentTypeJson)
-	if err := c.Do(payload, &response, client.OptPath("states")); err != nil {
+	if err := c.Do(nil, &response, client.OptPath("states")); err != nil {
 		return nil, err
 	}
 
@@ -104,8 +101,7 @@ func (c *Client) Actuators() ([]Sensor, error) {
 func (c *Client) Lights() ([]Sensor, error) {
 	// Return the response
 	var response []State
-	payload := client.NewRequest(client.ContentTypeJson)
-	if err := c.Do(payload, &response, client.OptPath("states")); err != nil {
+	if err := c.Do(nil, &response, client.OptPath("states")); err != nil {
 		return nil, err
 	}
 

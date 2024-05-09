@@ -95,9 +95,9 @@ func (c *Client) Speech(w io.Writer, voice, text string, opts ...Opt) (int64, er
 	}
 
 	// Make a response object, write the data
-	if payload, err := client.NewJSONRequest(request, client.ContentTypeBinary); err != nil {
+	if payload, err := client.NewJSONRequest(request); err != nil {
 		return 0, err
-	} else if err := c.Do(payload.Post(), &response, client.OptPath("audio/speech")); err != nil {
+	} else if err := c.Do(payload, &response, client.OptPath("audio/speech")); err != nil {
 		return 0, err
 	}
 

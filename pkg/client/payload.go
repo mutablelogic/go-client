@@ -29,6 +29,14 @@ type Payload interface {
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+// GLOBALS
+
+var (
+	MethodGet    = NewRequestEx(http.MethodGet, ContentTypeAny)
+	MethodDelete = NewRequestEx(http.MethodDelete, ContentTypeAny)
+)
+
+///////////////////////////////////////////////////////////////////////////////
 // LIFECYCLE
 
 // Return a new empty request which defaults to GET

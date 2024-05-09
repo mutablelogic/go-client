@@ -18,10 +18,6 @@ type Client struct {
 	*client.Client
 }
 
-type Request struct {
-	client.Request
-}
-
 type Response struct {
 	IP string `json:"ip"`
 }
@@ -54,7 +50,7 @@ func New(opts ...client.ClientOpt) (*Client, error) {
 // Get returns the current IP address from the API
 func (c *Client) Get() (Response, error) {
 	var response Response
-	if err := c.Do(client.NewRequest(client.ContentTypeJson), &response, client.OptQuery(url.Values{"format": []string{"json"}})); err != nil {
+	if err := c.Do(client.NewRequest(), &response, client.OptQuery(url.Values{"format": []string{"json"}})); err != nil {
 		return Response{}, err
 	}
 	return response, nil

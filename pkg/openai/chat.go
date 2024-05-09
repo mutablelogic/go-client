@@ -68,22 +68,23 @@ func (arr MessageContentArray) Flatten() string {
 
 // Chat creates a model response for the given chat conversation.
 func (c *Client) Chat(messages []*Message, opts ...Opt) (Chat, error) {
-	// Create the request
 	var request reqChat
+	var response Chat
+
+	// Create the request
 	request.Model = defaultChatCompletion
 	request.Messages = messages
 	for _, opt := range opts {
 		if err := opt(&request); err != nil {
-			return Chat{}, err
+			return response, err
 		}
 	}
 
 	// Return the response
-	var response Chat
-	if payload, err := client.NewJSONRequest(request, client.ContentTypeJson); err != nil {
-		return Chat{}, err
-	} else if err := c.Do(payload.Post(), &response, client.OptPath("chat/completions")); err != nil {
-		return Chat{}, err
+	if payload, err := client.NewJSONRequest(request); err != nil {
+		return response, err
+	} else if err := c.Do(payload, &response, client.OptPath("chat/completions")); err != nil {
+		return response, err
 	}
 
 	// Return success

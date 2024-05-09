@@ -5,7 +5,26 @@ import (
 	"net/url"
 	"path/filepath"
 	"strings"
+
+	// Namespace imports
+	. "github.com/djthorpe/go-errors"
 )
+
+// OptReqEndpoint modifies the request endpoint for this request only
+func OptReqEndpoint(value string) RequestOpt {
+	return func(r *http.Request) error {
+		if url, err := url.Parse(value); err != nil {
+			return err
+		} else if url.Scheme == "" || url.Host == "" {
+			return ErrBadParameter.Withf("endpoint: %q", value)
+		} else if url.Scheme != "http" && url.Scheme != "https" {
+			return ErrBadParameter.Withf("endpoint: %q", value)
+		} else {
+			r.URL = url
+		}
+		return nil
+	}
+}
 
 // OptPath appends path elements onto a request
 func OptPath(value ...string) RequestOpt {
@@ -41,6 +60,14 @@ func OptQuery(value url.Values) RequestOpt {
 		url.RawQuery = value.Encode()
 		// Set new query
 		r.URL = &url
+		return nil
+	}
+}
+
+// OptReqHeader adds a header value to the request
+func OptReqHeader(name, value string) RequestOpt {
+	return func(r *http.Request) error {
+		r.Header.Set(name, value)
 		return nil
 	}
 }

@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"io"
 	"mime/multipart"
+	"net/url"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 
 	// Namespace imports
@@ -16,10 +18,14 @@ import (
 ///////////////////////////////////////////////////////////////////////////////
 // TYPES
 
+// Encoder is a multipart encoder object
 type Encoder struct {
-	w *multipart.Writer
+	w io.Writer
+	m *multipart.Writer
+	v url.Values
 }
 
+// File is a file object, which is used to encode a file in a multipart request
 type File struct {
 	Path string
 	Body io.Reader
@@ -29,21 +35,40 @@ type File struct {
 // GLOBALS
 
 const (
-	defaultTag = "json"
+	defaultTag      = "json"
+	omitemptyValue  = "omitempty"
+	ContentTypeForm = "application/x-www-form-urlencoded"
+)
+
+var (
+	fileType = reflect.TypeOf(File{})
 )
 
 ///////////////////////////////////////////////////////////////////////////////
 // LIFECYCLE
 
-func NewEncoder(w io.Writer) *Encoder {
+// NewMultipartEncoder creates a new encoder object, which writes
+// multipart/form-data to the io.Writer
+func NewMultipartEncoder(w io.Writer) *Encoder {
 	return &Encoder{
-		multipart.NewWriter(w),
+		m: multipart.NewWriter(w),
+	}
+}
+
+// NewFormEncoder creates a new encoder object, whichwrites
+// application/x-www-form-urlencoded to the io.Writer
+func NewFormEncoder(w io.Writer) *Encoder {
+	return &Encoder{
+		w: w,
+		v: make(url.Values),
 	}
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 // PUBLIC METHODS
 
+// Encode writes the struct to the multipart writer, including any File objects
+// which are added as form data and excluding any fields with a tag of json:"-"
 func (enc *Encoder) Encode(v any) error {
 	rv := reflect.ValueOf(v)
 	if rv.Kind() == reflect.Ptr {
@@ -62,6 +87,7 @@ func (enc *Encoder) Encode(v any) error {
 
 		// Set the field name
 		name := field.Name
+		omitempty := false
 
 		// Modify the field name if there is a tag
 		if tag := field.Tag.Get(defaultTag); tag != "" {
@@ -75,20 +101,26 @@ func (enc *Encoder) Encode(v any) error {
 			if tuples[0] != "" {
 				name = tuples[0]
 			}
+
+			// Check for omitempty tag
+			if slices.Contains(tuples, omitemptyValue) {
+				omitempty = true
+			}
 		}
 
-		value := rv.FieldByIndex(field.Index).Interface()
+		// Skip invalid or empty fields
+		fv := rv.FieldByIndex(field.Index)
+		if omitempty && (fv.IsZero() || fv.IsNil()) {
+			continue
+		}
 
-		// If this is a file, then add it to the form data
-		if field.Type == reflect.TypeOf(File{}) {
-			path := value.(File).Path
-			fmt.Println("path=", path)
-			if part, err := enc.w.CreateFormFile(name, filepath.Base(path)); err != nil {
-				result = errors.Join(result, err)
-			} else if _, err := io.Copy(part, value.(File).Body); err != nil {
+		// Write field
+		value := rv.FieldByIndex(field.Index).Interface()
+		if field.Type == fileType {
+			if _, err := enc.writeFileField(name, value.(File)); err != nil {
 				result = errors.Join(result, err)
 			}
-		} else if err := enc.w.WriteField(name, fmt.Sprint(value)); err != nil {
+		} else if err := enc.writeField(name, value); err != nil {
 			result = errors.Join(result, err)
 		}
 	}
@@ -97,10 +129,68 @@ func (enc *Encoder) Encode(v any) error {
 	return result
 }
 
+// Return the MIME content type of the data
 func (enc *Encoder) ContentType() string {
-	return enc.w.FormDataContentType()
+	switch {
+	case enc.m != nil:
+		return enc.m.FormDataContentType()
+	default:
+		return ContentTypeForm
+	}
 }
 
+// Close the writer after writing all the data
 func (enc *Encoder) Close() error {
-	return enc.w.Close()
+	// multipart writer
+	if enc.m != nil {
+		return enc.m.Close()
+	}
+	// form writer
+	if enc.v != nil && enc.w != nil {
+		if _, err := enc.w.Write([]byte(enc.v.Encode())); err != nil {
+			return err
+		} else {
+			return nil
+		}
+	}
+	return ErrNotImplemented
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// PRIVATE METHODS
+
+// Write a file field to the multipart writer, and return the number of bytes
+// written
+func (enc *Encoder) writeFileField(name string, value File) (int64, error) {
+	// File not supported on form writer
+	if enc.m == nil {
+		return 0, ErrNotImplemented.Withf("%q: file upload not supported for %q", name, ContentTypeForm)
+	}
+
+	// Output file
+	path := value.Path
+	if part, err := enc.m.CreateFormFile(name, filepath.Base(path)); err != nil {
+		return 0, err
+	} else if n, err := io.Copy(part, value.Body); err != nil {
+		return 0, err
+	} else {
+		return n, nil
+	}
+}
+
+// Write a field as a string
+func (enc *Encoder) writeField(name string, value any) error {
+	switch {
+	case enc.m != nil:
+		if err := enc.m.WriteField(name, fmt.Sprint(value)); err != nil {
+			return err
+		}
+	case enc.v != nil:
+		enc.v.Add(name, fmt.Sprint(value))
+	default:
+		return ErrNotImplemented
+	}
+
+	// Return success
+	return nil
 }

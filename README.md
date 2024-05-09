@@ -52,7 +52,7 @@ func main() {
 Various options can be passed to the client `New` method to control its behaviour:
 
 * `OptEndpoint(value string)` sets the endpoint for all requests
-* `OptTimeout(value time.Duration)` sets the timeout on any request, which defaults to 10 seconds
+* `OptTimeout(value time.Duration)` sets the timeout on any request, which defaults to 30 seconds
 * `OptUserAgent(value string)` sets the user agent string on each API request
 * `OptTrace(w io.Writer, verbose bool)` allows you to debug the request and response data. 
    When `verbose` is set to true, it also displays the payloads

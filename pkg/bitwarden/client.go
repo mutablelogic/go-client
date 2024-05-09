@@ -96,10 +96,10 @@ func (c *Client) Prelogin(email, password string) (*Session, error) {
 
 	// Prelogin
 	request.Email = email
-	payload, err := client.NewJSONRequest(request, client.ContentTypeJson)
+	payload, err := client.NewJSONRequest(request)
 	if err != nil {
 		return nil, err
-	} else if err := c.Do(payload.Post(), &response.Kdf, client.OptPath("accounts/prelogin")); err != nil {
+	} else if err := c.Do(payload, &response.Kdf, client.OptPath("accounts/prelogin")); err != nil {
 		return nil, err
 	} else if response.Kdf.Iterations == 0 {
 		return nil, ErrUnexpectedResponse

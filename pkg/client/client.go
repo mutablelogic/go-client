@@ -1,6 +1,7 @@
 package client
 
 import (
+	"context"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
@@ -51,13 +52,13 @@ const (
 	DefaultTimeout            = time.Second * 30
 	DefaultUserAgent          = "github.com/mutablelogic/go-client"
 	PathSeparator             = string(os.PathSeparator)
+	ContentTypeAny            = "*/*"
 	ContentTypeJson           = "application/json"
 	ContentTypeTextXml        = "text/xml"
 	ContentTypeApplicationXml = "application/xml"
 	ContentTypeTextPlain      = "text/plain"
 	ContentTypeTextHTML       = "text/html"
 	ContentTypeBinary         = "application/octet-stream"
-	ContentTypeForm           = "multipart/form-data"
 )
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -110,6 +111,12 @@ func (client *Client) String() string {
 // Do a JSON request with a payload, populate an object with the response
 // and return any errors
 func (client *Client) Do(in Payload, out any, opts ...RequestOpt) error {
+	return client.DoWithContext(context.Background(), in, out, opts...)
+}
+
+// Do a JSON request with a payload, populate an object with the response
+// and return any errors. The context can be used to cancel the request
+func (client *Client) DoWithContext(ctx context.Context, in Payload, out any, opts ...RequestOpt) error {
 	client.Mutex.Lock()
 	defer client.Mutex.Unlock()
 
@@ -135,7 +142,7 @@ func (client *Client) Do(in Payload, out any, opts ...RequestOpt) error {
 		accept = in.Accept()
 		mimetype = in.Type()
 	}
-	req, err := client.request(method, accept, mimetype, in)
+	req, err := client.request(ctx, method, accept, mimetype, in)
 	if err != nil {
 		return err
 	}
@@ -182,14 +189,14 @@ func (client *Client) Request(req *http.Request, out any, opts ...RequestOpt) er
 // request creates a request which can be used to return responses. The accept
 // parameter is the accepted mime-type of the response. If the accept parameter is empty,
 // then the default is application/json.
-func (client *Client) request(method, accept, mimetype string, body io.Reader) (*http.Request, error) {
+func (client *Client) request(ctx context.Context, method, accept, mimetype string, body io.Reader) (*http.Request, error) {
 	// Return error if no endpoint is set
 	if client.endpoint == nil {
 		return nil, ErrBadParameter.With("missing endpoint")
 	}
 
 	// Make a request
-	r, err := http.NewRequest(method, client.endpoint.String(), body)
+	r, err := http.NewRequestWithContext(ctx, method, client.endpoint.String(), body)
 	if err != nil {
 		return nil, err
 	}
@@ -203,6 +210,8 @@ func (client *Client) request(method, accept, mimetype string, body io.Reader) (
 	}
 	if accept != "" {
 		r.Header.Set("Accept", accept)
+	} else {
+		r.Header.Set("Accept", ContentTypeAny)
 	}
 	if client.ua != "" {
 		r.Header.Set("User-Agent", client.ua)
@@ -256,7 +265,7 @@ func do(client *http.Client, req *http.Request, accept string, strict bool, out 
 	}
 
 	// When in strict mode, check content type returned is as expected
-	if strict && accept != "" {
+	if strict && (accept != "" && accept != ContentTypeAny) {
 		if mimetype != accept {
 			return ErrUnexpectedResponse.Withf("strict mode: unexpected responsse with %q", mimetype)
 		}

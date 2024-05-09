@@ -66,9 +66,10 @@ const (
 )
 
 const (
-	deviceName       = "api"
-	loginScope       = "api offline_access"
-	loginApiKeyScope = "api"
+	deviceName    = "github.com/mutablelogic/go-client"
+	loginScope    = "api offline_access"
+	loginApiScope = "api"
+	clientId      = "connector"
 )
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -113,18 +114,37 @@ func (c *Client) Prelogin(email, password string) (*Session, error) {
 	return &response, nil
 }
 
-// GetToken returns a token for a session
-func (c *Client) LoginToken(session *Session) error {
+// Login returns a token for a session, or a challenge for two-factor authentication
+func (c *Client) Login(session *Session) error {
 	var request reqToken
+	var response respToken
 
+	// Check parameters
+	if session == nil {
+		return ErrBadParameter
+	}
+
+	// Set up the request
 	request.GrantType = "password"
 	request.Email = session.Email
 	request.Password = session.Password
 	request.Scope = loginScope
-	request.ClientId = "browser"
+	request.ClientId = clientId
 	request.DeviceType = deviceType()
 	request.DeviceName = deviceName
-	request.DeviceIdentifier = "00000000-0000-0000-0000-000000000000" // TODO
+	request.DeviceIdentifier = "aac2e34a-44db-42ab-a733-5322dd582c3d" // TODO
+
+	// Request -> Response
+	if payload, err := client.NewFormRequest(request, client.ContentTypeJson); err != nil {
+		return err
+	} else if err := c.Do(payload, &response, client.OptReqEndpoint(identityUrl), client.OptPath("connect/token"), client.OptReqHeader("Host", "identity.bitwarden.com")); err != nil {
+		return err
+	}
+
+	// TODO
+
+	// Return success
+	return nil
 }
 
 ///////////////////////////////////////////////////////////////////////////////

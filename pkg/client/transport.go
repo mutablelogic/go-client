@@ -9,6 +9,8 @@ import (
 	"mime"
 	"net/http"
 	"time"
+
+	"github.com/mutablelogic/go-client/pkg/multipart"
 	// Packages
 )
 
@@ -80,7 +82,7 @@ func (transport *logtransport) RoundTrip(req *http.Request) (*http.Response, err
 	if transport.v {
 		data, err := req.Body.(*readwrapper).as(req.Header.Get("Content-Type"))
 		if err == nil {
-			fmt.Fprintln(transport.w, "   ", string(data))
+			fmt.Fprintf(transport.w, "  => %q\n", string(data))
 		}
 	}
 
@@ -96,7 +98,7 @@ func (transport *logtransport) RoundTrip(req *http.Request) (*http.Response, err
 			defer resp.Body.Close()
 			body, err := io.ReadAll(resp.Body)
 			if err == nil {
-				fmt.Fprintln(transport.w, "    ", string(body))
+				fmt.Fprintf(transport.w, "  <= %q\n", string(body))
 			}
 			resp.Body = io.NopCloser(bytes.NewReader(body))
 		}
@@ -137,6 +139,8 @@ func (w *readwrapper) as(mimetype string) ([]byte, error) {
 		} else {
 			return dest.Bytes(), nil
 		}
+	case multipart.ContentTypeForm:
+		return w.data.Bytes(), nil
 	default:
 		// TODO: Make this more like a hex dump
 		return []byte(hex.EncodeToString(w.data.Bytes())), nil

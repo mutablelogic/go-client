@@ -63,7 +63,28 @@ func NewMultipartRequest(payload any, accept string) (*Request, error) {
 	this.buffer = new(bytes.Buffer)
 
 	// Encode the payload
-	enc := multipart.NewEncoder(this.buffer)
+	enc := multipart.NewMultipartEncoder(this.buffer)
+	defer enc.Close()
+	if err := enc.Encode(payload); err != nil {
+		return nil, err
+	} else {
+		this.mimetype = enc.ContentType()
+	}
+
+	// Return success
+	return this, nil
+}
+
+// Return a new request with a Form data payload which defaults to POST. The accept
+// parameter is the accepted mime-type of the response.
+func NewFormRequest(payload any, accept string) (*Request, error) {
+	this := new(Request)
+	this.method = http.MethodPost
+	this.accept = accept
+	this.buffer = new(bytes.Buffer)
+
+	// Encode the payload
+	enc := multipart.NewFormEncoder(this.buffer)
 	defer enc.Close()
 	if err := enc.Encode(payload); err != nil {
 		return nil, err

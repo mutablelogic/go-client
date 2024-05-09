@@ -31,3 +31,19 @@ func Test_client_002(t *testing.T) {
 	data, _ := json.MarshalIndent(session, "", "  ")
 	t.Log(string(data))
 }
+
+func Test_client_003(t *testing.T) {
+	assert := assert.New(t)
+	client, err := bitwarden.New(opts.OptTrace(os.Stderr, true))
+	assert.NoError(err)
+
+	session, err := client.Prelogin("nobody@example.com", "p4ssw0rd")
+	assert.NoError(err)
+	assert.NotNil(session)
+
+	err = client.Login(session)
+	assert.NoError(err)
+
+	data, _ := json.MarshalIndent(session, "", "  ")
+	t.Log(string(data))
+}

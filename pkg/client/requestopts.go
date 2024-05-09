@@ -10,9 +10,27 @@ import (
 	. "github.com/djthorpe/go-errors"
 )
 
+///////////////////////////////////////////////////////////////////////////////
+// TYPES
+
+type requestOpts struct {
+	*http.Request
+
+	// OptResponse
+	callback func() error
+
+	// OptNoTimeout
+	noTimeout bool
+}
+
+type RequestOpt func(*requestOpts) error
+
+///////////////////////////////////////////////////////////////////////////////
+// PUBLIC METHODS
+
 // OptReqEndpoint modifies the request endpoint for this request only
 func OptReqEndpoint(value string) RequestOpt {
-	return func(r *http.Request) error {
+	return func(r *requestOpts) error {
 		if url, err := url.Parse(value); err != nil {
 			return err
 		} else if url.Scheme == "" || url.Host == "" {
@@ -28,7 +46,7 @@ func OptReqEndpoint(value string) RequestOpt {
 
 // OptPath appends path elements onto a request
 func OptPath(value ...string) RequestOpt {
-	return func(r *http.Request) error {
+	return func(r *requestOpts) error {
 		// Make a copy
 		url := *r.URL
 		// Clean up and append path
@@ -41,7 +59,7 @@ func OptPath(value ...string) RequestOpt {
 
 // OptToken adds an authorization header. The header format is "Authorization: Bearer <token>"
 func OptToken(value Token) RequestOpt {
-	return func(r *http.Request) error {
+	return func(r *requestOpts) error {
 		if value.Value != "" {
 			r.Header.Set("Authorization", value.String())
 		} else {
@@ -53,7 +71,7 @@ func OptToken(value Token) RequestOpt {
 
 // OptQuery adds query parameters to a request
 func OptQuery(value url.Values) RequestOpt {
-	return func(r *http.Request) error {
+	return func(r *requestOpts) error {
 		// Make a copy
 		url := *r.URL
 		// Append query
@@ -66,8 +84,27 @@ func OptQuery(value url.Values) RequestOpt {
 
 // OptReqHeader adds a header value to the request
 func OptReqHeader(name, value string) RequestOpt {
-	return func(r *http.Request) error {
+	return func(r *requestOpts) error {
 		r.Header.Set(name, value)
+		return nil
+	}
+}
+
+// OptResponse calls a function when a response has been decoded,
+// used for streaming responses. The function can return an error to
+// stop the request immediately
+func OptResponse(fn func() error) RequestOpt {
+	return func(r *requestOpts) error {
+		r.callback = fn
+		return nil
+	}
+}
+
+// OptNoTimeout disables the timeout for this request, useful for long-running
+// requests. The context can be used instead for cancelling requests
+func OptNoTimeout() RequestOpt {
+	return func(r *requestOpts) error {
+		r.noTimeout = true
 		return nil
 	}
 }

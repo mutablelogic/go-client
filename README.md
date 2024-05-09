@@ -10,15 +10,16 @@ This repository contains a generic HTTP client which can be adapted to provide:
 
 Documentation: https://pkg.go.dev/github.com/mutablelogic/go-client/pkg/client
 
-There are also some example API clients:
+There are also some example clients which use this library:
 
-* [Bitwarden Client](https://github.com/mutablelogic/go-client/tree/main/pkg/bitwarden)
-* [Elevenlabs Client](https://github.com/mutablelogic/go-client/tree/main/pkg/elevenlabs)
-* [Home Assistant Client](https://github.com/mutablelogic/go-client/tree/main/pkg/homeassistant)
+* [Bitwarden API Client](https://github.com/mutablelogic/go-client/tree/main/pkg/bitwarden)
+* [Elevenlabs API Client](https://github.com/mutablelogic/go-client/tree/main/pkg/elevenlabs)
+* [Home Assistant API Client](https://github.com/mutablelogic/go-client/tree/main/pkg/homeassistant)
 * [IPify Client](https://github.com/mutablelogic/go-client/tree/main/pkg/ipify)
 * [Mistral API Client](https://github.com/mutablelogic/go-client/tree/main/pkg/mistral)
 * [NewsAPI client](https://github.com/mutablelogic/go-client/tree/main/pkg/newsapi)
-* [OpenAI client](https://github.com/mutablelogic/go-client/tree/main/pkg/openai)
+* [Ollama API client](https://github.com/mutablelogic/go-client/tree/main/pkg/ollama)
+* [OpenAI API client](https://github.com/mutablelogic/go-client/tree/main/pkg/openai)
 
 ## Basic Usage
 
@@ -29,7 +30,7 @@ to a JSON endpoint:
 package main
 
 import (
-    client "github.com/mutablelogic/go-client"
+    client "github.com/mutablelogic/go-client/pkg/client"
 )
 
 func main() {
@@ -82,7 +83,7 @@ For example,
 package main
 
 import (
-    client "github.com/mutablelogic/go-client"
+    client "github.com/mutablelogic/go-client/pkg/client"
 )
 
 func main() {
@@ -155,7 +156,7 @@ The authentication token can be set as follows:
 package main
 
 import (
-    client "github.com/mutablelogic/go-client"
+    client "github.com/mutablelogic/go-client/pkg/client"
 )
 
 func main() {

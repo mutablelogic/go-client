@@ -82,7 +82,7 @@ func (transport *logtransport) RoundTrip(req *http.Request) (*http.Response, err
 	if transport.v {
 		data, err := req.Body.(*readwrapper).as(req.Header.Get("Content-Type"))
 		if err == nil {
-			fmt.Fprintf(transport.w, "  => %q\n", string(data))
+			fmt.Fprintf(transport.w, "  => %v\n", string(data))
 		}
 	}
 
@@ -134,7 +134,7 @@ func (w *readwrapper) as(mimetype string) ([]byte, error) {
 	switch mimetype {
 	case ContentTypeJson:
 		dest := bytes.NewBuffer(nil)
-		if err := json.Indent(dest, w.data.Bytes(), "    ", "  "); err != nil {
+		if err := json.Indent(dest, w.data.Bytes(), "     ", "  "); err != nil {
 			return nil, err
 		} else {
 			return dest.Bytes(), nil

@@ -5,7 +5,7 @@ gateway-specific clients. Basic usage:
 	package main
 
 	import (
-		client "github.com/mutablelogic/go-client/pkg/client"
+		client "github.com/mutablelogic/go-client"
 	)
 
 	func main() {

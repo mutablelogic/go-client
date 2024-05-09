@@ -4,10 +4,10 @@ bitwarden implements an API client for bitwarden
 package bitwarden
 
 import (
-	// Packages
 	"runtime"
 
-	"github.com/mutablelogic/go-client/pkg/client"
+	// Packages
+	"github.com/mutablelogic/go-client"
 
 	// Namespace imports
 	. "github.com/djthorpe/go-errors"
@@ -96,10 +96,10 @@ func (c *Client) Prelogin(email, password string) (*Session, error) {
 
 	// Prelogin
 	request.Email = email
-	payload, err := client.NewJSONRequest(request, client.ContentTypeJson)
+	payload, err := client.NewJSONRequest(request)
 	if err != nil {
 		return nil, err
-	} else if err := c.Do(payload.Post(), &response.Kdf, client.OptPath("accounts/prelogin")); err != nil {
+	} else if err := c.Do(payload, &response.Kdf, client.OptPath("accounts/prelogin")); err != nil {
 		return nil, err
 	} else if response.Kdf.Iterations == 0 {
 		return nil, ErrUnexpectedResponse

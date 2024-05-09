@@ -4,15 +4,14 @@ import (
 	"testing"
 
 	// Packages
-	"github.com/mutablelogic/go-client/pkg/client"
+	"github.com/mutablelogic/go-client"
 	"github.com/stretchr/testify/assert"
 )
 
 func Test_payload_001(t *testing.T) {
 	assert := assert.New(t)
-	payload := client.NewPayload(client.ContentTypeBinary)
+	payload := client.NewRequest()
 	assert.NotNil(payload)
 	assert.Equal("GET", payload.Method())
-	assert.Equal(client.ContentTypeJson, payload.Type())
-	assert.Equal(client.ContentTypeBinary, payload.Accept())
+	assert.Equal(client.ContentTypeAny, payload.Accept())
 }

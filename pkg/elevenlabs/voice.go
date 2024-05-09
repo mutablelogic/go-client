@@ -1,11 +1,9 @@
 package elevenlabs
 
 import (
-
 	// Packages
-
 	"github.com/djthorpe/go-errors"
-	"github.com/mutablelogic/go-client/pkg/client"
+	"github.com/mutablelogic/go-client"
 )
 
 ///////////////////////////////////////////////////////////////////////////////

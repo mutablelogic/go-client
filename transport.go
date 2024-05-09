@@ -10,8 +10,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/mutablelogic/go-client/pkg/multipart"
 	// Packages
+	"github.com/mutablelogic/go-client/pkg/multipart"
 )
 
 ///////////////////////////////////////////////////////////////////////////////

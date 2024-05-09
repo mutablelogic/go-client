@@ -22,7 +22,7 @@ There are also some example clients which use this library:
 * [Ollama API client](https://github.com/mutablelogic/go-client/tree/main/pkg/ollama)
 * [OpenAI API client](https://github.com/mutablelogic/go-client/tree/main/pkg/openai)
 
-Aiming to have compatibility with go version 1.19 and above.
+Aiming to have compatibility with go version 1.21 and above.
 
 ## Basic Usage
 
@@ -33,7 +33,7 @@ to a JSON endpoint:
 package main
 
 import (
-    client "github.com/mutablelogic/go-client/pkg/client"
+    client "github.com/mutablelogic/go-client"
 )
 
 func main() {
@@ -85,7 +85,7 @@ For example,
 package main
 
 import (
-    client "github.com/mutablelogic/go-client/pkg/client"
+    client "github.com/mutablelogic/go-client"
 )
 
 func main() {
@@ -160,7 +160,7 @@ The authentication token can be set as follows:
 package main
 
 import (
-    client "github.com/mutablelogic/go-client/pkg/client"
+    client "github.com/mutablelogic/go-client"
 )
 
 func main() {

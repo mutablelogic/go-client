@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	// Packages
-	opts "github.com/mutablelogic/go-client/pkg/client"
+	opts "github.com/mutablelogic/go-client"
 	newsapi "github.com/mutablelogic/go-client/pkg/newsapi"
 	assert "github.com/stretchr/testify/assert"
 )

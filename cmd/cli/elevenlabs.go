@@ -6,8 +6,8 @@ import (
 	"regexp"
 	"strings"
 
-	// Package imports
-	"github.com/mutablelogic/go-client/pkg/client"
+	// Packages
+	"github.com/mutablelogic/go-client"
 	"github.com/mutablelogic/go-client/pkg/elevenlabs"
 )
 

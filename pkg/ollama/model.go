@@ -1,14 +1,14 @@
 package ollama
 
 import (
-	// Packages
 	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"time"
 
-	"github.com/mutablelogic/go-client/pkg/client"
+	// Packages
+	"github.com/mutablelogic/go-client"
 )
 
 ///////////////////////////////////////////////////////////////////////////////

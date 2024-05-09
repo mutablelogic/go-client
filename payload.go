@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 
+	// Packages
 	"github.com/mutablelogic/go-client/pkg/multipart"
 )
 

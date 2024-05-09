@@ -8,6 +8,18 @@ This repository contains a generic HTTP client which can be adapted to provide:
 * Ability to send data of type `application/x-www-form-urlencoded`
 * Debugging capabilities to see the request and response data
 
+Documentation: https://pkg.go.dev/github.com/mutablelogic/go-client/pkg/client
+
+There are also some example API clients:
+
+* [Bitwarden Client](https://github.com/mutablelogic/go-client/tree/main/pkg/bitwarden)
+* [Elevenlabs Client](https://github.com/mutablelogic/go-client/tree/main/pkg/elevenlabs)
+* [Home Assistant Client](https://github.com/mutablelogic/go-client/tree/main/pkg/homeassistant)
+* [IPify Client](https://github.com/mutablelogic/go-client/tree/main/pkg/ipify)
+* [Mistral API Client](https://github.com/mutablelogic/go-client/tree/main/pkg/mistral)
+* [NewsAPI client](https://github.com/mutablelogic/go-client/tree/main/pkg/newsapi)
+* [OpenAI client](https://github.com/mutablelogic/go-client/tree/main/pkg/openai)
+
 ## Basic Usage
 
 The following example shows how to decode a response from a GET request
@@ -40,7 +52,7 @@ func main() {
 Various options can be passed to the client `New` method to control its behaviour:
 
 * `OptEndpoint(value string)` sets the endpoint for all requests
-* `OptTimeout(value time.Duration)` sets the timeout on any request, which defaults to 10 seconds
+* `OptTimeout(value time.Duration)` sets the timeout on any request, which defaults to 30 seconds
 * `OptUserAgent(value string)` sets the user agent string on each API request
 * `OptTrace(w io.Writer, verbose bool)` allows you to debug the request and response data. 
    When `verbose` is set to true, it also displays the payloads
@@ -112,7 +124,7 @@ type Payload interface {
 }
 ```
 
-### Request options
+## Request options
 
 The signature of the `Do` method is:
 
@@ -135,7 +147,7 @@ Various options can be passed to modify each individual request when using the `
 * `OptHeader(key, value string)` appends a custom header to the request
 
 
-### Authentication
+## Authentication
 
 The authentication token can be set as follows:
 
@@ -159,3 +171,14 @@ func main() {
     // ...
 }
 ```
+
+You can also set the token on a per-request basis using the `OptToken` option in call to the `Do` method.
+
+## Form submission
+
+You can create a payload with form data:
+
+* `client.NewFormRequest(payload any, accept string)` returns a new request with a Form data payload which defaults to POST.
+* `client.NewMultipartRequest(payload any, accept string)` returns a new request with a Multipart Form data payload which defaults to POST. This is useful for file uploads.
+
+The payload should be a `struct` where the fields are converted to form tuples. File uploads require a field of type `multipart.File`.

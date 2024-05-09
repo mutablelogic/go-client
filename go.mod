@@ -1,6 +1,8 @@
 module github.com/mutablelogic/go-client
 
-go 1.21
+go 1.22
+
+toolchain go1.22.3
 
 require (
 	github.com/andreburgaud/crypt2go v1.5.0

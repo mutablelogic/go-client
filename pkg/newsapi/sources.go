@@ -1,7 +1,8 @@
 package newsapi
 
 import (
-	"github.com/mutablelogic/go-client/pkg/client"
+	// Packages
+	"github.com/mutablelogic/go-client"
 
 	// Namespace imports
 	. "github.com/djthorpe/go-errors"

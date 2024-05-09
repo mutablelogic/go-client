@@ -33,7 +33,7 @@ to a JSON endpoint:
 package main
 
 import (
-    client "github.com/mutablelogic/go-client/pkg/client"
+    client "github.com/mutablelogic/go-client"
 )
 
 func main() {
@@ -85,7 +85,7 @@ For example,
 package main
 
 import (
-    client "github.com/mutablelogic/go-client/pkg/client"
+    client "github.com/mutablelogic/go-client"
 )
 
 func main() {
@@ -160,7 +160,7 @@ The authentication token can be set as follows:
 package main
 
 import (
-    client "github.com/mutablelogic/go-client/pkg/client"
+    client "github.com/mutablelogic/go-client"
 )
 
 func main() {

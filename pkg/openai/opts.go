@@ -3,7 +3,8 @@ package openai
 import (
 	"fmt"
 
-	"github.com/mutablelogic/go-client/pkg/client"
+	// Packages
+	"github.com/mutablelogic/go-client"
 )
 
 ///////////////////////////////////////////////////////////////////////////////

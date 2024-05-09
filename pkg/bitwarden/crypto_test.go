@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	// Packages
 	"github.com/mutablelogic/go-client/pkg/bitwarden"
 	"github.com/stretchr/testify/assert"
 )

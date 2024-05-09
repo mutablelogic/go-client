@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	// Packages
+	opts "github.com/mutablelogic/go-client"
 	bitwarden "github.com/mutablelogic/go-client/pkg/bitwarden"
-	opts "github.com/mutablelogic/go-client/pkg/client"
 	assert "github.com/stretchr/testify/assert"
 )
 

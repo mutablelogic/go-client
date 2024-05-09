@@ -7,7 +7,7 @@ import (
 	"time"
 
 	// Packages
-	opts "github.com/mutablelogic/go-client/pkg/client"
+	opts "github.com/mutablelogic/go-client"
 	ollama "github.com/mutablelogic/go-client/pkg/ollama"
 	assert "github.com/stretchr/testify/assert"
 )

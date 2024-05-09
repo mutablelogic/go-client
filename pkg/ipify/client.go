@@ -8,7 +8,7 @@ import (
 	"net/url"
 
 	// Packages
-	"github.com/mutablelogic/go-client/pkg/client"
+	"github.com/mutablelogic/go-client"
 )
 
 ///////////////////////////////////////////////////////////////////////////////

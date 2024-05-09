@@ -2,7 +2,7 @@ package mistral
 
 import (
 	// Packages
-	"github.com/mutablelogic/go-client/pkg/client"
+	"github.com/mutablelogic/go-client"
 
 	// Namespace imports
 	. "github.com/mutablelogic/go-client/pkg/openai/schema"

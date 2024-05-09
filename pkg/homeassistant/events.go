@@ -1,6 +1,6 @@
 package homeassistant
 
-import "github.com/mutablelogic/go-client/pkg/client"
+import "github.com/mutablelogic/go-client"
 
 ///////////////////////////////////////////////////////////////////////////////
 // TYPES

@@ -2,7 +2,7 @@ package main
 
 import (
 	// Packages
-	"github.com/mutablelogic/go-client/pkg/client"
+	"github.com/mutablelogic/go-client"
 	"github.com/mutablelogic/go-client/pkg/homeassistant"
 )
 

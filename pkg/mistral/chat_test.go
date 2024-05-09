@@ -5,9 +5,9 @@ import (
 	"testing"
 
 	// Packages
-	opts "github.com/mutablelogic/go-client/pkg/client"
+	opts "github.com/mutablelogic/go-client"
 	mistral "github.com/mutablelogic/go-client/pkg/mistral"
-	"github.com/mutablelogic/go-client/pkg/openai/schema"
+	schema "github.com/mutablelogic/go-client/pkg/openai/schema"
 	assert "github.com/stretchr/testify/assert"
 )
 

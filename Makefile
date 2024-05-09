@@ -21,7 +21,7 @@ cmd: $(CMD_DIR)
 
 test:
 	@${GO} mod tidy
-	@${GO} test -v ./pkg/...
+	@${GO} test ./pkg/...
 
 $(CMD_DIR): dependencies mkdir
 	@echo Build cmd $(notdir $@)

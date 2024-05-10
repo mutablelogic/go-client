@@ -39,6 +39,7 @@ func OptReqEndpoint(value string) RequestOpt {
 			return ErrBadParameter.Withf("endpoint: %q", value)
 		} else {
 			r.URL = url
+			r.Host = url.Hostname()
 		}
 		return nil
 	}

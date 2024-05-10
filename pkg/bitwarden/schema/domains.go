@@ -1,0 +1,18 @@
+package schema
+
+import "encoding/json"
+
+///////////////////////////////////////////////////////////////////////////////
+// TYPES
+
+type Domains struct {
+	Object string `json:"object"`
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// STRINGIFY
+
+func (d Domains) String() string {
+	data, _ := json.MarshalIndent(d, "", "  ")
+	return string(data)
+}

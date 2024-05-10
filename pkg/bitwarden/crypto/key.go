@@ -1,4 +1,4 @@
-package bitwarden
+package crypto
 
 import (
 	"crypto/rand"
@@ -6,7 +6,6 @@ import (
 	"encoding/base64"
 
 	// Packages
-
 	pbkdf2 "github.com/xdg-go/pbkdf2"
 )
 

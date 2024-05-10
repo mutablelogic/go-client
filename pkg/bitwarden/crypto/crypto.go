@@ -1,4 +1,4 @@
-package bitwarden
+package crypto
 
 import (
 	"crypto/aes"
@@ -8,11 +8,14 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
+	"strconv"
+	"strings"
 
 	// Packages
 	padding "github.com/andreburgaud/crypt2go/padding"
+
 	// Namespace imports
-	//. "github.com/djthorpe/go-errors"
+	. "github.com/djthorpe/go-errors"
 )
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -25,8 +28,8 @@ type CryptoKey struct {
 
 type Encrypted struct {
 	Type  uint   `json:"type"`          // Cypher type
-	Value string `json:"value"`         // Encrypted value in base64
 	Iv    string `json:"iv,omitempty"`  // Initialization Vector in base64 (for decryption)
+	Value string `json:"value"`         // Encrypted value in base64
 	Mac   string `json:"mac,omitempty"` // Message Authentication Hash (HMAC) in base64
 }
 
@@ -46,6 +49,29 @@ func NewKey(key, mac []byte) *CryptoKey {
 		Key: key,
 		Mac: mac,
 	}
+}
+
+// NewEncrypted returns a new Encrypted object from a string
+func NewEncrypted(s string) (*Encrypted, error) {
+	result := new(Encrypted)
+	parts := strings.SplitN(s, "|", 3)
+	if len(parts) < 2 {
+		return nil, ErrBadParameter.Withf("Invalid encrypted: %q", s)
+	} else if iv := strings.SplitN(parts[0], ".", 2); len(iv) != 2 {
+		return nil, ErrBadParameter.Withf("Invalid encrypted IV: %q", parts[0])
+	} else if typ, err := strconv.ParseUint(iv[0], 10, 32); err != nil {
+		return nil, ErrBadParameter.Withf("Invalid encrypted type: %q", iv[0])
+	} else {
+		result.Type = uint(typ)
+		result.Iv = iv[1]
+		result.Value = parts[1]
+	}
+	if len(parts) > 2 {
+		result.Mac = parts[2]
+	}
+
+	// Return success
+	return result, nil
 }
 
 ///////////////////////////////////////////////////////////////////////////////

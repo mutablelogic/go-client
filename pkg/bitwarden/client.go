@@ -4,10 +4,10 @@ bitwarden implements an API client for bitwarden
 package bitwarden
 
 import (
-	"runtime"
+	"time"
 
 	// Packages
-	"github.com/mutablelogic/go-client"
+	client "github.com/mutablelogic/go-client"
 
 	// Namespace imports
 	. "github.com/djthorpe/go-errors"
@@ -20,13 +20,26 @@ type Client struct {
 	*client.Client
 }
 
+type Kdf struct {
+	Kdf        int `json:"kdf,omitempty"`
+	Iterations int `json:"kdfIterations"`
+}
+
 type Session struct {
-	Kdf struct {
-		Iterations int `json:"kdfIterations"`
-	} `json:"kdf"`
-	Key      []byte `json:"key"`
-	Email    string `json:"email"`
-	Password string `json:"password"`
+	Email string `json:"email"`
+	Kdf   Kdf    `json:"kdf"`
+
+	// Device identifier
+	Device *Device `json:"device,omitempty"`
+
+	// Login Token
+	Token *Token `json:"token,omitempty"`
+
+	// Private
+	grantType    string
+	scope        string
+	clientId     string
+	clientSecret string
 }
 
 type reqPrelogin struct {
@@ -34,26 +47,32 @@ type reqPrelogin struct {
 }
 
 type reqToken struct {
-	GrantType         string `json:"grant_type"`
-	Email             string `json:"username"`
-	Password          string `json:"password"`
-	Scope             string `json:"scope"`
-	ClientId          string `json:"client_id"`
-	DeviceType        string `json:"deviceType"`
-	DeviceName        string `json:"deviceName"`
-	DeviceIdentifier  string `json:"deviceIdentifier"`
-	DevicePushToken   string `json:"devicePushToken"`
+	Email        string `json:"username"`
+	GrantType    string `json:"grant_type"`
+	Scope        string `json:"scope"`
+	ClientId     string `json:"client_id"`
+	ClientSecret string `json:"client_secret"`
+
+	// Device
+	*Device
+
+	// Two-factor authentication
 	TwoFactorToken    string `json:"twoFactorToken,omitempty"`
 	TwoFactorProvider int    `json:"twoFactorProvider,omitempty"`
 	TwoFactorRemember int    `json:"twoFactorRemember,omitempty"`
 }
 
 type respToken struct {
-	AccessToken  string `json:"access_token"`
-	ExpiresIn    int    `json:"expires_in"`
-	TokenType    string `json:"token_type"`
-	RefreshToken string `json:"refresh_token"`
-	Key          string `json:"key"`
+	Scope                string `json:"scope"`
+	Key                  string `json:"key"`
+	PrivateKey           string `json:"PrivateKey,omitempty"`
+	RefreshToken         string `json:"refresh_token,omitempty"`
+	MasterPasswordPolicy string `json:"master_password_policy,omitempty"`
+	ForcePasswordReset   bool   `json:"force_password_reset,omitempty"`
+	ResetMasterPassword  bool   `json:"reset_master_password,omitempty"`
+
+	Token
+	Kdf
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -66,10 +85,9 @@ const (
 )
 
 const (
-	deviceName    = "github.com/mutablelogic/go-client"
-	loginScope    = "api offline_access"
-	loginApiScope = "api"
-	clientId      = "connector"
+	defaultScope     = "api"
+	defaultGrantType = "client_credentials"
+	deviceName       = "github.com/mutablelogic/go-client"
 )
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -89,13 +107,14 @@ func New(opts ...client.ClientOpt) (*Client, error) {
 ///////////////////////////////////////////////////////////////////////////////
 // PUBLIC METHODS
 
-// Prelogin returns a session for logging in for a given email and password
-func (c *Client) Prelogin(email, password string) (*Session, error) {
+// Prelogin returns a session for logging in for a given email
+func (c *Client) Prelogin(email string) (*Session, error) {
 	var request reqPrelogin
 	var response Session
 
 	// Prelogin
 	request.Email = email
+	response.Email = request.Email
 	payload, err := client.NewJSONRequest(request)
 	if err != nil {
 		return nil, err
@@ -105,60 +124,65 @@ func (c *Client) Prelogin(email, password string) (*Session, error) {
 		return nil, ErrUnexpectedResponse
 	}
 
-	// Create keys for encryption and decryption
-	response.Email = email
-	response.Key = MakeInternalKey(email, password, response.Kdf.Iterations)
-	response.Password = HashedPassword(email, password, response.Kdf.Iterations)
-
 	// Return success
 	return &response, nil
 }
 
 // Login returns a token for a session, or a challenge for two-factor authentication
-func (c *Client) Login(session *Session) error {
+func (c *Client) Login(session *Session, opts ...SessionOpt) error {
 	var request reqToken
 	var response respToken
 
 	// Check parameters
-	if session == nil {
-		return ErrBadParameter
+	if session == nil || session.Email == "" {
+		return ErrBadParameter.With("session")
+	}
+
+	// Set session defaults
+	if session.grantType == "" {
+		session.grantType = defaultGrantType
+	}
+	if session.scope == "" {
+		session.scope = defaultScope
+	}
+
+	// Apply options
+	for _, opt := range opts {
+		if err := opt(session); err != nil {
+			return err
+		}
+	}
+
+	// Check
+	if session.clientId == "" || session.clientSecret == "" {
+		return ErrBadParameter.With("missing client_id or client_secret credentials")
 	}
 
 	// Set up the request
-	request.GrantType = "password"
 	request.Email = session.Email
-	request.Password = session.Password
-	request.Scope = loginScope
-	request.ClientId = clientId
-	request.DeviceType = deviceType()
-	request.DeviceName = deviceName
-	request.DeviceIdentifier = "aac2e34a-44db-42ab-a733-5322dd582c3d" // TODO
+	request.Scope = session.scope
+	request.ClientId = session.clientId
+	request.ClientSecret = session.clientSecret
+	request.GrantType = session.grantType
+	request.ClientId = session.clientId
+	request.ClientSecret = session.clientSecret
+
+	// Set device
+	if session.Device != nil {
+		request.Device = session.Device
+	}
 
 	// Request -> Response
 	if payload, err := client.NewFormRequest(request, client.ContentTypeJson); err != nil {
 		return err
-	} else if err := c.Do(payload, &response, client.OptReqEndpoint(identityUrl), client.OptPath("connect/token"), client.OptReqHeader("Host", "identity.bitwarden.com")); err != nil {
+	} else if err := c.Do(payload, &response, client.OptReqEndpoint(identityUrl), client.OptPath("connect/token")); err != nil {
 		return err
 	}
 
-	// TODO
+	// Store token
+	session.Token = &response.Token
+	session.Token.now = time.Now()
 
 	// Return success
 	return nil
-}
-
-///////////////////////////////////////////////////////////////////////////////
-// PRIVATE METHODS
-
-func deviceType() string {
-	switch runtime.GOOS {
-	case "linux":
-		return "8" // Linux Desktop
-	case "darwin":
-		return "7" // MacOS Desktop
-	case "windows":
-		return "6" // Windows Desktop
-	default:
-		return "14" // Unknown Browser
-	}
 }

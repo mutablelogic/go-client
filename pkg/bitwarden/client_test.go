@@ -24,7 +24,7 @@ func Test_client_002(t *testing.T) {
 	client, err := bitwarden.New(opts.OptTrace(os.Stderr, true))
 	assert.NoError(err)
 
-	session, err := client.Prelogin("nobody@example.com", "p4ssw0rd")
+	session, err := client.Prelogin("nobody@example.com")
 	assert.NoError(err)
 	assert.NotNil(session)
 
@@ -32,18 +32,33 @@ func Test_client_002(t *testing.T) {
 	t.Log(string(data))
 }
 
-func DisabledTest_client_003(t *testing.T) { // TODO
+func Test_client_003(t *testing.T) { // TODO
 	assert := assert.New(t)
 	client, err := bitwarden.New(opts.OptTrace(os.Stderr, true))
 	assert.NoError(err)
 
-	session, err := client.Prelogin("nobody@example.com", "p4ssw0rd")
+	session, err := client.Prelogin("nobody@example.com")
 	assert.NoError(err)
 	assert.NotNil(session)
 
-	err = client.Login(session)
+	err = client.Login(session, bitwarden.OptCredentials(GetCredentials(t)), bitwarden.OptDevice(bitwarden.Device{
+		Name: "mydevice",
+	}))
 	assert.NoError(err)
 
 	data, _ := json.MarshalIndent(session, "", "  ")
 	t.Log(string(data))
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// ENVIRONMENT
+
+func GetCredentials(t *testing.T) (string, string) {
+	key := os.Getenv("BW_CLIENTID")
+	secret := os.Getenv("BW_CLIENTSECRET")
+	if key == "" || secret == "" {
+		t.Skip("BW_CLIENTID or BW_CLIENTSECRET not set")
+		t.SkipNow()
+	}
+	return key, secret
 }

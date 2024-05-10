@@ -1,13 +1,14 @@
 package bitwarden_test
 
 import (
-	"encoding/json"
 	"os"
+	"strings"
 	"testing"
 
 	// Packages
 	opts "github.com/mutablelogic/go-client"
 	bitwarden "github.com/mutablelogic/go-client/pkg/bitwarden"
+	crypto "github.com/mutablelogic/go-client/pkg/bitwarden/crypto"
 	assert "github.com/stretchr/testify/assert"
 )
 
@@ -19,35 +20,31 @@ func Test_client_001(t *testing.T) {
 	t.Log(client)
 }
 
-func Test_client_002(t *testing.T) {
+func Test_client_004(t *testing.T) {
 	assert := assert.New(t)
-	client, err := bitwarden.New(opts.OptTrace(os.Stderr, true))
-	assert.NoError(err)
 
-	session, err := client.Prelogin("nobody@example.com")
-	assert.NoError(err)
-	assert.NotNil(session)
-
-	data, _ := json.MarshalIndent(session, "", "  ")
-	t.Log(string(data))
+	// Create a master key
+	key := crypto.MakeInternalKey(strings.ToLower(GetEmail(t)), GetPassword(t), 0, 100000)
+	assert.NotNil(key)
+	t.Logf("MakeInternalKey password=%q salt=%q iter=%v", GetPassword(t), GetEmail(t), 100000)
+	t.Logf("  => %v", key)
 }
 
-func Test_client_003(t *testing.T) { // TODO
+func Test_client_005(t *testing.T) {
 	assert := assert.New(t)
 	client, err := bitwarden.New(opts.OptTrace(os.Stderr, true))
 	assert.NoError(err)
 
-	session, err := client.Prelogin("nobody@example.com")
-	assert.NoError(err)
-	assert.NotNil(session)
-
+	// Login a new session
+	session := new(bitwarden.Session)
 	err = client.Login(session, bitwarden.OptCredentials(GetCredentials(t)), bitwarden.OptDevice(bitwarden.Device{
 		Name: "mydevice",
 	}))
 	assert.NoError(err)
 
-	data, _ := json.MarshalIndent(session, "", "  ")
-	t.Log(string(data))
+	// Create a master key
+	masterKey := session.MakeInternalKey(strings.ToLower(GetEmail(t)), GetPassword(t))
+	assert.NotNil(masterKey)
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -61,4 +58,31 @@ func GetCredentials(t *testing.T) (string, string) {
 		t.SkipNow()
 	}
 	return key, secret
+}
+
+func GetIdentifier(t *testing.T) string {
+	device := os.Getenv("BW_DEVICEID")
+	if device == "" {
+		t.Skip("BW_DEVICEID not set, use ", bitwarden.MakeDeviceIdentifier())
+		t.SkipNow()
+	}
+	return device
+}
+
+func GetEmail(t *testing.T) string {
+	email := os.Getenv("BW_EMAIL")
+	if email == "" {
+		t.Skip("BW_EMAIL not set")
+		t.SkipNow()
+	}
+	return email
+}
+
+func GetPassword(t *testing.T) string {
+	password := os.Getenv("BW_PASSWORD")
+	if password == "" {
+		t.Skip("BW_PASSWORD not set")
+		t.SkipNow()
+	}
+	return password
 }

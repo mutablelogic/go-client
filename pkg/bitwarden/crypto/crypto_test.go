@@ -11,7 +11,7 @@ import (
 
 func Test_crypto_001(t *testing.T) {
 	assert := assert.New(t)
-	key := crypto.MakeInternalKey("nobody@example.com", "p4ssw0rd", 5000)
+	key := crypto.MakeInternalKey("nobody@example.com", "p4ssw0rd", 0, 5000)
 	assert.NotNil(key)
 	assert.Len(key, 32)
 

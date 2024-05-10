@@ -86,6 +86,18 @@ func (k *Encrypted) String() string {
 	return result
 }
 
+// Return the CryptoKey as a string
+func (k *CryptoKey) String() string {
+	str := "<key "
+	if len(k.Key) > 0 {
+		str += fmt.Sprintf(" value=%q", base64.StdEncoding.EncodeToString(k.Key))
+	}
+	if len(k.Mac) > 0 {
+		str += fmt.Sprintf(" mac=%q", base64.StdEncoding.EncodeToString(k.Mac))
+	}
+	return str + ">"
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 // PUBLIC METHODS
 
@@ -123,6 +135,7 @@ func (k *CryptoKey) Encrypt(data []byte) (*Encrypted, error) {
 		mac.Write(iv)
 		mac.Write(ciphertext)
 		result.Mac = base64.StdEncoding.EncodeToString(mac.Sum(nil))
+		result.Type = 2
 	}
 
 	// Return success
@@ -131,6 +144,14 @@ func (k *CryptoKey) Encrypt(data []byte) (*Encrypted, error) {
 
 // Decrypt data using AES-256-CBC
 func (k *CryptoKey) Decrypt(data *Encrypted) ([]byte, error) {
+	if data == nil {
+		return nil, ErrBadParameter.With("invalid encrypted data")
+	}
+	if data.Type != 0 && data.Type != 2 {
+		return nil, ErrBadParameter.With("invalid encrypted type:", data.Type)
+	}
+
+	// Decode encrypted data
 	value, err := base64.StdEncoding.DecodeString(data.Value)
 	if err != nil {
 		return nil, err
@@ -146,11 +167,11 @@ func (k *CryptoKey) Decrypt(data *Encrypted) ([]byte, error) {
 	}
 
 	// Decrypt data
-	block, err := aes.NewCipher(k.Key)
-	if err != nil {
+	if block, err := aes.NewCipher(k.Key); err != nil {
 		panic(err)
+	} else {
+		cipher.NewCBCDecrypter(block, iv).CryptBlocks(value, value)
 	}
-	cipher.NewCBCDecrypter(block, iv).CryptBlocks(value, value)
 
 	// Unpad data
 	value, err = padding.NewPkcs7Padding(aes.BlockSize).Unpad(value)
@@ -160,6 +181,16 @@ func (k *CryptoKey) Decrypt(data *Encrypted) ([]byte, error) {
 
 	// Return success
 	return value, nil
+}
+
+func (k *CryptoKey) DecryptStr(data string) (string, error) {
+	if encrypted, err := NewEncrypted(data); err != nil {
+		return "", err
+	} else if value, err := k.Decrypt(encrypted); err != nil {
+		return "", err
+	} else {
+		return string(value), nil
+	}
 }
 
 // Check the integrity of the data using HMAC, if the key has a MAC

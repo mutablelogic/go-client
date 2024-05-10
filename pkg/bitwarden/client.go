@@ -4,10 +4,13 @@ bitwarden implements an API client for bitwarden
 package bitwarden
 
 import (
+	"crypto/sha256"
 	"time"
 
 	// Packages
 	client "github.com/mutablelogic/go-client"
+	"github.com/mutablelogic/go-client/pkg/bitwarden/crypto"
+	"golang.org/x/crypto/hkdf"
 
 	// Namespace imports
 	. "github.com/djthorpe/go-errors"
@@ -21,14 +24,11 @@ type Client struct {
 }
 
 type Kdf struct {
-	Kdf        int `json:"kdf,omitempty"`
-	Iterations int `json:"kdfIterations"`
+	Type       int `json:"kdf"`
+	Iterations int `json:"KdfIterations"`
 }
 
 type Session struct {
-	Email string `json:"email"`
-	Kdf   Kdf    `json:"kdf"`
-
 	// Device identifier
 	Device *Device `json:"device,omitempty"`
 
@@ -40,6 +40,7 @@ type Session struct {
 	scope        string
 	clientId     string
 	clientSecret string
+	kdf          Kdf
 }
 
 type reqPrelogin struct {
@@ -47,7 +48,6 @@ type reqPrelogin struct {
 }
 
 type reqToken struct {
-	Email        string `json:"username"`
 	GrantType    string `json:"grant_type"`
 	Scope        string `json:"scope"`
 	ClientId     string `json:"client_id"`
@@ -107,34 +107,13 @@ func New(opts ...client.ClientOpt) (*Client, error) {
 ///////////////////////////////////////////////////////////////////////////////
 // PUBLIC METHODS
 
-// Prelogin returns a session for logging in for a given email
-func (c *Client) Prelogin(email string) (*Session, error) {
-	var request reqPrelogin
-	var response Session
-
-	// Prelogin
-	request.Email = email
-	response.Email = request.Email
-	payload, err := client.NewJSONRequest(request)
-	if err != nil {
-		return nil, err
-	} else if err := c.Do(payload, &response.Kdf, client.OptPath("accounts/prelogin")); err != nil {
-		return nil, err
-	} else if response.Kdf.Iterations == 0 {
-		return nil, ErrUnexpectedResponse
-	}
-
-	// Return success
-	return &response, nil
-}
-
 // Login returns a token for a session, or a challenge for two-factor authentication
 func (c *Client) Login(session *Session, opts ...SessionOpt) error {
 	var request reqToken
 	var response respToken
 
 	// Check parameters
-	if session == nil || session.Email == "" {
+	if session == nil {
 		return ErrBadParameter.With("session")
 	}
 
@@ -155,15 +134,12 @@ func (c *Client) Login(session *Session, opts ...SessionOpt) error {
 
 	// Check
 	if session.clientId == "" || session.clientSecret == "" {
-		return ErrBadParameter.With("missing client_id or client_secret credentials")
+		return ErrBadParameter.With("missing credentials")
 	}
 
 	// Set up the request
-	request.Email = session.Email
-	request.Scope = session.scope
-	request.ClientId = session.clientId
-	request.ClientSecret = session.clientSecret
 	request.GrantType = session.grantType
+	request.Scope = session.scope
 	request.ClientId = session.clientId
 	request.ClientSecret = session.clientSecret
 
@@ -179,10 +155,55 @@ func (c *Client) Login(session *Session, opts ...SessionOpt) error {
 		return err
 	}
 
-	// Store token
+	// Update session
 	session.Token = &response.Token
 	session.Token.now = time.Now()
+	session.kdf = response.Kdf
 
 	// Return success
 	return nil
+}
+
+// Make a master key from a session
+func (s *Session) MakeInternalKey(salt, password string) []byte {
+	return crypto.MakeInternalKey(salt, password, s.kdf.Type, s.kdf.Iterations)
+}
+
+// Make a decryption key from a session
+func (s *Session) MakeDecryptKey(salt, password string, cipher *crypto.Encrypted) *crypto.CryptoKey {
+	var key *crypto.CryptoKey
+
+	// Create the internal key
+	internalKey := s.MakeInternalKey(salt, password)
+	if internalKey == nil {
+		return nil
+	}
+
+	// Create the (key,mac) from the internalKey
+	switch cipher.Type {
+	case 0:
+		key = crypto.NewKey(internalKey, nil)
+	case 2:
+		value := make([]byte, 32)
+		mac := make([]byte, 32)
+		hkdf.Expand(sha256.New, internalKey, []byte("enc")).Read(value)
+		hkdf.Expand(sha256.New, internalKey, []byte("mac")).Read(mac)
+		key = crypto.NewKey(value, mac)
+	default:
+		return nil
+	}
+
+	// Decrypt the cipher
+	finalKey, err := key.Decrypt(cipher)
+	if err != nil {
+		return nil
+	}
+	switch len(finalKey) {
+	case 32:
+		return crypto.NewKey(finalKey, nil)
+	case 64:
+		return crypto.NewKey(finalKey[:32], finalKey[32:])
+	default:
+		return nil
+	}
 }

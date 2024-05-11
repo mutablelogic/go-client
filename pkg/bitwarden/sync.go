@@ -16,17 +16,17 @@ import (
 
 type Sync struct {
 	*schema.Profile `json:"Profile,omitempty"`
-	Folders         []*schema.Folder `json:"Folders,omitempty"`
-	Ciphers         []*schema.Cipher `json:"Ciphers,omitempty"`
-	Domains         *schema.Domains  `json:"Domains,omitempty"`
-	Object          string           `json:"Object"`
+	Folders         *schema.Folders `json:"Folders,omitempty"`
+	Ciphers         *schema.Ciphers `json:"Ciphers,omitempty"`
+	Domains         *schema.Domains `json:"Domains,omitempty"`
+	Object          string          `json:"Object"`
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 // PUBLIC METHODS
 
 // Sync all items
-func (c *Client) Sync(session *Session) (*Sync, error) {
+func (c *Client) Sync(session *schema.Session) (*Sync, error) {
 	response := new(Sync)
 
 	// Check session

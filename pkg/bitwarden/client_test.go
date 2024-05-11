@@ -9,6 +9,7 @@ import (
 	opts "github.com/mutablelogic/go-client"
 	bitwarden "github.com/mutablelogic/go-client/pkg/bitwarden"
 	crypto "github.com/mutablelogic/go-client/pkg/bitwarden/crypto"
+	"github.com/mutablelogic/go-client/pkg/bitwarden/schema"
 	assert "github.com/stretchr/testify/assert"
 )
 
@@ -36,8 +37,8 @@ func Test_client_005(t *testing.T) {
 	assert.NoError(err)
 
 	// Login a new session
-	session := new(bitwarden.Session)
-	err = client.Login(session, bitwarden.OptCredentials(GetCredentials(t)), bitwarden.OptDevice(bitwarden.Device{
+	session := bitwarden.NewSession()
+	err = client.Login(session, bitwarden.OptCredentials(GetCredentials(t)), bitwarden.OptDevice(schema.Device{
 		Name: "mydevice",
 	}))
 	assert.NoError(err)
@@ -63,7 +64,7 @@ func GetCredentials(t *testing.T) (string, string) {
 func GetIdentifier(t *testing.T) string {
 	device := os.Getenv("BW_DEVICEID")
 	if device == "" {
-		t.Skip("BW_DEVICEID not set, use ", bitwarden.MakeDeviceIdentifier())
+		t.Skip("BW_DEVICEID not set, use ", schema.NewDevice(t.Name()).Identifier)
 		t.SkipNow()
 	}
 	return device

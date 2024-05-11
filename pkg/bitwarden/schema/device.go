@@ -1,4 +1,4 @@
-package bitwarden
+package schema
 
 import (
 	"fmt"
@@ -55,7 +55,7 @@ const (
 
 // Return a new device with a random identifier
 func NewDevice(name string) *Device {
-	return NewDeviceEx(deviceType(), MakeDeviceIdentifier(), name, "")
+	return NewDeviceEx(MakeDeviceType(), MakeDeviceIdentifier(), name, "")
 }
 
 // Return a new device with a known identifier and type
@@ -89,7 +89,7 @@ func (d Device) String() string {
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-// PUBLIC METHODS
+// PRIVATE METHODS
 
 // MakeDeviceIdentifier creates a randomly-assigned device identifier
 func MakeDeviceIdentifier() string {
@@ -104,10 +104,8 @@ func MakeDeviceIdentifier() string {
 	return uuid
 }
 
-///////////////////////////////////////////////////////////////////////////////
-// PRIVATE METHODS
-
-func deviceType() DeviceType {
+// MakeDeviceType returns the device type for the current runtime
+func MakeDeviceType() DeviceType {
 	switch runtime.GOOS {
 	case "linux":
 		return LinuxDesktop

@@ -2,9 +2,7 @@ package schema
 
 import (
 	"encoding/json"
-
-	// Packages
-	"github.com/mutablelogic/go-client/pkg/bitwarden/crypto"
+	"io"
 )
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -40,13 +38,10 @@ func (p Profile) String() string {
 ///////////////////////////////////////////////////////////////////////////////
 // PUBLIC METHODS
 
-// Return a decrypted key using the master key
-func (p Profile) DecryptionKey(k *crypto.CryptoKey) ([]byte, error) {
-	if encrypted, err := crypto.NewEncrypted(p.Key); err != nil {
-		return nil, err
-	} else if data, err := k.Decrypt(encrypted); err != nil {
-		return nil, err
-	} else {
-		return data, nil
-	}
+func (p *Profile) Read(r io.Reader) error {
+	return json.NewDecoder(r).Decode(p)
+}
+
+func (p *Profile) Write(w io.Writer) error {
+	return json.NewEncoder(w).Encode(p)
 }

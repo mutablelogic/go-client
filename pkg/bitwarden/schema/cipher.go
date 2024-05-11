@@ -2,11 +2,14 @@ package schema
 
 import (
 	"encoding/json"
+	"io"
 	"time"
 )
 
 ///////////////////////////////////////////////////////////////////////////////
 // TYPES
+
+type Ciphers []*Cipher
 
 type Cipher struct {
 	Id             string     `json:"id"`
@@ -45,6 +48,17 @@ const (
 func (c Cipher) String() string {
 	data, _ := json.MarshalIndent(c, "", "  ")
 	return string(data)
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// PUBLIC METHODS
+
+func (c *Ciphers) Read(r io.Reader) error {
+	return json.NewDecoder(r).Decode(c)
+}
+
+func (c *Ciphers) Write(w io.Writer) error {
+	return json.NewEncoder(w).Encode(c)
 }
 
 /*

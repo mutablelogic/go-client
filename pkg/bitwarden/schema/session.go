@@ -1,0 +1,109 @@
+package schema
+
+import (
+	"crypto/sha256"
+	"encoding/json"
+	"io"
+
+	// Packages
+	crypto "github.com/mutablelogic/go-client/pkg/bitwarden/crypto"
+	hkdf "golang.org/x/crypto/hkdf"
+)
+
+///////////////////////////////////////////////////////////////////////////////
+// TYPES
+
+type Session struct {
+	ReaderWriter
+
+	// Device identifier
+	Device *Device `json:"device,omitempty"`
+
+	// Login Token
+	Token *Token `json:"token,omitempty"`
+
+	// Encryption parameters
+	Kdf
+
+	// Private
+	grantType    string
+	scope        string
+	clientId     string
+	clientSecret string
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// STRINGIFY
+
+func (s Session) String() string {
+	data, _ := json.MarshalIndent(s, "", "  ")
+	return string(data)
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// PUBLIC METHODS
+
+// Set client id and secret
+func (s *Session) SetCredentials(clientId, secret string) {
+	s.clientId = clientId
+	s.clientSecret = secret
+}
+
+// Session Reader
+func (s *Session) Read(r io.Reader) error {
+	return json.NewDecoder(r).Decode(s)
+}
+
+// Session Writer
+func (s *Session) Write(w io.Writer) error {
+	return json.NewEncoder(w).Encode(s)
+}
+
+// Return true if the session has a token and the token is not expired
+func (s *Session) IsValid() bool {
+	return s.Token != nil && s.Token.IsValid()
+}
+
+// Make a master key from a session
+func (s *Session) MakeInternalKey(salt, password string) []byte {
+	return crypto.MakeInternalKey(salt, password, s.Kdf.Type, s.Kdf.Iterations)
+}
+
+// Make a decryption key from a session
+func (s *Session) MakeDecryptKey(salt, password string, cipher *crypto.Encrypted) *crypto.CryptoKey {
+	var key *crypto.CryptoKey
+
+	// Create the internal key
+	internalKey := s.MakeInternalKey(salt, password)
+	if internalKey == nil {
+		return nil
+	}
+
+	// Create the (key,mac) from the internalKey
+	switch cipher.Type {
+	case 0:
+		key = crypto.NewKey(internalKey, nil)
+	case 2:
+		value := make([]byte, 32)
+		mac := make([]byte, 32)
+		hkdf.Expand(sha256.New, internalKey, []byte("enc")).Read(value)
+		hkdf.Expand(sha256.New, internalKey, []byte("mac")).Read(mac)
+		key = crypto.NewKey(value, mac)
+	default:
+		return nil
+	}
+
+	// Decrypt the cipher
+	finalKey, err := key.Decrypt(cipher)
+	if err != nil {
+		return nil
+	}
+	switch len(finalKey) {
+	case 32:
+		return crypto.NewKey(finalKey, nil)
+	case 64:
+		return crypto.NewKey(finalKey[:32], finalKey[32:])
+	default:
+		return nil
+	}
+}

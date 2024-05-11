@@ -2,11 +2,15 @@ package schema
 
 import (
 	"encoding/json"
+	"fmt"
+	"io"
 	"time"
 )
 
 ///////////////////////////////////////////////////////////////////////////////
 // TYPES
+
+type Folders []*Folder
 
 type Folder struct {
 	Id           string    `json:"id"`
@@ -18,23 +22,21 @@ type Folder struct {
 ///////////////////////////////////////////////////////////////////////////////
 // PUBLIC METHODS
 
-/*
-// Decrypt and return plaintext version of folder
-func (f Folder) Decrypt(k *bitwarden.CryptoKey) error {
-	if encrypted, err := bitwarden.NewEncrypted(f.Name); err != nil {
-		return err
-	} else if data, err := k.Decrypt(encrypted); err != nil {
-		return err
-	} else {
-		f.Name = string(data)
-	}
-
-	fmt.Println(f)
-
-	// Return success
-	return nil
+// Read a list of folders
+func (f *Folders) Read(r io.Reader) error {
+	return json.NewDecoder(r).Decode(f)
 }
-*/
+
+// Write a list of folders
+func (f *Folders) Write(w io.Writer) error {
+	return json.NewEncoder(w).Encode(f)
+}
+
+// Decrypt a folder
+func (f Folder) Decrypt(s *Session) (Crypter, error) {
+	fmt.Println("TODO: Decrypt")
+	return f, nil
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 // STRINGIFY

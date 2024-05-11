@@ -122,7 +122,8 @@ func (s *Session) CacheKey(key, email, password string) error {
 	if encryptedKey, err := crypto.NewEncrypted(key); err != nil {
 		return err
 	} else if decryptKey := s.MakeDecryptKey(strings.ToLower(email), password, encryptedKey); decryptKey == nil {
-		return ErrBadParameter.With("CacheKey")
+		// Probably a bad key, email or password
+		return ErrNotAuthorized.With("Failed to create decryption key")
 	} else {
 		s.cryptKey = decryptKey
 	}

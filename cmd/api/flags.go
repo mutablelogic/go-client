@@ -92,7 +92,8 @@ func (flags *Flags) Parse(args []string) error {
 	// Parse the commands
 	for _, cmd := range flags.cmds {
 		if err := cmd.Parse(flags, opts...); err != nil {
-			return fmt.Errorf("%v: %w", cmd.Name, err)
+			fmt.Fprintf(os.Stderr, "%v: %v\n", cmd.Name, err)
+			return err
 		}
 	}
 

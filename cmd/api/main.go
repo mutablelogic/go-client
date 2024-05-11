@@ -16,6 +16,7 @@ func main() {
 	// Register commands
 	ipifyRegister(flags)
 	bwRegister(flags)
+	newsapiRegister(flags)
 
 	// Parse
 	if err := flags.Parse(os.Args[1:]); errors.Is(err, ErrHelp) {
@@ -38,19 +39,19 @@ func main() {
 	}
 
 	// Get function then run it
-	fn, err := cmd.Get(flags.Args()[1:])
+	fn, args, err := cmd.Get(flags.Args()[1:])
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(-1)
 	} else if fn == nil {
 		flags.PrintCommandUsage(cmd)
-	} else if err := Run(fn); err != nil {
+	} else if err := Run(fn, args); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(-2)
 	}
 }
 
-func Run(fn *Fn) error {
+func Run(fn *Fn, args []string) error {
 	writer := tablewriter.New(os.Stdout, tablewriter.OptOutputText(), tablewriter.OptHeader())
-	return fn.Call(writer)
+	return fn.Call(writer, args)
 }

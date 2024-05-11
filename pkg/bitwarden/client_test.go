@@ -9,7 +9,7 @@ import (
 	opts "github.com/mutablelogic/go-client"
 	bitwarden "github.com/mutablelogic/go-client/pkg/bitwarden"
 	crypto "github.com/mutablelogic/go-client/pkg/bitwarden/crypto"
-	"github.com/mutablelogic/go-client/pkg/bitwarden/schema"
+	schema "github.com/mutablelogic/go-client/pkg/bitwarden/schema"
 	assert "github.com/stretchr/testify/assert"
 )
 
@@ -37,7 +37,7 @@ func Test_client_005(t *testing.T) {
 	assert.NoError(err)
 
 	// Login a new session
-	session := bitwarden.NewSession()
+	session := schema.NewSession()
 	err = client.Login(session, bitwarden.OptCredentials(GetCredentials(t)), bitwarden.OptDevice(schema.Device{
 		Name: "mydevice",
 	}))

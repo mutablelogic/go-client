@@ -111,7 +111,8 @@ func (s *Session) MakeDecryptKey(salt, password string, cipher *crypto.Encrypted
 	}
 }
 
-// Create the encryption key from an email and password
+// Create the encryption key from an email and password and cache it. Returns
+// ErrNotAuthorized error if the key, email or password credentials are invalid
 func (s *Session) CacheKey(key, email, password string) error {
 	// Check parameters
 	if key == "" || email == "" || password == "" {

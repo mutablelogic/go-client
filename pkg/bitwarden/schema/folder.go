@@ -39,7 +39,7 @@ func (f Folder) Decrypt(s *Session) (Crypter, error) {
 	} else {
 		result.Name = value
 	}
-	return &f, nil
+	return result, nil
 }
 
 ///////////////////////////////////////////////////////////////////////////////

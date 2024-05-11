@@ -16,6 +16,16 @@ import (
 )
 
 ///////////////////////////////////////////////////////////////////////////////
+// TYPES
+
+type bwCipher struct {
+	Name     string
+	Username string
+	URI      string
+	Folder   string
+}
+
+///////////////////////////////////////////////////////////////////////////////
 // GLOBALS
 
 const (
@@ -47,9 +57,10 @@ func bwRegister(flags *Flags) {
 		Description: "Interact with the Bitwarden API",
 		Parse:       bwParse,
 		Fn: []Fn{
-			{Name: "login", Description: "Login to Bitwarden", Call: bwLogin},
+			{Name: "auth", Description: "Authenticate with Bitwarden", Call: bwAuth},
 			{Name: "sync", Description: "Sync items from Bitwarden", Call: bwSync},
 			{Name: "folders", Description: "Retrieve folders", Call: bwFolders},
+			{Name: "logins", Description: "Retrieve login items", Call: bwLogins},
 		},
 	})
 }
@@ -87,7 +98,7 @@ func bwParse(flags *Flags, opts ...client.ClientOpt) error {
 ///////////////////////////////////////////////////////////////////////////////
 // API METHODS
 
-func bwLogin(w *tablewriter.TableWriter) error {
+func bwAuth(w *tablewriter.TableWriter) error {
 	// Load session or create a new one
 	session, err := bwReadSession()
 	if err != nil {
@@ -168,24 +179,15 @@ func bwFolders(w *tablewriter.TableWriter) error {
 		return err
 	}
 
-	// If no password is set, then read it
-	password := bwPassword
-	if password == "" {
-		stdin := int(os.Stdin.Fd())
-		if !term.IsTerminal(stdin) {
-			return ErrBadParameter.With("No password set and not running in terminal")
-		}
-		fmt.Fprintf(os.Stdout, "Enter password: ")
-		if value, err := term.ReadPassword(stdin); err != nil {
+	// Make an encryption key
+	if bwPassword == "" {
+		if v, err := bwReadPasswordFromTerminal(); err != nil {
 			return err
 		} else {
-			password = string(value)
+			bwPassword = v
 		}
-		fmt.Fprintf(os.Stdout, "\n")
 	}
-
-	// Make the decryption key
-	if err := session.CacheKey(profile.Key, profile.Email, password); err != nil {
+	if err := session.CacheKey(profile.Key, profile.Email, bwPassword); err != nil {
 		return err
 	}
 
@@ -211,8 +213,79 @@ func bwFolders(w *tablewriter.TableWriter) error {
 	return nil
 }
 
+func bwLogins(w *tablewriter.TableWriter) error {
+	// Load the profile
+	profile, err := bwReadProfile()
+	if err != nil {
+		return err
+	}
+
+	// Load session or create a new one
+	session, err := bwReadSession()
+	if err != nil {
+		return err
+	}
+
+	// Make an encryption key
+	if bwPassword == "" {
+		if v, err := bwReadPasswordFromTerminal(); err != nil {
+			return err
+		} else {
+			bwPassword = v
+		}
+	}
+	if err := session.CacheKey(profile.Key, profile.Email, bwPassword); err != nil {
+		return err
+	}
+
+	// Read the ciphers
+	ciphers := schema.Ciphers{}
+	result := []bwCipher{}
+	if err := bwRead("ciphers.json", &ciphers); err != nil {
+		return err
+	}
+	// Decrypt the ciphers from the session
+	for _, cipher := range ciphers {
+		if cipher.Type != schema.CipherTypeLogin {
+			continue
+		}
+		if decrypted, err := cipher.Decrypt(session); err != nil {
+			return err
+		} else {
+			result = append(result, bwCipher{
+				Name:     decrypted.(*schema.Cipher).Name,
+				Username: decrypted.(*schema.Cipher).Login.Username,
+				URI:      decrypted.(*schema.Cipher).Login.URI,
+				Folder:   decrypted.(*schema.Cipher).FolderId,
+			})
+		}
+	}
+
+	// Output the ciphers
+	w.Write(result)
+
+	// Return success
+	return nil
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 // OTHER
+
+func bwReadPasswordFromTerminal() (string, error) {
+	stdin := int(os.Stdin.Fd())
+	if !term.IsTerminal(stdin) {
+		return "", ErrBadParameter.With("No password set and not running in terminal")
+	}
+	fmt.Fprintf(os.Stdout, "Enter password: ")
+	defer func() {
+		fmt.Fprintf(os.Stdout, "\n")
+	}()
+	if value, err := term.ReadPassword(stdin); err != nil {
+		return "", err
+	} else {
+		return string(value), nil
+	}
+}
 
 func bwReadProfile() (*schema.Profile, error) {
 	result := schema.NewProfile()

@@ -134,6 +134,9 @@ func (s *Session) CacheKey(key, email, password string) error {
 
 // Decrypt a cipher string, requires a cached key first
 func (s *Session) DecryptStr(value string) (string, error) {
+	if value == "" {
+		return "", nil
+	}
 	if s.cryptKey == nil {
 		return "", ErrInternalAppError.With("Missing decryption key")
 	}

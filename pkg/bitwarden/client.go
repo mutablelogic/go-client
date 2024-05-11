@@ -21,13 +21,15 @@ type Client struct {
 	*client.Client
 }
 
-type reqToken struct {
+type Login struct {
 	GrantType    string `json:"grant_type"`
 	Scope        string `json:"scope"`
 	ClientId     string `json:"client_id"`
 	ClientSecret string `json:"client_secret"`
+}
 
-	// Device
+type reqToken struct {
+	Login
 	*schema.Device
 
 	// Two-factor authentication
@@ -77,21 +79,13 @@ func New(opts ...client.ClientOpt) (*Client, error) {
 	return &Client{client}, nil
 }
 
-// Create a new empty session
-func NewSession() *schema.Session {
-	session := new(schema.Session)
-	session.grantType = defaultGrantType
-	session.scope = defaultScope
-	return session
-}
-
 ///////////////////////////////////////////////////////////////////////////////
 // PUBLIC METHODS
 
 // Login updates a session with a token. To create a new, empty session
 // then pass an empty session to this method. Use OptCredentials  option
 // to pass a client_id and client_secret to the session.
-func (c *Client) Login(session *schema.Session, opts ...SessionOpt) error {
+func (c *Client) Login(session *schema.Session, opts ...LoginOpt) error {
 	var request reqToken
 	var response respToken
 
@@ -100,18 +94,21 @@ func (c *Client) Login(session *schema.Session, opts ...SessionOpt) error {
 		return ErrBadParameter.With("session")
 	}
 
+	// Set defaults
+	request.GrantType = defaultGrantType
+	request.Scope = defaultScope
+
 	// Apply options
 	for _, opt := range opts {
-		if err := opt(session); err != nil {
+		if err := opt(session, &request); err != nil {
 			return err
 		}
 	}
 
-	// Check
-	if session.clientId == "" || session.clientSecret == "" {
+	// Check request parameters
+	if request.ClientId == "" || request.ClientSecret == "" {
 		return ErrBadParameter.With("missing credentials")
-	}
-	if session.Device == nil {
+	} else if session.Device == nil {
 		return ErrBadParameter.With("missing device")
 	} else {
 		// Populate missing device fields
@@ -132,14 +129,8 @@ func (c *Client) Login(session *schema.Session, opts ...SessionOpt) error {
 		return nil
 	}
 
-	// Set up the request
-	request.GrantType = session.grantType
-	request.Scope = session.scope
-	request.ClientId = session.clientId
-	request.ClientSecret = session.clientSecret
-	request.Device = session.Device
-
 	// Request -> Response
+	request.Device = session.Device
 	if payload, err := client.NewFormRequest(request, client.ContentTypeJson); err != nil {
 		return err
 	} else if err := c.Do(payload, &response, client.OptReqEndpoint(identityUrl), client.OptPath("connect/token")); err != nil {

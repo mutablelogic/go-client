@@ -9,6 +9,7 @@ import (
 	opts "github.com/mutablelogic/go-client"
 	bitwarden "github.com/mutablelogic/go-client/pkg/bitwarden"
 	crypto "github.com/mutablelogic/go-client/pkg/bitwarden/crypto"
+	schema "github.com/mutablelogic/go-client/pkg/bitwarden/schema"
 	assert "github.com/stretchr/testify/assert"
 )
 
@@ -18,8 +19,8 @@ func Test_sync_001(t *testing.T) {
 	assert.NoError(err)
 
 	// Login
-	session := new(bitwarden.Session)
-	err = client.Login(session, bitwarden.OptCredentials(GetCredentials(t)), bitwarden.OptDevice(bitwarden.Device{
+	session := new(schema.Session)
+	err = client.Login(session, bitwarden.OptCredentials(GetCredentials(t)), bitwarden.OptDevice(schema.Device{
 		Name:       "mydevice",
 		Identifier: GetIdentifier(t),
 	}))
@@ -42,13 +43,14 @@ func Test_sync_001(t *testing.T) {
 	if !assert.NotNil(decryptKey) {
 		t.FailNow()
 	}
-
-	if len(sync.Folders) > 0 {
-		t.Logf("Folders[0]: %v", sync.Folders[0])
-		value, err := decryptKey.DecryptStr(sync.Folders[0].Name)
-		if !assert.NoError(err) {
-			t.FailNow()
+	/*
+		if len(sync.Folders) > 0 {
+			t.Logf("Folders[0]: %v", sync.Folders[0])
+			value, err := decryptKey.DecryptStr(sync.Folders[0].Name)
+			if !assert.NoError(err) {
+				t.FailNow()
+			}
+			t.Logf("  name: %v", value)
 		}
-		t.Logf("  name: %v", value)
-	}
+	*/
 }

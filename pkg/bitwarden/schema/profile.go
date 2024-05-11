@@ -17,14 +17,23 @@ type Profile struct {
 	Premium                 bool            `json:"premium"`
 	PremiumFromOrganization bool            `json:"premiumFromOrganization"`
 	MasterPasswordHash      string          `json:"masterPasswordHash"`
-	MasterPasswordHint      *string         `json:"masterPasswordHint"`
+	MasterPasswordHint      *string         `json:"masterPasswordHint,omitempty"`
 	Culture                 string          `json:"culture"`
 	TwoFactorEnabled        bool            `json:"twoFactorEnabled"`
-	SecurityStamp           *string         `json:"securityStamp"`
+	SecurityStamp           *string         `json:"securityStamp,omitempty"`
 	ForcePasswordReset      bool            `json:"forcePasswordReset"`
 	UsesKeyConnector        bool            `json:"usesKeyConnector"`
-	Organizations           []*Organization `json:"organizations"`
+	Organizations           []*Organization `json:"organizations,omitempty"`
 	Object                  string          `json:"object"`
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// LIFECYCLE
+
+func NewProfile() *Profile {
+	return &Profile{
+		Object: "profile",
+	}
 }
 
 ///////////////////////////////////////////////////////////////////////////////

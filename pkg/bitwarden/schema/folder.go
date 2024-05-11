@@ -2,7 +2,6 @@ package schema
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
 	"time"
 )
@@ -14,7 +13,7 @@ type Folders []*Folder
 
 type Folder struct {
 	Id           string    `json:"id"`
-	Name         string    `json:"name"`
+	Name         string    `json:"name"` // Encrypted
 	RevisionDate time.Time `json:"revisionDate"`
 	Object       string    `json:"object"`
 }
@@ -34,8 +33,13 @@ func (f *Folders) Write(w io.Writer) error {
 
 // Decrypt a folder
 func (f Folder) Decrypt(s *Session) (Crypter, error) {
-	fmt.Println("TODO: Decrypt")
-	return f, nil
+	result := &f
+	if value, err := s.DecryptStr(result.Name); err != nil {
+		return nil, err
+	} else {
+		result.Name = value
+	}
+	return &f, nil
 }
 
 ///////////////////////////////////////////////////////////////////////////////

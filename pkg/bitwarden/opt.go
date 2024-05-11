@@ -11,14 +11,14 @@ import (
 ///////////////////////////////////////////////////////////////////////////////
 // TYPES
 
-type SessionOpt func(*schema.Session) error
+type LoginOpt func(*schema.Session, *reqToken) error
 
 ///////////////////////////////////////////////////////////////////////////////
 // SESSION OPTIONS
 
 // Set the device, populating missing fields
-func OptDevice(device schema.Device) SessionOpt {
-	return func(s *schema.Session) error {
+func OptDevice(device schema.Device) LoginOpt {
+	return func(s *schema.Session, r *reqToken) error {
 		if device.Name == "" {
 			return ErrBadParameter.With("OptDevice")
 		} else {
@@ -36,19 +36,20 @@ func OptDevice(device schema.Device) SessionOpt {
 }
 
 // Set the client_id and client_secret
-func OptCredentials(clientId, secret string) SessionOpt {
-	return func(s *schema.Session) error {
+func OptCredentials(clientId, secret string) LoginOpt {
+	return func(s *schema.Session, r *reqToken) error {
 		if clientId == "" || secret == "" {
 			return ErrBadParameter.With("OptCredentials")
 		}
-		s.SetCredentials(clientId, secret)
+		r.ClientId = clientId
+		r.ClientSecret = secret
 		return nil
 	}
 }
 
 // Force login by clearing the token
-func OptForce() SessionOpt {
-	return func(s *schema.Session) error {
+func OptForce() LoginOpt {
+	return func(s *schema.Session, r *reqToken) error {
 		s.Token = nil
 		return nil
 	}

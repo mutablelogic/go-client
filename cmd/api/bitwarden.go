@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -8,6 +9,7 @@ import (
 	"github.com/mutablelogic/go-client"
 	"github.com/mutablelogic/go-client/pkg/bitwarden"
 	"github.com/mutablelogic/go-client/pkg/bitwarden/schema"
+	"golang.org/x/term"
 
 	// Namespace import
 	. "github.com/djthorpe/go-errors"
@@ -24,7 +26,8 @@ const (
 var (
 	bwClient                   *bitwarden.Client
 	bwClientId, bwClientSecret string
-	bwConfigDir, bwCacheDir    string
+	bwPassword                 string
+	bwConfigDir                string
 	bwForce                    bool
 )
 
@@ -35,9 +38,8 @@ func bwRegister(flags *Flags) {
 	// Register flags required
 	flags.String(bwName, "bitwarden-client-id", "${BW_CLIENTID}", "Client ID")
 	flags.String(bwName, "bitwarden-client-secret", "${BW_CLIENTSECRET}", "Client Secret")
+	flags.String(bwName, "bitwarden-password", "${BW_PASSWORD}", "Master password")
 	flags.Bool(bwName, "force", false, "Force login or sync to Bitwarden, even if existing token or data is valid")
-	//	flags.String(bwName, "bitwarden-device-id", "${BW_DEVICEID}", "Device Identifier")
-	//	flags.String(bwName, "bitwarden-password", "${BW_PASSWORD}", "Master Password")
 
 	// Register commands
 	flags.Register(Cmd{
@@ -68,25 +70,15 @@ func bwParse(flags *Flags, opts ...client.ClientOpt) error {
 			return err
 		}
 	}
-	// Get cache directory
-	if cache, err := os.UserCacheDir(); err != nil {
-		return err
-	} else {
-		bwCacheDir = filepath.Join(cache, bwName)
-		if err := os.MkdirAll(bwCacheDir, bwDirPerm); err != nil {
-			return err
-		}
-	}
 
-	// Set client ID and secret
+	// Set defaults
 	bwClientId = flags.GetString("bitwarden-client-id")
 	bwClientSecret = flags.GetString("bitwarden-client-secret")
 	if bwClientId == "" || bwClientSecret == "" {
 		return ErrBadParameter.With("Missing -bitwarden-client-id or -bitwarden-client-secret argument")
 	}
-
-	// Get the force flag
 	bwForce = flags.GetBool("force")
+	bwPassword = flags.GetString("bitwarden-password")
 
 	// Return success
 	return nil
@@ -103,11 +95,11 @@ func bwLogin(w *tablewriter.TableWriter) error {
 	}
 
 	// Login options
-	opts := []bitwarden.SessionOpt{
+	opts := []bitwarden.LoginOpt{
 		bitwarden.OptCredentials(bwClientId, bwClientSecret),
 	}
 	if session.Device == nil {
-		opts = append(opts, bitwarden.OptDevice(bitwarden.Device{
+		opts = append(opts, bitwarden.OptDevice(schema.Device{
 			Name: bwName,
 		}))
 	}
@@ -164,15 +156,37 @@ func bwSync(w *tablewriter.TableWriter) error {
 }
 
 func bwFolders(w *tablewriter.TableWriter) error {
+	// Load the profile
+	profile, err := bwReadProfile()
+	if err != nil {
+		return err
+	}
+
 	// Load session or create a new one
 	session, err := bwReadSession()
 	if err != nil {
 		return err
 	}
 
-	// If the session is not valid, then return an error
-	if !session.IsValid() {
-		return ErrOutOfOrder.With("Session is not valid, login first")
+	// If no password is set, then read it
+	password := bwPassword
+	if password == "" {
+		stdin := int(os.Stdin.Fd())
+		if !term.IsTerminal(stdin) {
+			return ErrBadParameter.With("No password set and not running in terminal")
+		}
+		fmt.Fprintf(os.Stdout, "Enter password: ")
+		if value, err := term.ReadPassword(stdin); err != nil {
+			return err
+		} else {
+			password = string(value)
+		}
+		fmt.Fprintf(os.Stdout, "\n")
+	}
+
+	// Make the decryption key
+	if err := session.CacheKey(profile.Key, profile.Email, password); err != nil {
+		return err
 	}
 
 	// Read the folders
@@ -186,7 +200,7 @@ func bwFolders(w *tablewriter.TableWriter) error {
 		if decrypted, err := folder.Decrypt(session); err != nil {
 			return err
 		} else {
-			folders[i] = decrypted
+			folders[i] = decrypted.(*schema.Folder)
 		}
 	}
 
@@ -200,12 +214,14 @@ func bwFolders(w *tablewriter.TableWriter) error {
 ///////////////////////////////////////////////////////////////////////////////
 // OTHER
 
-func bwReadSession() (*bitwarden.Session, error) {
-	result := new(bitwarden.Session)
-	filename := filepath.Join(bwConfigDir, "session.json")
+func bwReadProfile() (*schema.Profile, error) {
+	result := schema.NewProfile()
+	filename := filepath.Join(bwConfigDir, "profile.json")
 	if _, err := os.Stat(filename); os.IsNotExist(err) {
-		// Return a new, empty session
-		return result, nil
+		// Return an error
+		return nil, ErrNotFound.With("Profile not found")
+	} else if err != nil {
+		return nil, err
 	}
 
 	// Open the file
@@ -219,7 +235,28 @@ func bwReadSession() (*bitwarden.Session, error) {
 	return result, result.Read(file)
 }
 
-func bwWriteSession(session *bitwarden.Session) error {
+func bwReadSession() (*schema.Session, error) {
+	result := schema.NewSession()
+	filename := filepath.Join(bwConfigDir, "session.json")
+	if _, err := os.Stat(filename); os.IsNotExist(err) {
+		// Return a new, empty session
+		return result, nil
+	} else if err != nil {
+		return nil, err
+	}
+
+	// Open the file
+	file, err := os.Open(filename)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	// Read and return the session
+	return result, result.Read(file)
+}
+
+func bwWriteSession(session *schema.Session) error {
 	return bwWrite("session.json", session)
 }
 

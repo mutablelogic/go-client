@@ -1,0 +1,9 @@
+package schema
+
+///////////////////////////////////////////////////////////////////////////////
+// TYPES
+
+type Kdf struct {
+	Type       int `json:"kdf"`
+	Iterations int `json:"KdfIterations"`
+}

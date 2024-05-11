@@ -31,7 +31,15 @@ type respSources struct {
 ///////////////////////////////////////////////////////////////////////////////
 // PUBLIC METHODS
 
-// Sources returns all the models
+// Sources returns all the models. The options which can be passed are:
+//
+//	  OptCategory: The category you would like to get sources for. Possible
+//				  options are business, entertainment, general, health, science, sports,
+//				  technology.
+//
+//	  OptLanguage: The language you would like to get sources for
+//
+//	  OptCountry: The country you would like to get sources for
 func (c *Client) Sources(opt ...Opt) ([]Source, error) {
 	var response respSources
 	var query opts

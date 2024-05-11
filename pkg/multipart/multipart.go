@@ -80,8 +80,17 @@ func (enc *Encoder) Encode(v any) error {
 
 	// Iterate over visible fields
 	var result error
+	ignore := make([][]int, 0)
 	for _, field := range reflect.VisibleFields(rv.Type()) {
+		if field.Type.Kind() == reflect.Ptr {
+			if fv := rv.FieldByIndex(field.Index); fv.IsNil() {
+				// If the field is a pointer and the value is nil, we need to ignore children
+				ignore = append(ignore, field.Index)
+			}
+		}
+
 		if field.Anonymous {
+			// Don't process anonymous fields
 			continue
 		}
 
@@ -108,9 +117,14 @@ func (enc *Encoder) Encode(v any) error {
 			}
 		}
 
+		// Skip ignored children
+		if hasParentIndex(ignore, field.Index) {
+			continue
+		}
+
 		// Skip invalid or empty fields
 		fv := rv.FieldByIndex(field.Index)
-		if omitempty && (fv.IsZero() || fv.IsNil()) {
+		if omitempty && fv.IsZero() {
 			continue
 		}
 
@@ -193,4 +207,14 @@ func (enc *Encoder) writeField(name string, value any) error {
 
 	// Return success
 	return nil
+}
+
+// Check field index for a parent, which should be ignored
+func hasParentIndex(ignore [][]int, index []int) bool {
+	for _, ignore := range ignore {
+		if slices.Equal(ignore, index[:len(ignore)]) {
+			return true
+		}
+	}
+	return false
 }

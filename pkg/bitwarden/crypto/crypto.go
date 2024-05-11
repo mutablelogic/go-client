@@ -1,4 +1,4 @@
-package bitwarden
+package crypto
 
 import (
 	"crypto/aes"
@@ -8,11 +8,14 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
+	"strconv"
+	"strings"
 
 	// Packages
 	padding "github.com/andreburgaud/crypt2go/padding"
+
 	// Namespace imports
-	//. "github.com/djthorpe/go-errors"
+	. "github.com/djthorpe/go-errors"
 )
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -25,8 +28,8 @@ type CryptoKey struct {
 
 type Encrypted struct {
 	Type  uint   `json:"type"`          // Cypher type
-	Value string `json:"value"`         // Encrypted value in base64
 	Iv    string `json:"iv,omitempty"`  // Initialization Vector in base64 (for decryption)
+	Value string `json:"value"`         // Encrypted value in base64
 	Mac   string `json:"mac,omitempty"` // Message Authentication Hash (HMAC) in base64
 }
 
@@ -48,6 +51,29 @@ func NewKey(key, mac []byte) *CryptoKey {
 	}
 }
 
+// NewEncrypted returns a new Encrypted object from a string
+func NewEncrypted(s string) (*Encrypted, error) {
+	result := new(Encrypted)
+	parts := strings.SplitN(s, "|", 3)
+	if len(parts) < 2 {
+		return nil, ErrBadParameter.Withf("Invalid encrypted: %q", s)
+	} else if iv := strings.SplitN(parts[0], ".", 2); len(iv) != 2 {
+		return nil, ErrBadParameter.Withf("Invalid encrypted IV: %q", parts[0])
+	} else if typ, err := strconv.ParseUint(iv[0], 10, 32); err != nil {
+		return nil, ErrBadParameter.Withf("Invalid encrypted type: %q", iv[0])
+	} else {
+		result.Type = uint(typ)
+		result.Iv = iv[1]
+		result.Value = parts[1]
+	}
+	if len(parts) > 2 {
+		result.Mac = parts[2]
+	}
+
+	// Return success
+	return result, nil
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 // STRINGIFY
 
@@ -58,6 +84,18 @@ func (k *Encrypted) String() string {
 		result += "|" + string(k.Mac)
 	}
 	return result
+}
+
+// Return the CryptoKey as a string
+func (k *CryptoKey) String() string {
+	str := "<key "
+	if len(k.Key) > 0 {
+		str += fmt.Sprintf(" value=%q", base64.StdEncoding.EncodeToString(k.Key))
+	}
+	if len(k.Mac) > 0 {
+		str += fmt.Sprintf(" mac=%q", base64.StdEncoding.EncodeToString(k.Mac))
+	}
+	return str + ">"
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -97,6 +135,7 @@ func (k *CryptoKey) Encrypt(data []byte) (*Encrypted, error) {
 		mac.Write(iv)
 		mac.Write(ciphertext)
 		result.Mac = base64.StdEncoding.EncodeToString(mac.Sum(nil))
+		result.Type = 2
 	}
 
 	// Return success
@@ -105,6 +144,14 @@ func (k *CryptoKey) Encrypt(data []byte) (*Encrypted, error) {
 
 // Decrypt data using AES-256-CBC
 func (k *CryptoKey) Decrypt(data *Encrypted) ([]byte, error) {
+	if data == nil {
+		return nil, ErrBadParameter.With("invalid encrypted data")
+	}
+	if data.Type != 0 && data.Type != 2 {
+		return nil, ErrBadParameter.With("invalid encrypted type:", data.Type)
+	}
+
+	// Decode encrypted data
 	value, err := base64.StdEncoding.DecodeString(data.Value)
 	if err != nil {
 		return nil, err
@@ -120,11 +167,11 @@ func (k *CryptoKey) Decrypt(data *Encrypted) ([]byte, error) {
 	}
 
 	// Decrypt data
-	block, err := aes.NewCipher(k.Key)
-	if err != nil {
+	if block, err := aes.NewCipher(k.Key); err != nil {
 		panic(err)
+	} else {
+		cipher.NewCBCDecrypter(block, iv).CryptBlocks(value, value)
 	}
-	cipher.NewCBCDecrypter(block, iv).CryptBlocks(value, value)
 
 	// Unpad data
 	value, err = padding.NewPkcs7Padding(aes.BlockSize).Unpad(value)
@@ -134,6 +181,16 @@ func (k *CryptoKey) Decrypt(data *Encrypted) ([]byte, error) {
 
 	// Return success
 	return value, nil
+}
+
+func (k *CryptoKey) DecryptStr(data string) (string, error) {
+	if encrypted, err := NewEncrypted(data); err != nil {
+		return "", err
+	} else if value, err := k.Decrypt(encrypted); err != nil {
+		return "", err
+	} else {
+		return string(value), nil
+	}
 }
 
 // Check the integrity of the data using HMAC, if the key has a MAC

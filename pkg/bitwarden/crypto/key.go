@@ -1,4 +1,4 @@
-package bitwarden
+package crypto
 
 import (
 	"crypto/rand"
@@ -6,19 +6,27 @@ import (
 	"encoding/base64"
 
 	// Packages
-
 	pbkdf2 "github.com/xdg-go/pbkdf2"
 )
 
 ///////////////////////////////////////////////////////////////////////////////
 // PUBLIC METHODS
 
-func MakeInternalKey(salt, password string, iterations int) []byte {
-	return pbkdf2.Key([]byte(password), []byte(salt), iterations, (256 / 8), sha256.New)
+func MakeInternalKey(salt, password string, kdf, iterations int) []byte {
+	if iterations == 0 || salt == "" || password == "" {
+		return nil
+	}
+	switch kdf {
+	case 0:
+		return pbkdf2.Key([]byte(password), []byte(salt), iterations, (256 / 8), sha256.New)
+	}
+
+	// Unsupported
+	return nil
 }
 
-func HashedPassword(salt, password string, iterations int) string {
-	key := MakeInternalKey(salt, password, iterations)
+func HashedPassword(salt, password string, kdf int, iterations int) string {
+	key := MakeInternalKey(salt, password, kdf, iterations)
 	if key == nil {
 		return ""
 	}

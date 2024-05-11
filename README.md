@@ -9,7 +9,7 @@ This repository contains a generic HTTP client which can be adapted to provide:
 * Debugging capabilities to see the request and response data
 * Streaming JSON responses
 
-Documentation: https://pkg.go.dev/github.com/mutablelogic/go-client/pkg/client
+API Documentation: https://pkg.go.dev/github.com/mutablelogic/go-client
 
 There are also some example clients which use this library:
 

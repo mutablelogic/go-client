@@ -61,6 +61,7 @@ func bwRegister(flags *Flags) {
 			{Name: "sync", Description: "Sync items from Bitwarden", Call: bwSync},
 			{Name: "folders", Description: "Retrieve folders", Call: bwFolders},
 			{Name: "logins", Description: "Retrieve login items", Call: bwLogins},
+			{Name: "password", Description: "Print a password to stdout", Call: bwGetPassword},
 		},
 	})
 }
@@ -266,6 +267,10 @@ func bwLogins(w *tablewriter.TableWriter) error {
 
 	// Return success
 	return nil
+}
+
+func bwGetPassword(w *tablewriter.TableWriter) error {
+	return ErrNotImplemented
 }
 
 ///////////////////////////////////////////////////////////////////////////////

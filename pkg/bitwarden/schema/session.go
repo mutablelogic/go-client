@@ -17,9 +17,8 @@ import (
 ///////////////////////////////////////////////////////////////////////////////
 // TYPES
 
+// Session represents a long-running session with the Bitwarden server
 type Session struct {
-	ReaderWriter
-
 	// Device identifier
 	Device *Device `json:"device,omitempty"`
 

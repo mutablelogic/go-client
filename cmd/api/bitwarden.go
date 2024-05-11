@@ -60,8 +60,8 @@ func bwRegister(flags *Flags) {
 			{Name: "auth", Description: "Authenticate with Bitwarden", Call: bwAuth},
 			{Name: "sync", Description: "Sync items from Bitwarden", Call: bwSync},
 			{Name: "folders", Description: "Retrieve folders", Call: bwFolders},
-			{Name: "logins", Description: "Retrieve login items", Call: bwLogins},
-			{Name: "password", Description: "Print a password to stdout", Call: bwGetPassword},
+			{Name: "logins", Description: "Retrieve login items", Call: bwLogins, MaxArgs: 1},
+			{Name: "password", Description: "Print a password to stdout", Call: bwGetPassword, MinArgs: 1, MaxArgs: 1},
 		},
 	})
 }

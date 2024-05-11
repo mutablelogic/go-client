@@ -37,24 +37,16 @@ func main() {
 		os.Exit(-1)
 	}
 
-	// Get function
+	// Get function then run it
 	fn, err := cmd.Get(flags.Args()[1:])
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(-1)
-	}
-
-	// Run function
-	if fn != nil {
-		if err := Run(fn); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(-2)
-		}
-	} else if flags.NArg() == 1 {
+	} else if fn == nil {
 		flags.PrintCommandUsage(cmd)
-	} else {
-		fmt.Fprintf(os.Stderr, "Unknown command: %q\n", flags.Args()[1:])
-		os.Exit(-1)
+	} else if err := Run(fn); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(-2)
 	}
 }
 

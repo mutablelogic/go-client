@@ -49,7 +49,7 @@ func NewFlags(name string) *Flags {
 	flags := new(Flags)
 	flags.FlagSet = flag.NewFlagSet(name, flag.ContinueOnError)
 	flags.names = make(map[string]*Value)
-	flags.FlagSet.Usage = flags.PrintUsage
+	flags.FlagSet.Usage = func() {}
 
 	// Register global flags
 	flags.Bool("", "debug", false, "Enable debug logging")
@@ -70,6 +70,9 @@ func (flags *Flags) Register(c Cmd) {
 func (flags *Flags) Parse(args []string) error {
 	// Parse command line
 	if err := flags.FlagSet.Parse(args); err != nil {
+		if err == flag.ErrHelp {
+			flags.PrintUsage()
+		}
 		return err
 	}
 
@@ -82,22 +85,24 @@ func (flags *Flags) Parse(args []string) error {
 	// Set client options
 	opts := []client.ClientOpt{}
 	if flags.GetBool("debug") {
-		verbose := flags.GetBool("verbose")
-		opts = append(opts, client.OptTrace(flags.Output(), verbose))
+		// Append debug option with optional verbose
+		opts = append(opts, client.OptTrace(flags.Output(), flags.GetBool("verbose")))
 	}
 
 	// Parse the commands
 	for _, cmd := range flags.cmds {
-		cmd.Parse(flags, opts...)
+		if err := cmd.Parse(flags, opts...); err != nil {
+			return fmt.Errorf("%v: %w", cmd.Name, err)
+		}
 	}
 
 	// Return success
 	return nil
 }
 
-// GetCommand returns a command set from a name, or nil if the command set does
+// GetCommandSet returns a command set from a name, or nil if the command set does
 // not exist
-func (flags *Flags) GetCommand(name string) *Cmd {
+func (flags *Flags) GetCommandSet(name string) *Cmd {
 	for _, cmd := range flags.cmds {
 		if cmd.Name == name {
 			return &cmd
@@ -149,36 +154,63 @@ func (flags *Flags) PrintVersion() {
 func (flags *Flags) PrintUsage() {
 	w := flags.Output()
 	if flags.NArg() == 1 {
-		cmd := flags.GetCommand(flags.Arg(0))
-		if cmd == nil {
-			fmt.Fprintf(w, "Unknown command: %q\n", flags.Arg(0))
-			return
+		cmd := flags.GetCommandSet(flags.Arg(0))
+		if cmd != nil {
+			flags.PrintCommandUsage(cmd)
 		}
-		fmt.Fprintln(w, flags.Name(), cmd.Name)
-		fmt.Fprintln(w, "  ", cmd.Description)
-		fmt.Fprintln(w, "")
-		flags.PrintCommandFlags(cmd.Name)
 	} else {
-		fmt.Fprintln(w, flags.Name())
+		fmt.Fprintln(w, "Name:", flags.Name())
 		fmt.Fprintln(w, "  General command-line interface to API clients")
 		fmt.Fprintln(w, "")
-		fmt.Fprintln(w, "Syntax:")
+
+		// Command Sets
+		fmt.Fprintln(w, "Command Sets:")
+		for _, cmd := range flags.cmds {
+			fmt.Fprintln(w, "  ", flags.Name(), cmd.Name)
+			fmt.Fprintln(w, "    ", cmd.Description)
+			fmt.Fprintln(w, "")
+		}
+
+		// Help
+		fmt.Fprintln(w, "Help:")
 		fmt.Fprintln(w, "  ", flags.Name(), "version")
 		fmt.Fprintln(w, "    ", "Return the version of the application")
 		fmt.Fprintln(w, "")
+
+		// Help for command sets
 		for _, cmd := range flags.cmds {
 			fmt.Fprintln(w, "  ", flags.Name(), "-help", cmd.Name)
 			fmt.Fprintln(w, "    ", "Display", cmd.Name, "command syntax")
 			fmt.Fprintln(w, "")
 		}
+
+		fmt.Fprintln(w, "")
+		flags.PrintGlobalFlags()
 	}
-	fmt.Fprintln(w, "")
-	flags.PrintGlobalFlags()
 }
 
 // PrintGlobalFlags prints out the global flags
 func (flags *Flags) PrintGlobalFlags() {
 	flags.PrintCommandFlags("")
+}
+
+// PrintCommandUsage prints the usage of a commandset
+func (flags *Flags) PrintCommandUsage(cmd *Cmd) {
+	w := flags.Output()
+	fmt.Fprintln(w, "Name:", flags.Name(), cmd.Name)
+	fmt.Fprintln(w, "  ", cmd.Description)
+	fmt.Fprintln(w, "")
+
+	// Help for command sets
+	fmt.Fprintln(w, "Commands:")
+	for _, fn := range cmd.Fn {
+		fmt.Fprintln(w, "  ", flags.Name(), cmd.Name, fn.Name)
+		fmt.Fprintln(w, "    ", fn.Description)
+		fmt.Fprintln(w, "")
+	}
+	flags.PrintCommandFlags(cmd.Name)
+	fmt.Fprintln(w, "")
+	flags.PrintGlobalFlags()
 }
 
 // PrintGlobalFlags prints out the global flags

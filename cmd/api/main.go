@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path"
-	"strings"
 
 	"github.com/djthorpe/go-tablewriter"
 )
@@ -22,33 +21,38 @@ func main() {
 	if err := flags.Parse(os.Args[1:]); errors.Is(err, ErrHelp) {
 		os.Exit(0)
 	} else if err != nil {
-		fmt.Fprintln(os.Stderr, err)
 		os.Exit(-1)
 	}
 
 	// If there are no arguments, print help
 	if flags.NArg() == 0 {
-		flags.Usage()
+		flags.PrintUsage()
 		os.Exit(-1)
 	}
 
-	// Get command
-	cmd := flags.GetCommand(flags.Arg(0))
-	match := strings.Join(flags.Args()[1:], " ")
+	// Get command set
+	cmd := flags.GetCommandSet(flags.Arg(0))
 	if cmd == nil {
 		fmt.Fprintf(os.Stderr, "Unknown command: %q\n", flags.Arg(0))
 		os.Exit(-1)
 	}
-	fn := cmd.Get(match)
-	if fn == nil {
-		fmt.Fprintf(os.Stderr, "Unknown command: %q\n", strings.TrimSpace(strings.Join([]string{flags.Name(), cmd.Name, match}, " ")))
+
+	fn := cmd.Get(flags.Args()[1:])
+	if fn != nil {
+		if err := Run(fn); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(-2)
+		}
+	}
+	if flags.NArg() == 1 {
+		flags.PrintCommandUsage(cmd)
+	} else {
+		fmt.Fprintf(os.Stderr, "Unknown command: %q\n", flags.Args()[1:])
 		os.Exit(-1)
 	}
+}
 
-	// Create a tablewriter
+func Run(fn *Fn) error {
 	writer := tablewriter.New(os.Stdout, tablewriter.OptOutputText(), tablewriter.OptHeader())
-	if err := fn.Call(writer); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(-2)
-	}
+	return fn.Call(writer)
 }

@@ -17,7 +17,7 @@ func ipifyRegister(flags *Flags) {
 		Parse:       ipifyParse,
 		Fn: []Fn{
 			// Default caller
-			{Call: ipifyGetAddress},
+			{Call: ipifyGetAddress, Description: "Get the public IP address"},
 		},
 	})
 }

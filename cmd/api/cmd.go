@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+
 	"github.com/djthorpe/go-tablewriter"
 	"github.com/mutablelogic/go-client"
 )
@@ -24,11 +26,19 @@ type Fn struct {
 ///////////////////////////////////////////////////////////////////////////////
 // PUBLIC METHODS
 
-func (c *Cmd) Get(match string) *Fn {
-	for _, fn := range c.Fn {
-		if fn.Name == match {
-			return &fn
-		}
+func (c *Cmd) Get(args []string) *Fn {
+	if len(args) == 0 {
+		return nil
 	}
+	fmt.Println("TODO: %q", args)
 	return nil
+	/*
+	   	for _, fn := range c.Fn {
+	   		if fn.Name == match {
+	   			return &fn
+	   		}
+	   	}
+
+	   return nil
+	*/
 }

@@ -31,7 +31,7 @@ func ipifyParse(flags *Flags, opts ...client.ClientOpt) error {
 	return nil
 }
 
-func ipifyGetAddress(w *tablewriter.TableWriter, _ []string) error {
+func ipifyGetAddress(w *tablewriter.Writer, _ []string) error {
 	addr, err := ipifyClient.Get()
 	if err != nil {
 		return err

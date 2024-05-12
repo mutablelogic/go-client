@@ -22,7 +22,7 @@ type Fn struct {
 	Description string
 	MinArgs     uint
 	MaxArgs     uint
-	Call        func(*tablewriter.TableWriter, []string) error
+	Call        func(*tablewriter.Writer, []string) error
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -48,7 +48,8 @@ func (c *Cmd) Get(args []string) (*Fn, []string, error) {
 	// Check number of arguments
 	if fn.MinArgs != 0 && nargs < fn.MinArgs {
 		return nil, nil, fmt.Errorf("not enough arguments for %q", fn.Name)
-	} else if nargs > fn.MaxArgs {
+	}
+	if fn.MaxArgs != 0 && nargs > fn.MaxArgs {
 		return nil, nil, fmt.Errorf("too many arguments for %q", fn.Name)
 	}
 

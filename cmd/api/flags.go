@@ -90,10 +90,12 @@ func (flags *Flags) Parse(args []string) error {
 	}
 
 	// Parse the commands
-	for _, cmd := range flags.cmds {
-		if err := cmd.Parse(flags, opts...); err != nil {
-			fmt.Fprintf(os.Stderr, "%v: %v\n", cmd.Name, err)
-			return err
+	if flags.NArg() > 0 {
+		if cmd := flags.GetCommandSet(flags.Arg(0)); cmd != nil {
+			if err := cmd.Parse(flags, opts...); err != nil {
+				fmt.Fprintf(os.Stderr, "%v: %v\n", cmd.Name, err)
+				return err
+			}
 		}
 	}
 

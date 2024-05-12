@@ -17,6 +17,7 @@ func main() {
 	ipifyRegister(flags)
 	bwRegister(flags)
 	newsapiRegister(flags)
+	anthropicRegister(flags)
 
 	// Parse
 	if err := flags.Parse(os.Args[1:]); errors.Is(err, ErrHelp) {

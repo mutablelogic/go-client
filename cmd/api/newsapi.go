@@ -66,7 +66,7 @@ func inewsapiParse(flags *Flags, opts ...client.ClientOpt) error {
 ///////////////////////////////////////////////////////////////////////////////
 // METHODS
 
-func newsapiSources(w *tablewriter.TableWriter, _ []string) error {
+func newsapiSources(w *tablewriter.Writer, _ []string) error {
 	// Set options
 	opts := []newsapi.Opt{}
 	if newsapiCategory != "" {
@@ -89,7 +89,7 @@ func newsapiSources(w *tablewriter.TableWriter, _ []string) error {
 	return w.Write(sources)
 }
 
-func newsapiHeadlines(w *tablewriter.TableWriter, _ []string) error {
+func newsapiHeadlines(w *tablewriter.Writer, _ []string) error {
 	// Set options
 	opts := []newsapi.Opt{}
 	if newsapiCategory != "" {
@@ -112,7 +112,7 @@ func newsapiHeadlines(w *tablewriter.TableWriter, _ []string) error {
 	return w.Write(articles)
 }
 
-func newsapiArticles(w *tablewriter.TableWriter, args []string) error {
+func newsapiArticles(w *tablewriter.Writer, args []string) error {
 	// Set options
 	opts := []newsapi.Opt{}
 	if newsapiCategory != "" {

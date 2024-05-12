@@ -99,7 +99,7 @@ func bwParse(flags *Flags, opts ...client.ClientOpt) error {
 ///////////////////////////////////////////////////////////////////////////////
 // API METHODS
 
-func bwAuth(w *tablewriter.TableWriter, _ []string) error {
+func bwAuth(w *tablewriter.Writer, _ []string) error {
 	// Load session or create a new one
 	session, err := bwReadSession()
 	if err != nil {
@@ -136,7 +136,7 @@ func bwAuth(w *tablewriter.TableWriter, _ []string) error {
 	return nil
 }
 
-func bwSync(w *tablewriter.TableWriter, _ []string) error {
+func bwSync(w *tablewriter.Writer, _ []string) error {
 	// Load session or create a new one
 	session, err := bwReadSession()
 	if err != nil {
@@ -167,7 +167,7 @@ func bwSync(w *tablewriter.TableWriter, _ []string) error {
 	return nil
 }
 
-func bwFolders(w *tablewriter.TableWriter, _ []string) error {
+func bwFolders(w *tablewriter.Writer, _ []string) error {
 	// Load the profile
 	profile, err := bwReadProfile()
 	if err != nil {
@@ -214,7 +214,7 @@ func bwFolders(w *tablewriter.TableWriter, _ []string) error {
 	return nil
 }
 
-func bwLogins(w *tablewriter.TableWriter, _ []string) error {
+func bwLogins(w *tablewriter.Writer, _ []string) error {
 	// Load the profile
 	profile, err := bwReadProfile()
 	if err != nil {
@@ -269,7 +269,7 @@ func bwLogins(w *tablewriter.TableWriter, _ []string) error {
 	return nil
 }
 
-func bwGetPassword(w *tablewriter.TableWriter, _ []string) error {
+func bwGetPassword(w *tablewriter.Writer, _ []string) error {
 	return ErrNotImplemented
 }
 

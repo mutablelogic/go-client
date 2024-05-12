@@ -22,7 +22,7 @@ type Fn struct {
 	Description string
 	MinArgs     uint
 	MaxArgs     uint
-	Call        func(*tablewriter.TableWriter, []string) error
+	Call        func(*tablewriter.Writer, []string) error
 }
 
 ///////////////////////////////////////////////////////////////////////////////

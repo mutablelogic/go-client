@@ -13,14 +13,15 @@ API Documentation: https://pkg.go.dev/github.com/mutablelogic/go-client
 
 There are also some example clients which use this library:
 
+* [Anthropic API Client](https://github.com/mutablelogic/go-client/tree/main/pkg/bitwarden) for Claude LLM
 * [Bitwarden API Client](https://github.com/mutablelogic/go-client/tree/main/pkg/bitwarden)
-* [Elevenlabs API Client](https://github.com/mutablelogic/go-client/tree/main/pkg/elevenlabs)
+* [Elevenlabs API Client](https://github.com/mutablelogic/go-client/tree/main/pkg/elevenlabs) for Text-to-Speech
 * [Home Assistant API Client](https://github.com/mutablelogic/go-client/tree/main/pkg/homeassistant)
 * [IPify Client](https://github.com/mutablelogic/go-client/tree/main/pkg/ipify)
-* [Mistral API Client](https://github.com/mutablelogic/go-client/tree/main/pkg/mistral)
+* [Mistral API Client](https://github.com/mutablelogic/go-client/tree/main/pkg/mistral) for Mistral LLM
 * [NewsAPI client](https://github.com/mutablelogic/go-client/tree/main/pkg/newsapi)
-* [Ollama API client](https://github.com/mutablelogic/go-client/tree/main/pkg/ollama)
-* [OpenAI API client](https://github.com/mutablelogic/go-client/tree/main/pkg/openai)
+* [Ollama API client](https://github.com/mutablelogic/go-client/tree/main/pkg/ollama) for locally-hosted LLM's
+* [OpenAI API client](https://github.com/mutablelogic/go-client/tree/main/pkg/openai) for OpenAI LLM's
 
 Aiming to have compatibility with go version 1.21 and above.
 

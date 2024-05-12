@@ -9,22 +9,20 @@ import (
 // TYPES
 
 type Profile struct {
-	Id                      string          `json:"id"`
+	Id                      string          `json:"id,width:36"`
 	Name                    string          `json:"name"`
 	Email                   string          `json:"email"`
-	EmailVerified           bool            `json:"emailVerified"`
-	Key                     string          `json:"key"`
-	Premium                 bool            `json:"premium"`
-	PremiumFromOrganization bool            `json:"premiumFromOrganization"`
-	MasterPasswordHash      string          `json:"masterPasswordHash"`
-	MasterPasswordHint      *string         `json:"masterPasswordHint,omitempty"`
-	Culture                 string          `json:"culture"`
-	TwoFactorEnabled        bool            `json:"twoFactorEnabled"`
-	SecurityStamp           *string         `json:"securityStamp,omitempty"`
-	ForcePasswordReset      bool            `json:"forcePasswordReset"`
-	UsesKeyConnector        bool            `json:"usesKeyConnector"`
+	EmailVerified           bool            `json:"emailVerified,width:5,right"`
+	Key                     string          `json:"key,wrap"`
+	Premium                 bool            `json:"premium,width:5,right"`
+	PremiumFromOrganization bool            `json:"premiumFromOrganization,width:5,right"`
+	Culture                 string          `json:"culture,width:5,right"`
+	TwoFactorEnabled        bool            `json:"twoFactorEnabled,width:5,right"`
+	SecurityStamp           *string         `json:"securityStamp,omitempty,width:5,right"`
+	ForcePasswordReset      bool            `json:"forcePasswordReset,width:5,right"`
+	UsesKeyConnector        bool            `json:"usesKeyConnector,width:5,right"`
 	Organizations           []*Organization `json:"organizations,omitempty"`
-	Object                  string          `json:"object"`
+	Object                  string          `json:"object,width:7,right"`
 }
 
 ///////////////////////////////////////////////////////////////////////////////

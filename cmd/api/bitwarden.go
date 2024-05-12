@@ -19,10 +19,10 @@ import (
 // TYPES
 
 type bwCipher struct {
-	Name     string
-	Username string
-	URI      string
-	Folder   string
+	Name     string `json:"name,wrap"`
+	Username string `json:"username,width:30"`
+	URI      string `json:"uri,width:40"`
+	Folder   string `json:"folder,width:36"`
 }
 
 ///////////////////////////////////////////////////////////////////////////////

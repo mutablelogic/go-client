@@ -20,10 +20,10 @@ import (
 // Session represents a long-running session with the Bitwarden server
 type Session struct {
 	// Device identifier
-	Device *Device `json:"device,omitempty"`
+	Device *Device `json:"device,omitempty,wrap"`
 
 	// Login Token
-	Token *Token `json:"token,omitempty"`
+	Token *Token `json:"token,omitempty,wrap"`
 
 	// Encryption parameters
 	Kdf

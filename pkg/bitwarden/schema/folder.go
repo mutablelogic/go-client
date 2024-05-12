@@ -12,10 +12,10 @@ import (
 type Folders []*Folder
 
 type Folder struct {
-	Id           string    `json:"id"`
+	Id           string    `json:"id,width:36"`
 	Name         string    `json:"name"` // Encrypted
-	RevisionDate time.Time `json:"revisionDate"`
-	Object       string    `json:"object"`
+	RevisionDate time.Time `json:"revisionDate,width:29"`
+	Object       string    `json:"object,width:6"`
 }
 
 ///////////////////////////////////////////////////////////////////////////////

@@ -12,3 +12,8 @@ type MessageChoice struct {
 	Index        int    `json:"index"`
 	FinishReason string `json:"finish_reason"`
 }
+
+type Content struct {
+	Type string `json:"type,width:4"`
+	Text string `json:"text,wrap,width:60"`
+}

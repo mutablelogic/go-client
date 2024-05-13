@@ -15,9 +15,7 @@ func Test_message_001(t *testing.T) {
 	client, err := anthropic.New(GetApiKey(t), opts.OptTrace(os.Stderr, true))
 	assert.NoError(err)
 	assert.NotNil(client)
-	_, err = client.Messages(schema.Message{
-		Role:    "user",
-		Content: "What is the weather today",
-	})
+	msg := schema.NewMessage(schema.Anthropic, "user", "What is the weather today")
+	_, err = client.Messages(msg)
 	assert.NoError(err)
 }

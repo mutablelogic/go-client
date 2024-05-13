@@ -2,8 +2,11 @@ package anthropic
 
 import (
 	// Packages
-	"github.com/mutablelogic/go-client"
+	client "github.com/mutablelogic/go-client"
 	schema "github.com/mutablelogic/go-client/pkg/openai/schema"
+
+	// Namespace imports
+	. "github.com/djthorpe/go-errors"
 )
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -32,32 +35,30 @@ type respMessage struct {
 ///////////////////////////////////////////////////////////////////////////////
 // PUBLIC METHODS
 
-func NewMessage(role, text string) schema.Message {
-	return schema.Message{
-		Role:    role,
-		Content: text,
-	}
-}
-
-///////////////////////////////////////////////////////////////////////////////
-// API CALLS
-
 // Send a structured list of input messages with text and/or image content,
 // and the model will generate the next message in the conversation.
-func (c *Client) Messages(message schema.Message) ([]schema.Content, error) {
+func (c *Client) Messages(messages []*schema.Message) (*schema.Content, error) {
 	var request reqMessage
 	var response respMessage
 
+	// Check parameters
+	if len(messages) == 0 {
+		return nil, ErrBadParameter.With("messages")
+	}
+
+	// Set defaults
 	request.Model = defaultMessageModel
 	request.MaxTokens = defaultMaxTokens
-	request.Messages = []schema.Message{message}
 
 	// Return the response
 	if payload, err := client.NewJSONRequest(request); err != nil {
 		return nil, err
 	} else if err := c.Do(payload, &response, client.OptPath("messages")); err != nil {
 		return nil, err
-	} else {
-		return response.Content, nil
+	} else if len(response.Content) == 0 {
+		return nil, ErrInternalAppError.With("No content returned")
 	}
+
+	// Return success
+	return &response.Content[0], nil
 }

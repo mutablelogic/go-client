@@ -2,11 +2,11 @@ package main
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/djthorpe/go-tablewriter"
 	"github.com/mutablelogic/go-client"
 	"github.com/mutablelogic/go-client/pkg/anthropic"
+	"github.com/mutablelogic/go-client/pkg/openai/schema"
 )
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -54,8 +54,13 @@ func anthropicParse(flags *Flags, opts ...client.ClientOpt) error {
 
 func anthropicChat(w *tablewriter.Writer, args []string) error {
 	// Request -> Response
-	message := anthropic.NewMessage("user", strings.Join(args, " "))
-	responses, err := anthropicClient.Messages(message)
+	message := schema.NewMessage(schema.Anthropic, "user", nil)
+	for _, arg := range args {
+		message.Add(arg)
+	}
+
+	// Request -> Response
+	responses, err := anthropicClient.Messages([]*schema.Message{message})
 	if err != nil {
 		return err
 	}

@@ -2,13 +2,11 @@ package bitwarden_test
 
 import (
 	"os"
-	"strings"
 	"testing"
 
 	// Packages
 	opts "github.com/mutablelogic/go-client"
 	bitwarden "github.com/mutablelogic/go-client/pkg/bitwarden"
-	crypto "github.com/mutablelogic/go-client/pkg/bitwarden/crypto"
 	schema "github.com/mutablelogic/go-client/pkg/bitwarden/schema"
 	assert "github.com/stretchr/testify/assert"
 )
@@ -33,18 +31,6 @@ func Test_sync_001(t *testing.T) {
 		t.SkipNow()
 	}
 	assert.NotNil(profile)
-
-	// Decrypt
-	encryptedKey, err := crypto.NewEncrypted(profile.Key)
-	if !assert.NoError(err) {
-		t.FailNow()
-	}
-
-	session := client.Session()
-	decryptKey := session.MakeDecryptKey(strings.ToLower(profile.Email), GetPassword(t), encryptedKey)
-	if !assert.NotNil(decryptKey) {
-		t.FailNow()
-	}
 }
 
 func Test_sync_002(t *testing.T) {

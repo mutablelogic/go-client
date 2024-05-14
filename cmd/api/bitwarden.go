@@ -20,8 +20,9 @@ import (
 
 type bwCipher struct {
 	Name     string `json:"name,wrap"`
-	Username string `json:"username,width:30"`
-	URI      string `json:"uri,width:40"`
+	Username string `json:"username,width:30,wrap"`
+	Password string `json:"password,width:30,wrap"`
+	URI      string `json:"uri,width:40,wrap"`
 	Folder   string `json:"folder,width:36"`
 }
 
@@ -177,14 +178,28 @@ func bwLogins(w *tablewriter.Writer, _ []string) error {
 	}
 
 	// Decrypt the ciphers from the session
-	var result []*schema.Cipher
+	var result []bwCipher
 	for cipher := ciphers.Next(); cipher != nil; cipher = ciphers.Next() {
+		if cipher.Type != schema.CipherTypeLogin || cipher.Login == nil {
+			continue
+		}
 		if ciphers.CanCrypt() {
 			if cipher, err := ciphers.Decrypt(cipher); err == nil {
-				result = append(result, cipher)
+				result = append(result, bwCipher{
+					Name:     cipher.Name,
+					Username: cipher.Login.Username,
+					Password: cipher.Login.Password,
+					URI:      cipher.Login.URI,
+					Folder:   cipher.FolderId,
+				})
 			}
 		} else {
-			result = append(result, cipher)
+			result = append(result, bwCipher{
+				Name:     cipher.Name,
+				Username: cipher.Login.Username,
+				URI:      cipher.Login.URI,
+				Folder:   cipher.FolderId,
+			})
 		}
 	}
 	return w.Write(result)

@@ -15,16 +15,16 @@ import (
 type Ciphers []*Cipher
 
 type Cipher struct {
-	Id             string       `json:"id"`
-	Name           string       `json:"name"`
-	Type           CipherType   `json:"type"`
-	FolderId       string       `json:"folderId,omitempty"`
-	OrganizationId string       `json:"organizationId,omitempty"`
-	Favorite       bool         `json:"favorite,omitempty"`
-	Edit           bool         `json:"edit"`
-	RevisionDate   time.Time    `json:"revisionDate"`
+	Id             string       `json:"id,width:36"`
+	Name           string       `json:"name,width:30"`
+	Type           CipherType   `json:"type,width:5"`
+	FolderId       string       `json:"folderId,omitempty,width:36"`
+	OrganizationId string       `json:"organizationId,omitempty,width:36"`
+	Favorite       bool         `json:"favorite,omitempty,width:5"`
+	Edit           bool         `json:"edit,width:5"`
+	RevisionDate   time.Time    `json:"revisionDate,width:29"`
 	CollectionIds  []string     `json:"collectionIds,omitempty"`
-	ViewPassword   bool         `json:"viewPassword"`
+	ViewPassword   bool         `json:"viewPassword,width:5"`
 	Login          *CipherLogin `json:"Login,omitempty,wrap"`
 	//	Card           *CardData       `json:"Card,omitempty"`
 	//	SecureNote     *SecureNoteData `json:"SecureNote,omitempty"`

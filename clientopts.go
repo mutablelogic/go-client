@@ -113,3 +113,16 @@ func OptHeader(key, value string) ClientOpt {
 		return nil
 	}
 }
+
+// OptParent sets the parent client for this client, which is
+// used for setting additional client options in the parent
+func OptParent(v any) ClientOpt {
+	return func(client *Client) error {
+		if v == nil {
+			return ErrBadParameter.With("OptParent")
+		} else {
+			client.Parent = v
+		}
+		return nil
+	}
+}

@@ -15,42 +15,84 @@ import (
 
 func Test_sync_001(t *testing.T) {
 	assert := assert.New(t)
-	client, err := bitwarden.New(opts.OptTrace(os.Stderr, true))
-	assert.NoError(err)
-
-	// Login
-	session := new(schema.Session)
-	err = client.Login(session, bitwarden.OptCredentials(GetCredentials(t)), bitwarden.OptDevice(schema.Device{
+	client, err := bitwarden.New(opts.OptTrace(os.Stderr, true), bitwarden.OptFileStorage(t.TempDir()), bitwarden.OptCredentials(GetCredentials(t)), bitwarden.OptDevice(schema.Device{
 		Name:       "mydevice",
 		Identifier: GetIdentifier(t),
 	}))
 	assert.NoError(err)
 
-	// Sync
-	sync, err := client.Sync(session)
-	assert.NoError(err)
-	assert.NotNil(sync)
-	if !assert.NotNil(sync.Profile) {
-		t.FailNow()
+	// Login
+	err = client.Login()
+	if !assert.NoError(err) {
+		t.SkipNow()
 	}
 
+	// Sync
+	profile, err := client.Sync()
+	if !assert.NoError(err) {
+		t.SkipNow()
+	}
+	assert.NotNil(profile)
+
 	// Decrypt
-	encryptedKey, err := crypto.NewEncrypted(sync.Profile.Key)
+	encryptedKey, err := crypto.NewEncrypted(profile.Key)
 	if !assert.NoError(err) {
 		t.FailNow()
 	}
-	decryptKey := session.MakeDecryptKey(strings.ToLower(sync.Profile.Email), GetPassword(t), encryptedKey)
+
+	session := client.Session()
+	decryptKey := session.MakeDecryptKey(strings.ToLower(profile.Email), GetPassword(t), encryptedKey)
 	if !assert.NotNil(decryptKey) {
 		t.FailNow()
 	}
-	/*
-		if len(sync.Folders) > 0 {
-			t.Logf("Folders[0]: %v", sync.Folders[0])
-			value, err := decryptKey.DecryptStr(sync.Folders[0].Name)
-			if !assert.NoError(err) {
-				t.FailNow()
-			}
-			t.Logf("  name: %v", value)
-		}
-	*/
+}
+
+func Test_sync_002(t *testing.T) {
+	assert := assert.New(t)
+	client, err := bitwarden.New(opts.OptTrace(os.Stderr, true), bitwarden.OptFileStorage(t.TempDir()), bitwarden.OptCredentials(GetCredentials(t)), bitwarden.OptDevice(schema.Device{
+		Name:       "mydevice",
+		Identifier: GetIdentifier(t),
+	}))
+	assert.NoError(err)
+
+	// Login
+	err = client.Login()
+	if !assert.NoError(err) {
+		t.SkipNow()
+	}
+
+	// Get folders
+	folders, err := client.Folders()
+	if !assert.NoError(err) {
+		t.SkipNow()
+	}
+	assert.NotNil(folders)
+	for folder := folders.Next(); folder != nil; folder = folders.Next() {
+		t.Logf("Folder: %v", folder)
+	}
+}
+
+func Test_sync_003(t *testing.T) {
+	assert := assert.New(t)
+	client, err := bitwarden.New(opts.OptTrace(os.Stderr, true), bitwarden.OptFileStorage(t.TempDir()), bitwarden.OptCredentials(GetCredentials(t)), bitwarden.OptDevice(schema.Device{
+		Name:       "mydevice",
+		Identifier: GetIdentifier(t),
+	}))
+	assert.NoError(err)
+
+	// Login
+	err = client.Login()
+	if !assert.NoError(err) {
+		t.SkipNow()
+	}
+
+	// Get ciphers
+	ciphers, err := client.Ciphers()
+	if !assert.NoError(err) {
+		t.SkipNow()
+	}
+	assert.NotNil(ciphers)
+	for cipher := ciphers.Next(); cipher != nil; cipher = ciphers.Next() {
+		t.Logf("Cipher: %v", cipher)
+	}
 }

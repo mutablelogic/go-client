@@ -54,7 +54,7 @@ func anthropicParse(flags *Flags, opts ...client.ClientOpt) error {
 
 func anthropicChat(w *tablewriter.Writer, args []string) error {
 	// Request -> Response
-	message := schema.NewMessage(schema.Anthropic, "user", nil)
+	message := schema.NewMessage("user")
 	for _, arg := range args {
 		message.Add(arg)
 	}

@@ -28,7 +28,7 @@ type Session struct {
 	// Encryption parameters
 	Kdf
 
-	// Cached keys
+	// Cached
 	cryptKey *crypto.CryptoKey
 }
 

@@ -21,12 +21,11 @@ import (
 
 var (
 	samName              = "sam"
-	samWeatherTool       = schema.NewTool("get_weather", "Get the weather for a location")
+	samWeatherTool       = schema.NewTool("get_current_weather", "Get the current weather conditions for a location")
 	samNewsHeadlinesTool = schema.NewTool("get_news_headlines", "Get the news headlines")
 	samNewsSearchTool    = schema.NewTool("search_news", "Search news articles")
 	samHomeAssistantTool = schema.NewTool("get_home_devices", "Return information about home devices")
-	samSystemPrompt      = `Your name is Samantha, you are a friendly and occasionally sarcastic assistant, 
-	 	here to help with anything. Your responses should be short and to the point, and you should always be polite.`
+	samSystemPrompt      = `Your name is Samantha, you are a personal assistant modelled on the personality of Samantha from the movie "Her". Your responses should be short and friendly.`
 )
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -135,22 +134,23 @@ func samChat(ctx context.Context, w *tablewriter.Writer, _ []string) error {
 			anthropic.OptTool(samNewsSearchTool),
 			anthropic.OptTool(samHomeAssistantTool),
 		)
-		if err != nil {
-			return err
-		}
 		toolResult = false
-
-		for _, response := range responses {
-			switch response.Type {
-			case "text":
-				messages = samAppend(messages, schema.NewMessage("assistant", schema.Text(response.Text)))
-				fmt.Println(response.Text)
-				fmt.Println("")
-			case "tool_use":
-				messages = samAppend(messages, schema.NewMessage("assistant", response))
-				result := samCall(ctx, response)
-				messages = samAppend(messages, schema.NewMessage("user", result))
-				toolResult = true
+		if err != nil {
+			fmt.Println(err)
+			fmt.Println("")
+		} else {
+			for _, response := range responses {
+				switch response.Type {
+				case "text":
+					messages = samAppend(messages, schema.NewMessage("assistant", schema.Text(response.Text)))
+					fmt.Println(response.Text)
+					fmt.Println("")
+				case "tool_use":
+					messages = samAppend(messages, schema.NewMessage("assistant", response))
+					result := samCall(ctx, response)
+					messages = samAppend(messages, schema.NewMessage("user", result))
+					toolResult = true
+				}
 			}
 		}
 	}

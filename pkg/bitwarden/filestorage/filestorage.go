@@ -5,11 +5,7 @@ import (
 	"path/filepath"
 
 	// Packages
-
 	schema "github.com/mutablelogic/go-client/pkg/bitwarden/schema"
-
-	// Namespace imports
-	. "github.com/djthorpe/go-errors"
 )
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -141,12 +137,7 @@ func (f *fileStorage) WriteCiphers(v schema.Ciphers) error {
 // PUBLIC METHODS - READ CIPHERS AND FOLDERS
 
 // Read ciphers and return an iterator
-func (f *fileStorage) ReadCiphers(profile *schema.Profile) (schema.Iterator[*schema.Cipher], error) {
-	// Profile is a required argument
-	if profile == nil {
-		return nil, ErrBadParameter.With("missing profile")
-	}
-
+func (f *fileStorage) ReadCiphers() (schema.Iterator[*schema.Cipher], error) {
 	// Read the ciphers file
 	ciphers := schema.Ciphers{}
 	fileName := filepath.Join(f.cachePath, fileNameCiphers)
@@ -160,16 +151,11 @@ func (f *fileStorage) ReadCiphers(profile *schema.Profile) (schema.Iterator[*sch
 	}
 
 	// Return an iterator
-	return schema.NewIterator[*schema.Cipher](profile, ciphers), nil
+	return schema.NewIterator[*schema.Cipher](ciphers), nil
 }
 
 // Read folders and return an iterator
-func (f *fileStorage) ReadFolders(profile *schema.Profile) (schema.Iterator[*schema.Folder], error) {
-	// Profile is a required argument
-	if profile == nil {
-		return nil, ErrBadParameter.With("missing profile")
-	}
-
+func (f *fileStorage) ReadFolders() (schema.Iterator[*schema.Folder], error) {
 	// Read the folders file
 	folders := schema.Folders{}
 	fileName := filepath.Join(f.cachePath, fileNameFolders)
@@ -183,5 +169,5 @@ func (f *fileStorage) ReadFolders(profile *schema.Profile) (schema.Iterator[*sch
 	}
 
 	// Return an iterator
-	return schema.NewIterator[*schema.Folder](profile, folders), nil
+	return schema.NewIterator[*schema.Folder](folders), nil
 }

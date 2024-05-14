@@ -2,6 +2,8 @@ package schema
 
 import (
 	"io"
+
+	"github.com/mutablelogic/go-client/pkg/bitwarden/crypto"
 )
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -17,5 +19,5 @@ type ReaderWriter interface {
 
 type Crypter interface {
 	// Decrypt the object and return a new object
-	Decrypt(*Session) (Crypter, error)
+	Decrypt(*crypto.CryptoKey) (Crypter, error)
 }

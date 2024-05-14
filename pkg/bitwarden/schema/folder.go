@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"io"
 	"time"
+
+	"github.com/mutablelogic/go-client/pkg/bitwarden/crypto"
 )
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -32,9 +34,9 @@ func (f *Folders) Write(w io.Writer) error {
 }
 
 // Decrypt a folder
-func (f Folder) Decrypt(s *Session) (Crypter, error) {
+func (f Folder) Decrypt(k *crypto.CryptoKey) (Crypter, error) {
 	result := &f
-	if value, err := s.DecryptStr(result.Name); err != nil {
+	if value, err := k.DecryptStr(result.Name); err != nil {
 		return nil, err
 	} else {
 		result.Name = value

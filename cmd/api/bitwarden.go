@@ -34,10 +34,11 @@ const (
 )
 
 var (
-	bwClient    *bitwarden.Client
-	bwPassword  string
-	bwConfigDir string
-	bwForce     bool
+	bwClient      *bitwarden.Client
+	bwPassword    string
+	bwConfigDir   string
+	bwForce       bool
+	bwInteractive bool
 )
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -49,6 +50,7 @@ func bwRegister(flags *Flags) {
 	flags.String(bwName, "bitwarden-client-secret", "${BW_CLIENTSECRET}", "Client Secret")
 	flags.String(bwName, "bitwarden-password", "${BW_PASSWORD}", "Master password")
 	flags.Bool(bwName, "force", false, "Force login or sync to Bitwarden, even if existing token or data is valid")
+	flags.Bool(bwName, "interactive", true, "Allow interactive prompts for password")
 
 	// Register commands
 	flags.Register(Cmd{
@@ -82,6 +84,7 @@ func bwParse(flags *Flags, opts ...client.ClientOpt) error {
 		return ErrBadParameter.With("Missing -bitwarden-client-id or -bitwarden-client-secret argument")
 	}
 	bwForce = flags.GetBool("force")
+	bwInteractive = flags.GetBool("interactive")
 	bwPassword = flags.GetString("bitwarden-password")
 
 	// Create the client
@@ -124,6 +127,16 @@ func bwFolders(w *tablewriter.Writer, _ []string) error {
 	if bwForce {
 		opts = append(opts, bitwarden.OptForce())
 	}
+	if bwPassword == "" && bwInteractive {
+		if v, err := bwReadPasswordFromTerminal(); err != nil {
+			return err
+		} else {
+			bwPassword = v
+		}
+	}
+	if bwPassword != "" {
+		opts = append(opts, bitwarden.OptPassword(bwPassword))
+	}
 	folders, err := bwClient.Folders(opts...)
 	if err != nil {
 		return err
@@ -132,7 +145,13 @@ func bwFolders(w *tablewriter.Writer, _ []string) error {
 	// Decrypt the folders from the session
 	var result []*schema.Folder
 	for folder := folders.Next(); folder != nil; folder = folders.Next() {
-		result = append(result, folders.Decrypt(folder))
+		if folders.CanCrypt() {
+			if folder, err := folders.Decrypt(folder); err == nil {
+				result = append(result, folder)
+			}
+		} else {
+			result = append(result, folder)
+		}
 	}
 	return w.Write(result)
 }
@@ -142,6 +161,16 @@ func bwLogins(w *tablewriter.Writer, _ []string) error {
 	if bwForce {
 		opts = append(opts, bitwarden.OptForce())
 	}
+	if bwPassword == "" && bwInteractive {
+		if v, err := bwReadPasswordFromTerminal(); err != nil {
+			return err
+		} else {
+			bwPassword = v
+		}
+	}
+	if bwPassword != "" {
+		opts = append(opts, bitwarden.OptPassword(bwPassword))
+	}
 	ciphers, err := bwClient.Ciphers(opts...)
 	if err != nil {
 		return err
@@ -150,7 +179,13 @@ func bwLogins(w *tablewriter.Writer, _ []string) error {
 	// Decrypt the ciphers from the session
 	var result []*schema.Cipher
 	for cipher := ciphers.Next(); cipher != nil; cipher = ciphers.Next() {
-		result = append(result, ciphers.Decrypt(cipher))
+		if ciphers.CanCrypt() {
+			if cipher, err := ciphers.Decrypt(cipher); err == nil {
+				result = append(result, cipher)
+			}
+		} else {
+			result = append(result, cipher)
+		}
 	}
 	return w.Write(result)
 }

@@ -31,8 +31,8 @@ type Storage interface {
 	WriteCiphers(schema.Ciphers) error
 
 	// Read ciphers and return an iterator
-	ReadCiphers(*schema.Profile) (schema.Iterator[*schema.Cipher], error)
+	ReadCiphers() (schema.Iterator[*schema.Cipher], error)
 
 	// Read folders and return an iterator
-	ReadFolders(*schema.Profile) (schema.Iterator[*schema.Folder], error)
+	ReadFolders() (schema.Iterator[*schema.Folder], error)
 }

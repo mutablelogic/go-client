@@ -82,9 +82,9 @@ func (c *Client) Folders(opts ...RequestOpt) (schema.Iterator[*schema.Folder], e
 	// The iterator comes from sync or storage
 	var iterator schema.Iterator[*schema.Folder]
 	if response.Folders != nil {
-		iterator = schema.NewIterator[*schema.Folder](response.Profile, response.Folders)
+		iterator = schema.NewIterator[*schema.Folder](response.Folders)
 	} else if c.storage != nil {
-		if v, err := c.storage.ReadFolders(response.Profile); err != nil {
+		if v, err := c.storage.ReadFolders(); err != nil {
 			return nil, err
 		} else {
 			iterator = v
@@ -92,6 +92,13 @@ func (c *Client) Folders(opts ...RequestOpt) (schema.Iterator[*schema.Folder], e
 	}
 	if iterator == nil {
 		return nil, ErrInternalAppError.With("missing folders")
+	}
+
+	// Cache the encryption key for the folders
+	if reqOpt.passwd != "" {
+		if _, err := iterator.CryptKey(response.Profile, reqOpt.passwd, c.session.Kdf); err != nil {
+			return nil, err
+		}
 	}
 
 	// Return the iterator
@@ -130,9 +137,9 @@ func (c *Client) Ciphers(opts ...RequestOpt) (schema.Iterator[*schema.Cipher], e
 	// The iterator comes from sync or storage
 	var iterator schema.Iterator[*schema.Cipher]
 	if response.Ciphers != nil {
-		iterator = schema.NewIterator[*schema.Cipher](response.Profile, response.Ciphers)
+		iterator = schema.NewIterator[*schema.Cipher](response.Ciphers)
 	} else if c.storage != nil {
-		if v, err := c.storage.ReadCiphers(response.Profile); err != nil {
+		if v, err := c.storage.ReadCiphers(); err != nil {
 			return nil, err
 		} else {
 			iterator = v
@@ -140,6 +147,13 @@ func (c *Client) Ciphers(opts ...RequestOpt) (schema.Iterator[*schema.Cipher], e
 	}
 	if iterator == nil {
 		return nil, ErrInternalAppError.With("missing ciphers")
+	}
+
+	// Cache the encryption key for the ciphers
+	if reqOpt.passwd != "" {
+		if _, err := iterator.CryptKey(response.Profile, reqOpt.passwd, c.session.Kdf); err != nil {
+			return nil, err
+		}
 	}
 
 	// Return the iterator

@@ -23,6 +23,7 @@ func main() {
 	newsapiRegister(flags)
 	weatherapiRegister(flags)
 	samRegister(flags)
+	haRegister(flags)
 
 	// Parse command line and return function to run
 	fn, args, err := flags.Parse(os.Args[1:])

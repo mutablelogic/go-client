@@ -13,7 +13,7 @@ API Documentation: https://pkg.go.dev/github.com/mutablelogic/go-client
 
 There are also some example clients which use this library:
 
-* [Anthropic API Client](https://github.com/mutablelogic/go-client/tree/main/pkg/bitwarden) for Claude LLM
+* [Anthropic API Client](https://github.com/mutablelogic/go-client/tree/main/pkg/anthropic) for Claude LLM
 * [Bitwarden API Client](https://github.com/mutablelogic/go-client/tree/main/pkg/bitwarden)
 * [Elevenlabs API Client](https://github.com/mutablelogic/go-client/tree/main/pkg/elevenlabs) for Text-to-Speech
 * [Home Assistant API Client](https://github.com/mutablelogic/go-client/tree/main/pkg/homeassistant)

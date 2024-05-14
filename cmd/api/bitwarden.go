@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -20,8 +21,9 @@ import (
 
 type bwCipher struct {
 	Name     string `json:"name,wrap"`
-	Username string `json:"username,width:30"`
-	URI      string `json:"uri,width:40"`
+	Username string `json:"username,width:30,wrap"`
+	Password string `json:"password,width:30,wrap"`
+	URI      string `json:"uri,width:40,wrap"`
 	Folder   string `json:"folder,width:36"`
 }
 
@@ -34,11 +36,11 @@ const (
 )
 
 var (
-	bwClient                   *bitwarden.Client
-	bwClientId, bwClientSecret string
-	bwPassword                 string
-	bwConfigDir                string
-	bwForce                    bool
+	bwClient      *bitwarden.Client
+	bwPassword    string
+	bwConfigDir   string
+	bwForce       bool
+	bwInteractive bool
 )
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -50,6 +52,7 @@ func bwRegister(flags *Flags) {
 	flags.String(bwName, "bitwarden-client-secret", "${BW_CLIENTSECRET}", "Client Secret")
 	flags.String(bwName, "bitwarden-password", "${BW_PASSWORD}", "Master password")
 	flags.Bool(bwName, "force", false, "Force login or sync to Bitwarden, even if existing token or data is valid")
+	flags.Bool(bwName, "interactive", true, "Allow interactive prompts for password")
 
 	// Register commands
 	flags.Register(Cmd{
@@ -58,7 +61,6 @@ func bwRegister(flags *Flags) {
 		Parse:       bwParse,
 		Fn: []Fn{
 			{Name: "auth", Description: "Authenticate with Bitwarden", Call: bwAuth},
-			{Name: "sync", Description: "Sync items from Bitwarden", Call: bwSync},
 			{Name: "folders", Description: "Retrieve folders", Call: bwFolders},
 			{Name: "logins", Description: "Retrieve login items", Call: bwLogins, MaxArgs: 1},
 			{Name: "password", Description: "Print a password to stdout", Call: bwGetPassword, MinArgs: 1, MaxArgs: 1},
@@ -67,12 +69,6 @@ func bwRegister(flags *Flags) {
 }
 
 func bwParse(flags *Flags, opts ...client.ClientOpt) error {
-	if client, err := bitwarden.New(opts...); err != nil {
-		return err
-	} else {
-		bwClient = client
-	}
-
 	// Get config directory
 	if config, err := os.UserConfigDir(); err != nil {
 		return err
@@ -84,13 +80,23 @@ func bwParse(flags *Flags, opts ...client.ClientOpt) error {
 	}
 
 	// Set defaults
-	bwClientId = flags.GetString("bitwarden-client-id")
-	bwClientSecret = flags.GetString("bitwarden-client-secret")
-	if bwClientId == "" || bwClientSecret == "" {
+	clientId := flags.GetString("bitwarden-client-id")
+	clientSecret := flags.GetString("bitwarden-client-secret")
+	if clientId == "" || clientSecret == "" {
 		return ErrBadParameter.With("Missing -bitwarden-client-id or -bitwarden-client-secret argument")
 	}
 	bwForce = flags.GetBool("force")
+	bwInteractive = flags.GetBool("interactive")
 	bwPassword = flags.GetString("bitwarden-password")
+
+	// Create the client
+	opts = append(opts, bitwarden.OptCredentials(clientId, clientSecret))
+	opts = append(opts, bitwarden.OptFileStorage(bwConfigDir))
+	if client, err := bitwarden.New(opts...); err != nil {
+		return err
+	} else {
+		bwClient = client
+	}
 
 	// Return success
 	return nil
@@ -99,177 +105,108 @@ func bwParse(flags *Flags, opts ...client.ClientOpt) error {
 ///////////////////////////////////////////////////////////////////////////////
 // API METHODS
 
-func bwAuth(w *tablewriter.Writer, _ []string) error {
-	// Load session or create a new one
-	session, err := bwReadSession()
-	if err != nil {
-		return err
-	}
-
-	// Login options
-	opts := []bitwarden.LoginOpt{
-		bitwarden.OptCredentials(bwClientId, bwClientSecret),
-	}
-	if session.Device == nil {
-		opts = append(opts, bitwarden.OptDevice(schema.Device{
-			Name: bwName,
-		}))
-	}
+func bwAuth(_ context.Context, w *tablewriter.Writer, _ []string) error {
+	opts := []bitwarden.RequestOpt{}
 	if bwForce {
 		opts = append(opts, bitwarden.OptForce())
 	}
 
-	// Perform the login
-	if err := bwClient.Login(session, opts...); err != nil {
+	// Login
+	if err := bwClient.Login(opts...); err != nil {
 		return err
 	}
 
-	// Save session
-	if err := bwWriteSession(session); err != nil {
+	// Sync
+	if profile, err := bwClient.Sync(opts...); err != nil {
 		return err
+	} else {
+		return w.Write(profile)
 	}
-
-	// Print out session
-	w.Write(session)
-
-	// Return success
-	return nil
 }
 
-func bwSync(w *tablewriter.Writer, _ []string) error {
-	// Load session or create a new one
-	session, err := bwReadSession()
-	if err != nil {
-		return err
+func bwFolders(_ context.Context, w *tablewriter.Writer, _ []string) error {
+	opts := []bitwarden.RequestOpt{}
+	if bwForce {
+		opts = append(opts, bitwarden.OptForce())
 	}
-	// If the session is not valid, then return an error
-	if !session.IsValid() {
-		return ErrOutOfOrder.With("Session is not valid, login first")
-	}
-	// Perform the sync
-	sync, err := bwClient.Sync(session)
-	if err != nil {
-		return err
-	} else if err := bwWrite("profile.json", sync.Profile); err != nil {
-		return err
-	} else if err := bwWrite("folders.json", sync.Folders); err != nil {
-		return err
-	} else if err := bwWrite("ciphers.json", sync.Ciphers); err != nil {
-		return err
-	} else if err := bwWrite("domains.json", sync.Domains); err != nil {
-		return err
-	}
-
-	// Output the profile
-	w.Write(sync.Profile)
-
-	// Return success
-	return nil
-}
-
-func bwFolders(w *tablewriter.Writer, _ []string) error {
-	// Load the profile
-	profile, err := bwReadProfile()
-	if err != nil {
-		return err
-	}
-
-	// Load session or create a new one
-	session, err := bwReadSession()
-	if err != nil {
-		return err
-	}
-
-	// Make an encryption key
-	if bwPassword == "" {
+	if bwPassword == "" && bwInteractive {
 		if v, err := bwReadPasswordFromTerminal(); err != nil {
 			return err
 		} else {
 			bwPassword = v
 		}
 	}
-	if err := session.CacheKey(profile.Key, profile.Email, bwPassword); err != nil {
-		return err
+	if bwPassword != "" {
+		opts = append(opts, bitwarden.OptPassword(bwPassword))
 	}
-
-	// Read the folders
-	folders := schema.Folders{}
-	if err := bwRead("folders.json", &folders); err != nil {
+	folders, err := bwClient.Folders(opts...)
+	if err != nil {
 		return err
 	}
 
 	// Decrypt the folders from the session
-	for i, folder := range folders {
-		if decrypted, err := folder.Decrypt(session); err != nil {
-			return err
+	var result []*schema.Folder
+	for folder := folders.Next(); folder != nil; folder = folders.Next() {
+		if folders.CanCrypt() {
+			if folder, err := folders.Decrypt(folder); err == nil {
+				result = append(result, folder)
+			}
 		} else {
-			folders[i] = decrypted.(*schema.Folder)
+			result = append(result, folder)
 		}
 	}
-
-	// Output the folders
-	w.Write(folders)
-
-	// Return success
-	return nil
+	return w.Write(result)
 }
 
-func bwLogins(w *tablewriter.Writer, _ []string) error {
-	// Load the profile
-	profile, err := bwReadProfile()
-	if err != nil {
-		return err
+func bwLogins(_ context.Context, w *tablewriter.Writer, _ []string) error {
+	opts := []bitwarden.RequestOpt{}
+	if bwForce {
+		opts = append(opts, bitwarden.OptForce())
 	}
-
-	// Load session or create a new one
-	session, err := bwReadSession()
-	if err != nil {
-		return err
-	}
-
-	// Make an encryption key
-	if bwPassword == "" {
+	if bwPassword == "" && bwInteractive {
 		if v, err := bwReadPasswordFromTerminal(); err != nil {
 			return err
 		} else {
 			bwPassword = v
 		}
 	}
-	if err := session.CacheKey(profile.Key, profile.Email, bwPassword); err != nil {
+	if bwPassword != "" {
+		opts = append(opts, bitwarden.OptPassword(bwPassword))
+	}
+	ciphers, err := bwClient.Ciphers(opts...)
+	if err != nil {
 		return err
 	}
 
-	// Read the ciphers
-	ciphers := schema.Ciphers{}
-	result := []bwCipher{}
-	if err := bwRead("ciphers.json", &ciphers); err != nil {
-		return err
-	}
 	// Decrypt the ciphers from the session
-	for _, cipher := range ciphers {
-		if cipher.Type != schema.CipherTypeLogin {
+	var result []bwCipher
+	for cipher := ciphers.Next(); cipher != nil; cipher = ciphers.Next() {
+		if cipher.Type != schema.CipherTypeLogin || cipher.Login == nil {
 			continue
 		}
-		if decrypted, err := cipher.Decrypt(session); err != nil {
-			return err
+		if ciphers.CanCrypt() {
+			if cipher, err := ciphers.Decrypt(cipher); err == nil {
+				result = append(result, bwCipher{
+					Name:     cipher.Name,
+					Username: cipher.Login.Username,
+					Password: cipher.Login.Password,
+					URI:      cipher.Login.URI,
+					Folder:   cipher.FolderId,
+				})
+			}
 		} else {
 			result = append(result, bwCipher{
-				Name:     decrypted.(*schema.Cipher).Name,
-				Username: decrypted.(*schema.Cipher).Login.Username,
-				URI:      decrypted.(*schema.Cipher).Login.URI,
-				Folder:   decrypted.(*schema.Cipher).FolderId,
+				Name:     cipher.Name,
+				Username: cipher.Login.Username,
+				URI:      cipher.Login.URI,
+				Folder:   cipher.FolderId,
 			})
 		}
 	}
-
-	// Output the ciphers
-	w.Write(result)
-
-	// Return success
-	return nil
+	return w.Write(result)
 }
 
-func bwGetPassword(w *tablewriter.Writer, _ []string) error {
+func bwGetPassword(_ context.Context, w *tablewriter.Writer, _ []string) error {
 	return ErrNotImplemented
 }
 
@@ -290,74 +227,4 @@ func bwReadPasswordFromTerminal() (string, error) {
 	} else {
 		return string(value), nil
 	}
-}
-
-func bwReadProfile() (*schema.Profile, error) {
-	result := schema.NewProfile()
-	filename := filepath.Join(bwConfigDir, "profile.json")
-	if _, err := os.Stat(filename); os.IsNotExist(err) {
-		// Return an error
-		return nil, ErrNotFound.With("Profile not found")
-	} else if err != nil {
-		return nil, err
-	}
-
-	// Open the file
-	file, err := os.Open(filename)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-
-	// Read and return the session
-	return result, result.Read(file)
-}
-
-func bwReadSession() (*schema.Session, error) {
-	result := schema.NewSession()
-	filename := filepath.Join(bwConfigDir, "session.json")
-	if _, err := os.Stat(filename); os.IsNotExist(err) {
-		// Return a new, empty session
-		return result, nil
-	} else if err != nil {
-		return nil, err
-	}
-
-	// Open the file
-	file, err := os.Open(filename)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-
-	// Read and return the session
-	return result, result.Read(file)
-}
-
-func bwWriteSession(session *schema.Session) error {
-	return bwWrite("session.json", session)
-}
-
-func bwWrite(filename string, obj schema.ReaderWriter) error {
-	path := filepath.Join(bwConfigDir, filename)
-	w, err := os.Create(path)
-	if err != nil {
-		return err
-	}
-	defer w.Close()
-
-	// Write the object and return any errors
-	return obj.Write(w)
-}
-
-func bwRead(filename string, obj schema.ReaderWriter) error {
-	path := filepath.Join(bwConfigDir, filename)
-	r, err := os.Open(path)
-	if err != nil {
-		return err
-	}
-	defer r.Close()
-
-	// Write the object and return any errors
-	return obj.Read(r)
 }

@@ -34,6 +34,9 @@ type Client struct {
 	sync.Mutex
 	*http.Client
 
+	// Parent object for client options
+	Parent any
+
 	endpoint *url.URL
 	ua       string
 	rate     float32 // number of requests allowed per second

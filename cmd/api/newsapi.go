@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
@@ -66,7 +67,7 @@ func inewsapiParse(flags *Flags, opts ...client.ClientOpt) error {
 ///////////////////////////////////////////////////////////////////////////////
 // METHODS
 
-func newsapiSources(w *tablewriter.Writer, _ []string) error {
+func newsapiSources(_ context.Context, w *tablewriter.Writer, _ []string) error {
 	// Set options
 	opts := []newsapi.Opt{}
 	if newsapiCategory != "" {
@@ -89,7 +90,7 @@ func newsapiSources(w *tablewriter.Writer, _ []string) error {
 	return w.Write(sources)
 }
 
-func newsapiHeadlines(w *tablewriter.Writer, _ []string) error {
+func newsapiHeadlines(_ context.Context, w *tablewriter.Writer, _ []string) error {
 	// Set options
 	opts := []newsapi.Opt{}
 	if newsapiCategory != "" {
@@ -112,7 +113,7 @@ func newsapiHeadlines(w *tablewriter.Writer, _ []string) error {
 	return w.Write(articles)
 }
 
-func newsapiArticles(w *tablewriter.Writer, args []string) error {
+func newsapiArticles(_ context.Context, w *tablewriter.Writer, args []string) error {
 	// Set options
 	opts := []newsapi.Opt{}
 	if newsapiCategory != "" {

@@ -1,6 +1,9 @@
 package main
 
 import (
+	"context"
+
+	// Packages
 	"github.com/djthorpe/go-tablewriter"
 	"github.com/mutablelogic/go-client"
 	"github.com/mutablelogic/go-client/pkg/ipify"
@@ -31,7 +34,7 @@ func ipifyParse(flags *Flags, opts ...client.ClientOpt) error {
 	return nil
 }
 
-func ipifyGetAddress(w *tablewriter.Writer, _ []string) error {
+func ipifyGetAddress(_ context.Context, w *tablewriter.Writer, _ []string) error {
 	addr, err := ipifyClient.Get()
 	if err != nil {
 		return err

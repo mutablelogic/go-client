@@ -15,7 +15,7 @@ import (
 
 func Test_client_001(t *testing.T) {
 	assert := assert.New(t)
-	client, err := bitwarden.New(opts.OptTrace(os.Stderr, true))
+	client, err := bitwarden.New(opts.OptTrace(os.Stderr, true), bitwarden.OptCredentials(GetCredentials(t)))
 	assert.NoError(err)
 	assert.NotNil(client)
 	t.Log(client)
@@ -27,23 +27,27 @@ func Test_client_004(t *testing.T) {
 	// Create a master key
 	key := crypto.MakeInternalKey(strings.ToLower(GetEmail(t)), GetPassword(t), 0, 100000)
 	assert.NotNil(key)
-	t.Logf("MakeInternalKey password=%q salt=%q iter=%v", GetPassword(t), GetEmail(t), 100000)
+	t.Logf("MakeInternalKey salt=%q iter=%v", GetEmail(t), 100000)
 	t.Logf("  => %v", key)
 }
 
 func Test_client_005(t *testing.T) {
 	assert := assert.New(t)
-	client, err := bitwarden.New(opts.OptTrace(os.Stderr, true))
-	assert.NoError(err)
-
-	// Login a new session
-	session := schema.NewSession()
-	err = client.Login(session, bitwarden.OptCredentials(GetCredentials(t)), bitwarden.OptDevice(schema.Device{
+	client, err := bitwarden.New(opts.OptTrace(os.Stderr, true), bitwarden.OptFileStorage(t.TempDir()), bitwarden.OptCredentials(GetCredentials(t)), bitwarden.OptDevice(schema.Device{
 		Name: "mydevice",
 	}))
+	if !assert.NoError(err) {
+		t.FailNow()
+	}
+	assert.NotNil(client)
+
+	// Login a new session
+	err = client.Login(bitwarden.OptForce())
 	assert.NoError(err)
 
 	// Create a master key
+	session := client.Session()
+	assert.True(session.IsValid())
 	masterKey := session.MakeInternalKey(strings.ToLower(GetEmail(t)), GetPassword(t))
 	assert.NotNil(masterKey)
 }

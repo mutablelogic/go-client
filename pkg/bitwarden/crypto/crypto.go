@@ -184,7 +184,9 @@ func (k *CryptoKey) Decrypt(data *Encrypted) ([]byte, error) {
 }
 
 func (k *CryptoKey) DecryptStr(data string) (string, error) {
-	if encrypted, err := NewEncrypted(data); err != nil {
+	if data == "" {
+		return "", nil
+	} else if encrypted, err := NewEncrypted(data); err != nil {
 		return "", err
 	} else if value, err := k.Decrypt(encrypted); err != nil {
 		return "", err

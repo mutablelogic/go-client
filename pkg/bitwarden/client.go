@@ -18,7 +18,10 @@ import (
 // TYPES
 
 type Client struct {
-	*client.Client
+	client  *client.Client
+	session schema.Session
+	storage Storage
+	login   Login
 }
 
 type Login struct {
@@ -69,79 +72,128 @@ const (
 // LIFECYCLE
 
 func New(opts ...client.ClientOpt) (*Client, error) {
+	parent := new(Client)
+	parent.login.GrantType = defaultGrantType
+	parent.login.Scope = defaultScope
+
 	// Create client
-	client, err := client.New(append(opts, client.OptEndpoint(baseUrl))...)
+	opts_ := []client.ClientOpt{
+		client.OptParent(parent),
+	}
+	opts_ = append(opts_, opts...)
+	client, err := client.New(append(opts_, client.OptEndpoint(baseUrl))...)
 	if err != nil {
 		return nil, err
+	} else {
+		parent.client = client
+	}
+
+	// Check for missing parameters
+	if parent.login.ClientId == "" || parent.login.ClientSecret == "" {
+		return nil, ErrBadParameter.With("missing credentials")
+	}
+
+	// Read a session
+	session, err := readSessionFrom(parent.storage)
+	if err != nil {
+		return nil, err
+	} else {
+		parent.session = *session
+	}
+
+	// Set device
+	if parent.session.Device == nil {
+		parent.session.Device = schema.NewDevice(defaultDeviceName)
+	}
+	if parent.session.Device.Identifier == "" {
+		parent.session.Device.Identifier = schema.MakeDeviceIdentifier()
+	}
+	if parent.session.Device.Type == 0 {
+		parent.session.Device.Type = schema.MakeDeviceType()
 	}
 
 	// Return the client
-	return &Client{client}, nil
+	return parent, nil
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 // PUBLIC METHODS
 
-// Login updates a session with a token. To create a new, empty session
-// then pass an empty session to this method. Use OptCredentials  option
-// to pass a client_id and client_secret to the session.
-func (c *Client) Login(session *schema.Session, opts ...LoginOpt) error {
+// Login sets the session token. Use OptForce to request token
+// even if there is a valid token
+func (c *Client) Login(opts ...RequestOpt) error {
 	var request reqToken
 	var response respToken
-
-	// Check parameters
-	if session == nil {
-		return ErrBadParameter.With("session")
-	}
+	var reqOpt opt
 
 	// Set defaults
-	request.GrantType = defaultGrantType
-	request.Scope = defaultScope
+	request.Login = c.login
 
 	// Apply options
 	for _, opt := range opts {
-		if err := opt(session, &request); err != nil {
+		if err := opt(&reqOpt); err != nil {
 			return err
 		}
 	}
 
-	// Check request parameters
-	if request.ClientId == "" || request.ClientSecret == "" {
-		return ErrBadParameter.With("missing credentials")
-	} else if session.Device == nil {
-		return ErrBadParameter.With("missing device")
-	} else {
-		// Populate missing device fields
-		if session.Device.Identifier == "" {
-			session.Device.Identifier = schema.MakeDeviceIdentifier()
-		}
-		if session.Device.Name == "" {
-			session.Device.Name = defaultDeviceName
-		}
-		if session.Device.Type == 0 {
-			// TODO: Won't respect Android (0) being set
-			session.Device.Type = schema.MakeDeviceType()
-		}
+	// Clear token if force
+	if reqOpt.force {
+		c.session.Token = nil
 	}
 
-	// If the session is already valid, then return
-	if session.IsValid() {
-		return nil
-	}
+	// Request token if not valid
+	if !c.session.IsValid() {
+		// Request -> Response
+		request.Device = c.session.Device
+		if payload, err := client.NewFormRequest(request, client.ContentTypeJson); err != nil {
+			return err
+		} else if err := c.client.Do(payload, &response, client.OptReqEndpoint(identityUrl), client.OptPath("connect/token")); err != nil {
+			return err
+		}
 
-	// Request -> Response
-	request.Device = session.Device
-	if payload, err := client.NewFormRequest(request, client.ContentTypeJson); err != nil {
-		return err
-	} else if err := c.Do(payload, &response, client.OptReqEndpoint(identityUrl), client.OptPath("connect/token")); err != nil {
-		return err
+		// Update session
+		c.session.Token = &response.Token
+		c.session.Token.CreatedAt = time.Now()
+		c.session.Kdf = response.Kdf
+		if err := writeSessionTo(c.storage, &c.session); err != nil {
+			return err
+		}
 	}
-
-	// Update session
-	session.Token = &response.Token
-	session.Token.CreatedAt = time.Now()
-	session.Kdf = response.Kdf
 
 	// Return success
 	return nil
+}
+
+// Session returns the copy of the current session
+func (c *Client) Session() *schema.Session {
+	s := c.session
+	return &s
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// PRIVATE METHODS
+
+func writeSessionTo(storage Storage, session *schema.Session) error {
+	if session == nil {
+		return ErrBadParameter.With("session")
+	}
+	if storage == nil {
+		return nil
+	} else {
+		return storage.WriteSession(session)
+	}
+}
+
+func readSessionFrom(storage Storage) (*schema.Session, error) {
+	session := schema.NewSession()
+	if storage == nil {
+		return session, nil
+	}
+	if s, err := storage.ReadSession(); err != nil {
+		return nil, err
+	} else if s == nil {
+		return session, nil
+	} else {
+		return s, nil
+	}
 }

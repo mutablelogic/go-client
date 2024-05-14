@@ -189,6 +189,16 @@ You can create a payload with form data:
 
 The payload should be a `struct` where the fields are converted to form tuples. File uploads require a field of type `multipart.File`.
 
+## Unmarshalling responses
+
+You can implement your own unmarshalling of responses by implementing the `Unmarshaler` interface:
+
+```go
+type Unmarshaler interface {
+  Unmarshal(mimetype string, r io.Reader) error
+}
+```
+
 ## Streaming Responses
 
 If the returned content is a stream of JSON responses, then you can use the `OptResponse(fn func() error)` option, which

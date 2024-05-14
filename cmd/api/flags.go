@@ -23,6 +23,7 @@ type Flags struct {
 	cmds  []Cmd
 	cmd   *Cmd
 	root  string
+	fn    string
 	args  []string
 	names map[string]*Value
 }
@@ -92,15 +93,17 @@ func (flags *Flags) Parse(args []string) (*Fn, []string, error) {
 		}
 	}
 
-	// If the name of the command is the same as the name of the application
 	if cmd := flags.getCommandSet(flags.Name()); cmd != nil {
+		// If the name of the command is the same as the name of the application
 		flags.cmd = cmd
 		flags.root = cmd.Name
+		flags.fn = ""
 		flags.args = flags.Args()
 	} else if flags.NArg() > 0 {
 		if cmd := flags.getCommandSet(flags.Arg(0)); cmd != nil {
 			flags.cmd = cmd
 			flags.root = strings.Join([]string{flags.Name(), cmd.Name}, " ")
+			flags.fn = flags.Arg(1)
 			flags.args = flags.Args()[1:]
 		}
 	}
@@ -135,13 +138,16 @@ func (flags *Flags) Parse(args []string) (*Fn, []string, error) {
 	}
 
 	// Set the function to call
-	fn, args, err := flags.cmd.Get(flags.args)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "%v: %v\n", flags.cmd.Name, err)
-		return nil, nil, err
-	} else if fn == nil {
-		fmt.Fprintln(os.Stderr, "Unknown command, try -help")
+	fn := flags.cmd.Get(flags.fn)
+	if fn == nil {
+		fmt.Fprintf(os.Stderr, "Unknown command %q, try -help\n", flags.fn)
 		return nil, nil, ErrHelp
+	}
+
+	// Check the number of arguments
+	if err := fn.CheckArgs(flags.args); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return nil, nil, err
 	}
 
 	// Return success

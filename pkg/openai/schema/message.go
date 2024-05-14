@@ -41,9 +41,11 @@ type MessageChoice struct {
 
 // Message Content
 type Content struct {
+	Id     string         `json:"id,omitempty"`
 	Type   string         `json:"type,width:4"`
-	Text   string         `json:"text,wrap,width:60"`
+	Text   string         `json:"text,omitempty,wrap,width:60"`
 	Source *contentSource `json:"source,omitempty"`
+	toolUse
 }
 
 // Content Source
@@ -51,6 +53,12 @@ type contentSource struct {
 	Type      string `json:"type"`
 	MediaType string `json:"media_type,omitempty"`
 	Data      string `json:"data,omitempty"`
+}
+
+// Tool arguments
+type toolUse struct {
+	Name  string         `json:"name,omitempty"`
+	Input map[string]any `json:"input,omitempty"`
 }
 
 ///////////////////////////////////////////////////////////////////////////////

@@ -20,14 +20,24 @@ import (
 // TYPES
 
 type reqMessage struct {
-	Model     string            `json:"model"`
-	Messages  []*schema.Message `json:"messages,omitempty"`
-	Stream    bool              `json:"stream,omitempty"`
-	System    string            `json:"system,omitempty"`
-	MaxTokens int               `json:"max_tokens,omitempty"`
+	Model         string            `json:"model"`
+	Messages      []*schema.Message `json:"messages,omitempty"`
+	Stream        bool              `json:"stream,omitempty"`
+	System        string            `json:"system,omitempty"`
+	MaxTokens     int               `json:"max_tokens,omitempty"`
+	Metadata      *reqMetadata      `json:"metadata,omitempty"`
+	StopSequences []string          `json:"stop_sequences,omitempty"`
+	Temperature   float64           `json:"temperature,omitempty"`
+	TopK          int               `json:"top_k,omitempty"`
+	TopP          float64           `json:"top_p,omitempty"`
+	Tools         []schema.Tool     `json:"tools,omitempty"`
 
 	// Callbacks
 	delta Callback `json:"-"`
+}
+
+type reqMetadata struct {
+	User string `json:"user_id,omitempty"`
 }
 
 type respMessage struct {
@@ -87,7 +97,7 @@ const (
 // Send a structured list of input messages with text and/or image content,
 // and the model will generate the next message in the conversation. Use
 // a context to cancel the request, instead of the client-related timeout.
-func (c *Client) Messages(ctx context.Context, messages []*schema.Message, opt ...Opt) (*schema.Content, error) {
+func (c *Client) Messages(ctx context.Context, messages []*schema.Message, opt ...Opt) ([]schema.Content, error) {
 	var request reqMessage
 	var response respMessage
 
@@ -120,10 +130,10 @@ func (c *Client) Messages(ctx context.Context, messages []*schema.Message, opt .
 		return nil, ErrInternalAppError.With("No content returned")
 	}
 
-	// TODO: Somehow return Usage and Stop information
+	// TODO: Somehow return Usage and Stop information back to the caller
 
 	// Return success
-	return &response.Content[0], nil
+	return response.Content, nil
 }
 
 ///////////////////////////////////////////////////////////////////////////////

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -104,7 +105,7 @@ func bwParse(flags *Flags, opts ...client.ClientOpt) error {
 ///////////////////////////////////////////////////////////////////////////////
 // API METHODS
 
-func bwAuth(w *tablewriter.Writer, _ []string) error {
+func bwAuth(_ context.Context, w *tablewriter.Writer, _ []string) error {
 	opts := []bitwarden.RequestOpt{}
 	if bwForce {
 		opts = append(opts, bitwarden.OptForce())
@@ -123,7 +124,7 @@ func bwAuth(w *tablewriter.Writer, _ []string) error {
 	}
 }
 
-func bwFolders(w *tablewriter.Writer, _ []string) error {
+func bwFolders(_ context.Context, w *tablewriter.Writer, _ []string) error {
 	opts := []bitwarden.RequestOpt{}
 	if bwForce {
 		opts = append(opts, bitwarden.OptForce())
@@ -157,7 +158,7 @@ func bwFolders(w *tablewriter.Writer, _ []string) error {
 	return w.Write(result)
 }
 
-func bwLogins(w *tablewriter.Writer, _ []string) error {
+func bwLogins(_ context.Context, w *tablewriter.Writer, _ []string) error {
 	opts := []bitwarden.RequestOpt{}
 	if bwForce {
 		opts = append(opts, bitwarden.OptForce())
@@ -205,7 +206,7 @@ func bwLogins(w *tablewriter.Writer, _ []string) error {
 	return w.Write(result)
 }
 
-func bwGetPassword(w *tablewriter.Writer, _ []string) error {
+func bwGetPassword(_ context.Context, w *tablewriter.Writer, _ []string) error {
 	return ErrNotImplemented
 }
 

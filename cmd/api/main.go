@@ -1,16 +1,21 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
 	"path"
+	"syscall"
 
-	"github.com/djthorpe/go-tablewriter"
+	// Packages
+	tablewriter "github.com/djthorpe/go-tablewriter"
+	mycontext "github.com/mutablelogic/go-client/pkg/context"
 )
 
 func main() {
 	name := path.Base(os.Args[0])
+	path := path.Dir(os.Args[0])
 	flags := NewFlags(name)
 
 	// Register commands
@@ -19,40 +24,33 @@ func main() {
 	newsapiRegister(flags)
 	anthropicRegister(flags)
 
-	// Parse
-	if err := flags.Parse(os.Args[1:]); errors.Is(err, ErrHelp) {
+	// Parse command line and return function to run
+	fn, args, err := flags.Parse(os.Args[1:])
+	if errors.Is(err, ErrHelp) {
 		os.Exit(0)
-	} else if err != nil {
-		os.Exit(-1)
 	}
-
-	// If there are no arguments, print help
-	if flags.NArg() == 0 {
-		flags.PrintUsage()
-		os.Exit(-1)
+	if errors.Is(err, ErrInstall) {
+		if err := install(path, name, flags); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(-2)
+		}
+		os.Exit(0)
 	}
-
-	// Get command set
-	cmd := flags.GetCommandSet(flags.Arg(0))
-	if cmd == nil {
-		fmt.Fprintf(os.Stderr, "Unknown command: %q\n", flags.Arg(0))
-		os.Exit(-1)
-	}
-
-	// Get function then run it
-	fn, args, err := cmd.Get(flags.Args()[1:])
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
 		os.Exit(-1)
-	} else if fn == nil {
-		flags.PrintCommandUsage(cmd)
-	} else if err := Run(fn, args); err != nil {
+	}
+
+	// Create a context
+	ctx := mycontext.ContextForSignal(os.Interrupt, syscall.SIGQUIT)
+
+	// Run function
+	if err := Run(ctx, fn, args); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(-2)
 	}
 }
 
-func Run(fn *Fn, args []string) error {
+func Run(ctx context.Context, fn *Fn, args []string) error {
 	writer := tablewriter.New(os.Stdout, tablewriter.OptOutputText(), tablewriter.OptHeader())
-	return fn.Call(writer, args)
+	return fn.Call(ctx, writer, args)
 }

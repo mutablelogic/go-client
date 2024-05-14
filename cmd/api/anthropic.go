@@ -1,8 +1,10 @@
 package main
 
 import (
+	"context"
 	"fmt"
 
+	// Packages
 	"github.com/djthorpe/go-tablewriter"
 	"github.com/mutablelogic/go-client"
 	"github.com/mutablelogic/go-client/pkg/anthropic"
@@ -52,15 +54,17 @@ func anthropicParse(flags *Flags, opts ...client.ClientOpt) error {
 ///////////////////////////////////////////////////////////////////////////////
 // METHODS
 
-func anthropicChat(w *tablewriter.Writer, args []string) error {
+func anthropicChat(ctx context.Context, w *tablewriter.Writer, args []string) error {
 	// Request -> Response
 	message := schema.NewMessage("user")
 	for _, arg := range args {
-		message.Add(arg)
+		message.Add(schema.Text(arg))
 	}
 
 	// Request -> Response
-	responses, err := anthropicClient.Messages([]*schema.Message{message})
+	responses, err := anthropicClient.Messages(ctx, []*schema.Message{
+		message,
+	})
 	if err != nil {
 		return err
 	}

@@ -21,6 +21,12 @@ type Message struct {
 	// user or assistant
 	Role string `json:"role"`
 
+	// Message Id
+	Id string `json:"id,omitempty"`
+
+	// Model
+	Model string `json:"model,omitempty"`
+
 	// Content can be a string, array of strings, content
 	// object or an array of content objects
 	Content any `json:"content,omitempty"`
@@ -103,6 +109,11 @@ func ImageData(path string) (*Content, error) {
 
 func (m Message) String() string {
 	data, _ := json.MarshalIndent(m, "", "  ")
+	return string(data)
+}
+
+func (c Content) String() string {
+	data, _ := json.MarshalIndent(c, "", "  ")
 	return string(data)
 }
 

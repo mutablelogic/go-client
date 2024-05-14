@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/djthorpe/go-tablewriter"
@@ -22,7 +23,7 @@ type Fn struct {
 	Description string
 	MinArgs     uint
 	MaxArgs     uint
-	Call        func(*tablewriter.Writer, []string) error
+	Call        func(context.Context, *tablewriter.Writer, []string) error
 }
 
 ///////////////////////////////////////////////////////////////////////////////

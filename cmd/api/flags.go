@@ -1,10 +1,13 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/mutablelogic/go-client"
@@ -18,6 +21,9 @@ type Flags struct {
 	*flag.FlagSet
 
 	cmds  []Cmd
+	cmd   *Cmd
+	root  string
+	args  []string
 	names map[string]*Value
 }
 
@@ -32,7 +38,8 @@ type flagType uint
 // GLOBALS
 
 var (
-	ErrHelp = flag.ErrHelp
+	ErrHelp    = flag.ErrHelp
+	ErrInstall = errors.New("install")
 )
 
 const (
@@ -67,19 +74,48 @@ func (flags *Flags) Register(c Cmd) {
 	flags.cmds = append(flags.cmds, c)
 }
 
-func (flags *Flags) Parse(args []string) error {
+func (flags *Flags) Parse(args []string) (*Fn, []string, error) {
 	// Parse command line
-	if err := flags.FlagSet.Parse(args); err != nil {
-		if err == flag.ErrHelp {
-			flags.PrintUsage()
-		}
-		return err
-	}
+	err := flags.FlagSet.Parse(args)
 
 	// If there is a version argument, print the version and exit
-	if flags.NArg() == 1 && flags.Arg(0) == "version" {
-		flags.PrintVersion()
-		return ErrHelp
+	if flags.NArg() == 1 {
+		switch flags.Arg(0) {
+		case "version":
+			flags.PrintVersion()
+			return nil, nil, ErrHelp
+		case "help":
+			flags.PrintUsage()
+			return nil, nil, ErrHelp
+		case ErrInstall.Error():
+			return nil, nil, ErrInstall
+		}
+	}
+
+	// If the name of the command is the same as the name of the application
+	if cmd := flags.getCommandSet(flags.Name()); cmd != nil {
+		flags.cmd = cmd
+		flags.root = cmd.Name
+		flags.args = flags.Args()
+	} else if flags.NArg() > 0 {
+		if cmd := flags.getCommandSet(flags.Arg(0)); cmd != nil {
+			flags.cmd = cmd
+			flags.root = strings.Join([]string{flags.Name(), cmd.Name}, " ")
+			flags.args = flags.Args()[1:]
+		}
+	}
+
+	// Print usage
+	if err != nil {
+		if err != flag.ErrHelp {
+			fmt.Fprintf(os.Stderr, "%v: %v\n", flags.cmd.Name, err)
+		} else {
+			flags.PrintUsage()
+		}
+		return nil, nil, err
+	} else if flags.cmd == nil {
+		fmt.Fprintln(os.Stderr, "Unknown command, try -help")
+		return nil, nil, ErrHelp
 	}
 
 	// Set client options
@@ -89,29 +125,27 @@ func (flags *Flags) Parse(args []string) error {
 		opts = append(opts, client.OptTrace(flags.Output(), flags.GetBool("verbose")))
 	}
 
-	// Parse the commands
-	if flags.NArg() > 0 {
-		if cmd := flags.GetCommandSet(flags.Arg(0)); cmd != nil {
-			if err := cmd.Parse(flags, opts...); err != nil {
-				fmt.Fprintf(os.Stderr, "%v: %v\n", cmd.Name, err)
-				return err
-			}
-		}
+	// If there is a help argument, print the help and exit
+	if flags.NArg() == 1 && flags.Arg(0) == "help" || flags.cmd == nil {
+		flags.PrintUsage()
+		return nil, nil, ErrHelp
+	} else if err := flags.cmd.Parse(flags, opts...); err != nil {
+		fmt.Fprintf(os.Stderr, "%v: %v\n", flags.cmd.Name, err)
+		return nil, nil, err
+	}
+
+	// Set the function to call
+	fn, args, err := flags.cmd.Get(flags.args)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%v: %v\n", flags.cmd.Name, err)
+		return nil, nil, err
+	} else if fn == nil {
+		fmt.Fprintln(os.Stderr, "Unknown command, try -help")
+		return nil, nil, ErrHelp
 	}
 
 	// Return success
-	return nil
-}
-
-// GetCommandSet returns a command set from a name, or nil if the command set does
-// not exist
-func (flags *Flags) GetCommandSet(name string) *Cmd {
-	for _, cmd := range flags.cmds {
-		if cmd.Name == name {
-			return &cmd
-		}
-	}
-	return nil
+	return fn, args, nil
 }
 
 // Get returns the value of a flag, and returns true if the flag exists
@@ -121,6 +155,11 @@ func (flags *Flags) Get(name string) (string, bool) {
 	} else {
 		return value.Value.String(), true
 	}
+}
+
+// Get the current command set
+func (flags *Flags) Cmd() *Cmd {
+	return flags.cmd
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -156,33 +195,33 @@ func (flags *Flags) PrintVersion() {
 // PrintUsage prints the usage of the application
 func (flags *Flags) PrintUsage() {
 	w := flags.Output()
-	if flags.NArg() == 1 {
-		cmd := flags.GetCommandSet(flags.Arg(0))
-		if cmd != nil {
-			flags.PrintCommandUsage(cmd)
-		}
+	if flags.cmd != nil {
+		flags.PrintCommandUsage(flags.cmd)
 	} else {
-		fmt.Fprintln(w, "Name:", flags.Name())
+		fmt.Fprintln(w, "Name:", flags.root)
 		fmt.Fprintln(w, "  General command-line interface to API clients")
 		fmt.Fprintln(w, "")
 
 		// Command Sets
 		fmt.Fprintln(w, "Command Sets:")
 		for _, cmd := range flags.cmds {
-			fmt.Fprintln(w, "  ", flags.Name(), cmd.Name)
+			fmt.Fprintln(w, "  ", flags.root, cmd.Name)
 			fmt.Fprintln(w, "    ", cmd.Description)
 			fmt.Fprintln(w, "")
 		}
 
 		// Help
 		fmt.Fprintln(w, "Help:")
-		fmt.Fprintln(w, "  ", flags.Name(), "version")
+		fmt.Fprintln(w, "  ", flags.root, "version")
 		fmt.Fprintln(w, "    ", "Return the version of the application")
+		fmt.Fprintln(w, "")
+		fmt.Fprintln(w, "  ", flags.root, "install")
+		fmt.Fprintln(w, "    ", "Install symlinks for command calling")
 		fmt.Fprintln(w, "")
 
 		// Help for command sets
 		for _, cmd := range flags.cmds {
-			fmt.Fprintln(w, "  ", flags.Name(), "-help", cmd.Name)
+			fmt.Fprintln(w, "  ", flags.root, "-help", cmd.Name)
 			fmt.Fprintln(w, "    ", "Display", cmd.Name, "command syntax")
 			fmt.Fprintln(w, "")
 		}
@@ -200,14 +239,14 @@ func (flags *Flags) PrintGlobalFlags() {
 // PrintCommandUsage prints the usage of a commandset
 func (flags *Flags) PrintCommandUsage(cmd *Cmd) {
 	w := flags.Output()
-	fmt.Fprintln(w, "Name:", flags.Name(), cmd.Name)
+	fmt.Fprintln(w, "Name:", flags.root)
 	fmt.Fprintln(w, "  ", cmd.Description)
 	fmt.Fprintln(w, "")
 
 	// Help for command sets
 	fmt.Fprintln(w, "Commands:")
 	for _, fn := range cmd.Fn {
-		fmt.Fprintln(w, "  ", flags.Name(), cmd.Name, fn.Name)
+		fmt.Fprintln(w, "  ", flags.root, fn.Name)
 		fmt.Fprintln(w, "    ", fn.Description)
 		fmt.Fprintln(w, "")
 	}
@@ -224,11 +263,19 @@ func (flags *Flags) PrintCommandFlags(cmd string) {
 	} else {
 		fmt.Fprintf(w, "Flags for %v:\n", cmd)
 	}
-	flags.VisitAll(func(f *flag.Flag) {
-		if flags.names[f.Name].cmd == cmd {
-			fmt.Fprintf(w, "  -%v: %v\n", f.Name, f.Usage)
+	flags.VisitAll(func(flag *flag.Flag) {
+		if flags.names[flag.Name].cmd == cmd {
+			printFlag(w, flag)
 		}
 	})
+}
+
+func printFlag(w io.Writer, f *flag.Flag) {
+	fmt.Fprintf(w, "  -%v", f.Name)
+	if len(f.DefValue) > 0 {
+		fmt.Fprintf(w, " (default %q)", f.DefValue)
+	}
+	fmt.Fprintf(w, "\n    %v\n\n", f.Usage)
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -314,4 +361,16 @@ func (flags *Flags) GetString(name string) string {
 	} else {
 		return os.ExpandEnv(value)
 	}
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// PRIVATE METHODS
+
+func (flags *Flags) getCommandSet(name string) *Cmd {
+	for _, cmd := range flags.cmds {
+		if cmd.Name == name {
+			return &cmd
+		}
+	}
+	return nil
 }

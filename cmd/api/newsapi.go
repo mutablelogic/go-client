@@ -35,7 +35,7 @@ func newsapiRegister(flags *Flags) {
 	flags.Register(Cmd{
 		Name:        newsapiName,
 		Description: "Obtain news headlines from https://newsapi.org/",
-		Parse:       inewsapiParse,
+		Parse:       newsapiParse,
 		Fn: []Fn{
 			{Name: "sources", Call: newsapiSources, Description: "Return sources of news"},
 			{Name: "headlines", Call: newsapiHeadlines, Description: "Return top headlines from news sources"},
@@ -44,7 +44,7 @@ func newsapiRegister(flags *Flags) {
 	})
 }
 
-func inewsapiParse(flags *Flags, opts ...client.ClientOpt) error {
+func newsapiParse(flags *Flags, opts ...client.ClientOpt) error {
 	apiKey := flags.GetString("newsapi-key")
 	if apiKey == "" {
 		return fmt.Errorf("missing -newsapi-key flag")

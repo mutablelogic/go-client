@@ -14,15 +14,14 @@ import (
 )
 
 func main() {
-	name := path.Base(os.Args[0])
-	path := path.Dir(os.Args[0])
-	flags := NewFlags(name)
+	flags := NewFlags(path.Base(os.Args[0]))
 
 	// Register commands
 	ipifyRegister(flags)
 	bwRegister(flags)
-	newsapiRegister(flags)
 	anthropicRegister(flags)
+	newsapiRegister(flags)
+	weatherapiRegister(flags)
 
 	// Parse command line and return function to run
 	fn, args, err := flags.Parse(os.Args[1:])
@@ -30,7 +29,7 @@ func main() {
 		os.Exit(0)
 	}
 	if errors.Is(err, ErrInstall) {
-		if err := install(path, name, flags); err != nil {
+		if err := install(flags); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(-2)
 		}

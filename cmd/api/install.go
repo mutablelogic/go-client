@@ -7,14 +7,18 @@ import (
 	"path/filepath"
 )
 
-func install(path, name string, flags *Flags) error {
+func install(flags *Flags) error {
 	var info os.FileInfo
+	var path string
 
-	// stat the api binary
-	if v, err := os.Stat(filepath.Join(path, name)); err != nil {
+	exec, err := os.Executable()
+	if err != nil {
+		return err
+	} else if v, err := os.Stat(exec); err != nil {
 		return err
 	} else {
 		info = v
+		path = filepath.Dir(exec)
 	}
 
 	// check for an existing symlink
@@ -31,7 +35,7 @@ func install(path, name string, flags *Flags) error {
 			result = errors.Join(result, fmt.Errorf("failed to install %q: %w", cmd.Name, err))
 		}
 		// Make symlink
-		if err := os.Symlink(filepath.Join(path, name), filepath.Join(path, cmd.Name)); err != nil {
+		if err := os.Symlink(exec, filepath.Join(path, cmd.Name)); err != nil {
 			result = errors.Join(result, fmt.Errorf("failed to install %q: %w", cmd.Name, err))
 		}
 	}

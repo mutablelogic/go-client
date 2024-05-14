@@ -22,6 +22,7 @@ There are also some example clients which use this library:
 * [NewsAPI client](https://github.com/mutablelogic/go-client/tree/main/pkg/newsapi)
 * [Ollama API client](https://github.com/mutablelogic/go-client/tree/main/pkg/ollama) for locally-hosted LLM's
 * [OpenAI API client](https://github.com/mutablelogic/go-client/tree/main/pkg/openai) for OpenAI LLM's
+* [WeatherAPI client](https://github.com/mutablelogic/go-client/tree/main/pkg/weatherapi)
 
 Aiming to have compatibility with go version 1.21 and above.
 

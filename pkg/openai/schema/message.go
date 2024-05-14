@@ -46,6 +46,9 @@ type Content struct {
 	Text   string         `json:"text,omitempty,wrap,width:60"`
 	Source *contentSource `json:"source,omitempty"`
 	toolUse
+
+	ToolId string `json:"tool_use_id,omitempty"`
+	Result string `json:"content,omitempty"`
 }
 
 // Content Source
@@ -55,10 +58,16 @@ type contentSource struct {
 	Data      string `json:"data,omitempty"`
 }
 
-// Tool arguments
+// Tool call
 type toolUse struct {
 	Name  string         `json:"name,omitempty"`
 	Input map[string]any `json:"input,omitempty"`
+}
+
+// Tool result
+type toolResult struct {
+	ToolId string `json:"tool_use_id,omitempty"`
+	Result string `json:"content,omitempty"`
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -112,6 +121,11 @@ func ImageData(path string) (*Content, error) {
 	return Image(r)
 }
 
+// Return a tool result
+func ToolResult(id string, result string) *Content {
+	return &Content{Type: "tool_result", ToolId: id, Result: result}
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 // STRINGIFY
 
@@ -146,6 +160,19 @@ func (m *Message) Add(content ...any) *Message {
 		}
 	}
 	return m
+}
+
+// Return an input parameter as a string, returns false if the name
+// is incorrect or the input doesn't exist
+func (c Content) GetString(name, input string) (string, bool) {
+	if c.Name == name {
+		if value, exists := c.Input[input]; exists {
+			if value, ok := value.(string); ok {
+				return value, true
+			}
+		}
+	}
+	return "", false
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -210,6 +237,10 @@ func (m *Message) append(v any) error {
 			// []Content, Content => []Content
 			m.Content = append(m.Content.([]Content), v)
 			return nil
+		case []Content:
+			// []Content, []Content => []Content
+			m.Content = append(m.Content.([]Content), v...)
+			return nil
 		}
 	}
 	return ErrBadParameter.With("append: not implemented for ", reflect.TypeOf(m.Content), ",", reflect.TypeOf(v))
@@ -218,16 +249,16 @@ func (m *Message) append(v any) error {
 // Set the message content
 func (m *Message) set(v any) error {
 	// Append content to messages,
-	// m.Content will be of type string, []string, Content or []Content
+	// m.Content will be of type string, []string or []Content
 	switch v := v.(type) {
 	case string:
 		m.Content = v
 	case []string:
 		m.Content = v
 	case *Content:
-		m.Content = *v
+		m.Content = []Content{*v}
 	case Content:
-		m.Content = v
+		m.Content = []Content{v}
 	case []*Content:
 		if len(v) > 0 {
 			m.Content = make([]Content, 0, len(v))

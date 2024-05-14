@@ -24,8 +24,9 @@ var (
 	samWeatherTool       = schema.NewTool("get_weather", "Get the weather for a location")
 	samNewsHeadlinesTool = schema.NewTool("get_news_headlines", "Get the news headlines")
 	samNewsSearchTool    = schema.NewTool("search_news", "Search news articles")
-	samSystemPrompt      = `Your name is Samantha, you are a friendly AI assistant, here to help you with 
-		anything you need. Your responses should be short and to the point, and you should always be polite.`
+	samHomeAssistantTool = schema.NewTool("get_home_devices", "Return information about home devices")
+	samSystemPrompt      = `Your name is Samantha, you are a friendly and occasionally sarcastic assistant, 
+	 	here to help with anything. Your responses should be short and to the point, and you should always be polite.`
 )
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -51,7 +52,10 @@ func samParse(flags *Flags, opts ...client.ClientOpt) error {
 	if err := newsapiParse(flags, opts...); err != nil {
 		return err
 	}
-
+	// Initialize home assistant
+	if err := haParse(flags, opts...); err != nil {
+		return err
+	}
 	// Initialize anthropic
 	opts = append(opts, client.OptHeader("Anthropic-Beta", "tools-2024-04-04"))
 	if err := anthropicParse(flags, opts...); err != nil {
@@ -59,13 +63,19 @@ func samParse(flags *Flags, opts ...client.ClientOpt) error {
 	}
 
 	// Add tool parameters
-	if err := samWeatherTool.AddParameter("location", "The city to get the weather for", true); err != nil {
+	if err := samWeatherTool.AddParameter("location", `City to get the weather for. If a country, use the capital city. To get weather for the current location, use "auto:ip"`, true); err != nil {
 		return err
 	}
 	if err := samNewsHeadlinesTool.AddParameter("category", "The cateogry of news, which should be one of business, entertainment, general, health, science, sports or technology", true); err != nil {
 		return err
 	}
+	if err := samNewsHeadlinesTool.AddParameter("country", "Headlines from agencies in a specific country. Optional. Use ISO 3166 country code.", false); err != nil {
+		return err
+	}
 	if err := samNewsSearchTool.AddParameter("query", "The query with which to search news", true); err != nil {
+		return err
+	}
+	if err := samHomeAssistantTool.AddParameter("class", "The class of device, which should be one or more of door,lock,occupancy,motion,climate,light,switch,sensor,speaker,media_player,temperature,humidity,battery,tv,remote,light,vacuum separated by spaces", true); err != nil {
 		return err
 	}
 
@@ -99,18 +109,32 @@ func samChat(ctx context.Context, w *tablewriter.Writer, _ []string) error {
 		// Curtail requests to the last N history
 		if len(messages) > 10 {
 			messages = messages[len(messages)-10:]
-			// First message must have role 'user'
+
+			// First message must have role 'user' and not be a tool_result
 			for {
-				if len(messages) == 0 || messages[0].Role == "user" {
+				if len(messages) == 0 {
 					break
+				}
+				if messages[0].Role == "user" {
+					if content, ok := messages[0].Content.([]schema.Content); ok {
+						if len(content) > 0 && content[0].Type != "tool_result" {
+							break
+						}
+					} else {
+						break
+					}
 				}
 				messages = messages[1:]
 			}
-			// TODO: We must remove the first instance tool_result if there is no tool_use
 		}
 
 		// Request -> Response
-		responses, err := anthropicClient.Messages(ctx, messages, anthropic.OptSystem(samSystemPrompt), anthropic.OptTool(samWeatherTool), anthropic.OptTool(samNewsHeadlinesTool), anthropic.OptTool(samNewsSearchTool))
+		responses, err := anthropicClient.Messages(ctx, messages, anthropic.OptSystem(samSystemPrompt),
+			anthropic.OptTool(samWeatherTool),
+			anthropic.OptTool(samNewsHeadlinesTool),
+			anthropic.OptTool(samNewsSearchTool),
+			anthropic.OptTool(samHomeAssistantTool),
+		)
 		if err != nil {
 			return err
 		}
@@ -158,7 +182,8 @@ func samCall(_ context.Context, content schema.Content) *schema.Content {
 		} else {
 			category = "general"
 		}
-		if headlines, err := newsapiClient.Headlines(newsapi.OptCategory(category)); err != nil {
+		country, _ := content.GetString(content.Name, "country")
+		if headlines, err := newsapiClient.Headlines(newsapi.OptCategory(category), newsapi.OptCountry(country)); err != nil {
 			return schema.ToolResult(content.Id, fmt.Sprint("Unable to get the news headlines, the error is ", err))
 		} else if data, err := json.MarshalIndent(headlines, "", "  "); err != nil {
 			return schema.ToolResult(content.Id, fmt.Sprint("Unable to marshal the headlines data, the error is ", err))
@@ -176,6 +201,18 @@ func samCall(_ context.Context, content schema.Content) *schema.Content {
 			return schema.ToolResult(content.Id, fmt.Sprint("Unable to search news, the error is ", err))
 		} else if data, err := json.MarshalIndent(articles, "", "  "); err != nil {
 			return schema.ToolResult(content.Id, fmt.Sprint("Unable to marshal the articles data, the error is ", err))
+		} else {
+			return schema.ToolResult(content.Id, string(data))
+		}
+	case samHomeAssistantTool.Name:
+		classes, exists := content.GetString(content.Name, "class")
+		if !exists || classes == "" {
+			return schema.ToolResult(content.Id, "Unable to get home devices due to missing class")
+		}
+		if states, err := haGetStates(strings.Fields(classes)); err != nil {
+			return schema.ToolResult(content.Id, fmt.Sprint("Unable to get home devices, the error is ", err))
+		} else if data, err := json.MarshalIndent(states, "", "  "); err != nil {
+			return schema.ToolResult(content.Id, fmt.Sprint("Unable to marshal the states data, the error is ", err))
 		} else {
 			return schema.ToolResult(content.Id, string(data))
 		}

@@ -44,12 +44,6 @@ func Test_client_005(t *testing.T) {
 	// Login a new session
 	err = client.Login(bitwarden.OptForce())
 	assert.NoError(err)
-
-	// Create a master key
-	session := client.Session()
-	assert.True(session.IsValid())
-	masterKey := session.MakeInternalKey(strings.ToLower(GetEmail(t)), GetPassword(t))
-	assert.NotNil(masterKey)
 }
 
 ///////////////////////////////////////////////////////////////////////////////

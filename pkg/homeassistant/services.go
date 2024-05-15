@@ -16,12 +16,13 @@ import (
 // TYPES
 
 type Domain struct {
-	Domain   string             `json:"domain"`
-	Services map[string]Service `json:"services,omitempty"`
+	Domain   string              `json:"domain"`
+	Services map[string]*Service `json:"services,omitempty"`
 }
 
 type Service struct {
-	Name        string           `json:"name"`
+	Call        string           `json:"call,omitempty"`
+	Name        string           `json:"name,omitempty"`
 	Description string           `json:"description,omitempty,wrap"`
 	Fields      map[string]Field `json:"fields,omitempty,wrap"`
 }
@@ -59,7 +60,7 @@ func (c *Client) Domains() ([]Domain, error) {
 }
 
 // Return callable services for a domain
-func (c *Client) Services(domain string) ([]Service, error) {
+func (c *Client) Services(domain string) ([]*Service, error) {
 	var response []Domain
 	if err := c.Do(nil, &response, client.OptPath("services")); err != nil {
 		return nil, err
@@ -69,11 +70,13 @@ func (c *Client) Services(domain string) ([]Service, error) {
 			continue
 		}
 		if len(v.Services) == 0 {
-			// No services found
-			return []Service{}, nil
-		} else {
-			return maps.Values(v.Services), nil
+			return nil, nil
 		}
+		// Populate the Id field
+		for k, v := range v.Services {
+			v.Call = k
+		}
+		return maps.Values(v.Services), nil
 	}
 	// Return not found
 	return nil, ErrNotFound.Withf("domain not found: %q", domain)

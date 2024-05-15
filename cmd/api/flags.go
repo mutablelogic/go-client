@@ -97,8 +97,12 @@ func (flags *Flags) Parse(args []string) (*Fn, []string, error) {
 		// If the name of the command is the same as the name of the application
 		flags.cmd = cmd
 		flags.root = cmd.Name
-		flags.fn = ""
-		flags.args = flags.Args()
+		if len(flags.Args()) > 0 {
+			flags.fn = flags.Arg(0)
+			if len(flags.Args()) > 1 {
+				flags.args = flags.Args()[1:]
+			}
+		}
 	} else if flags.NArg() > 0 {
 		if cmd := flags.getCommandSet(flags.Arg(0)); cmd != nil {
 			flags.cmd = cmd

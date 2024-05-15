@@ -53,7 +53,7 @@ func haRegister(flags *Flags) {
 			{Name: "domains", Call: haDomains, Description: "Enumerate entity domains"},
 			{Name: "states", Call: haStates, Description: "Show current entity states", MaxArgs: 1, Syntax: "(<name>)"},
 			{Name: "services", Call: haServices, Description: "Show services for an entity", MinArgs: 1, MaxArgs: 1, Syntax: "<entity>"},
-			{Name: "call", Call: haCall, Description: "Call a service for an entity", MinArgs: 2, MaxArgs: 2, Syntax: "<service> <entity>"},
+			{Name: "call", Call: haCall, Description: "Call a service for an entity", MinArgs: 2, MaxArgs: 2, Syntax: "<call> <entity>"},
 		},
 	})
 }

@@ -2,8 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
-	"slices"
 	"strings"
 	"time"
 
@@ -16,16 +14,19 @@ import (
 // TYPES
 
 type haEntity struct {
-	Id         string                 `json:"entity_id"`
+	Id         string                 `json:"entity_id,width:40"`
 	Name       string                 `json:"name,omitempty"`
 	Class      string                 `json:"class,omitempty"`
+	Domain     string                 `json:"domain,omitempty"`
 	State      string                 `json:"state,omitempty"`
 	Attributes map[string]interface{} `json:"attributes,omitempty,wrap"`
-	UpdatedAt  time.Time              `json:"last_updated,omitempty"`
+	UpdatedAt  time.Time              `json:"last_updated,omitempty,width:34"`
+	ChangedAt  time.Time              `json:"last_changed,omitempty,width:34"`
 }
 
-type haClass struct {
-	Class string `json:"class,omitempty"`
+type haDomain struct {
+	Name     string `json:"domain"`
+	Services string `json:"services,omitempty"`
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -49,8 +50,9 @@ func haRegister(flags *Flags) {
 		Description: "Information from home assistant",
 		Parse:       haParse,
 		Fn: []Fn{
-			{Name: "classes", Call: haClasses, Description: "Return entity classes"},
-			{Name: "states", Call: haStates, Description: "Return entity states"},
+			{Name: "domains", Call: haDomains, Description: "Enumerate entity domains"},
+			{Name: "states", Call: haStates, Description: "Show current entity states", MaxArgs: 1, Syntax: "(<name>)"},
+			{Name: "services", Call: haServices, Description: "Show services for an entity", MinArgs: 1, MaxArgs: 1, Syntax: "<entity>"},
 		},
 	})
 }
@@ -71,14 +73,25 @@ func haParse(flags *Flags, opts ...client.ClientOpt) error {
 // METHODS
 
 func haStates(_ context.Context, w *tablewriter.Writer, args []string) error {
-	if states, err := haGetStates(args); err != nil {
+	var result []haEntity
+	states, err := haGetStates(nil)
+	if err != nil {
 		return err
-	} else {
-		return w.Write(states)
 	}
+
+	for _, state := range states {
+		if len(args) == 1 {
+			if !haMatchString(args[0], state.Name, state.Id) {
+				continue
+			}
+
+		}
+		result = append(result, state)
+	}
+	return w.Write(result)
 }
 
-func haClasses(_ context.Context, w *tablewriter.Writer, args []string) error {
+func haDomains(_ context.Context, w *tablewriter.Writer, args []string) error {
 	states, err := haGetStates(nil)
 	if err != nil {
 		return err
@@ -89,17 +102,42 @@ func haClasses(_ context.Context, w *tablewriter.Writer, args []string) error {
 		classes[state.Class] = true
 	}
 
-	result := []haClass{}
+	result := []haDomain{}
 	for c := range classes {
-		result = append(result, haClass{Class: c})
+		result = append(result, haDomain{
+			Name: c,
+		})
 	}
 	return w.Write(result)
+}
+
+func haServices(_ context.Context, w *tablewriter.Writer, args []string) error {
+	service, err := haClient.State(args[0])
+	if err != nil {
+		return err
+	}
+	services, err := haClient.Services(service.Domain())
+	if err != nil {
+		return err
+	}
+	return w.Write(services)
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 // PRIVATE METHODS
 
-func haGetStates(classes []string) ([]haEntity, error) {
+func haMatchString(q string, values ...string) bool {
+	q = strings.ToLower(q)
+	for _, v := range values {
+		v = strings.ToLower(v)
+		if strings.Contains(v, q) {
+			return true
+		}
+	}
+	return false
+}
+
+func haGetStates(domains []string) ([]haEntity, error) {
 	var result []haEntity
 
 	// Get states from the remote service
@@ -112,37 +150,29 @@ func haGetStates(classes []string) ([]haEntity, error) {
 	for _, state := range states {
 		entity := haEntity{
 			Id:         state.Entity,
-			State:      state.State,
+			Name:       state.Name(),
+			Domain:     state.Domain(),
+			Class:      state.Class(),
+			State:      state.Value(),
 			Attributes: state.Attributes,
-			UpdatedAt:  state.LastChanged,
+			UpdatedAt:  state.LastUpdated,
+			ChangedAt:  state.LastChanged,
 		}
 
-		// Ignore entities without state
-		if entity.State == "" || entity.State == "unknown" || entity.State == "unavailable" {
+		// Ignore any fields where the state is empty
+		if entity.State == "" {
 			continue
 		}
 
-		// Set entity type and name from entity id
-		parts := strings.SplitN(entity.Id, ".", 2)
-		if len(parts) >= 2 {
-			entity.Class = strings.ToLower(parts[0])
-			entity.Name = parts[1]
+		// Add unit of measurement
+		if unit := state.UnitOfMeasurement(); unit != "" {
+			entity.State += " " + unit
 		}
 
-		// Set entity type from device class
-		if t, exists := state.Attributes["device_class"]; exists {
-			entity.Class = fmt.Sprint(t)
-		}
-
-		// Filter classes
-		if len(classes) > 0 && !slices.Contains(classes, entity.Class) {
-			continue
-		}
-
-		// Set entity name from attributes
-		if name, exists := state.Attributes["friendly_name"]; exists {
-			entity.Name = fmt.Sprint(name)
-		}
+		// Filter domains
+		//if len(domains) > 0 && !slices.Contains(domains, entity.Domain) {
+		//	continue
+		//}
 
 		// Append results
 		result = append(result, entity)

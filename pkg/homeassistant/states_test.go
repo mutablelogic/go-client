@@ -20,44 +20,14 @@ func Test_states_001(t *testing.T) {
 	assert.NoError(err)
 	assert.NotNil(states)
 
-	t.Log(states)
-}
-
-func Test_states_002(t *testing.T) {
-	assert := assert.New(t)
-	client, err := homeassistant.New(GetEndPoint(t), GetApiKey(t), opts.OptTrace(os.Stderr, true))
-	assert.NoError(err)
-	assert.NotNil(client)
-
-	sensors, err := client.Sensors()
-	assert.NoError(err)
-	assert.NotNil(sensors)
-
-	t.Log(sensors)
-}
-
-func Test_states_003(t *testing.T) {
-	assert := assert.New(t)
-	client, err := homeassistant.New(GetEndPoint(t), GetApiKey(t), opts.OptTrace(os.Stderr, true))
-	assert.NoError(err)
-	assert.NotNil(client)
-
-	lights, err := client.Lights()
-	assert.NoError(err)
-	assert.NotNil(lights)
-
-	t.Log(lights)
-}
-
-func Test_states_004(t *testing.T) {
-	assert := assert.New(t)
-	client, err := homeassistant.New(GetEndPoint(t), GetApiKey(t), opts.OptTrace(os.Stderr, true))
-	assert.NoError(err)
-	assert.NotNil(client)
-
-	actuators, err := client.Actuators()
-	assert.NoError(err)
-	assert.NotNil(actuators)
-
-	t.Log(actuators)
+	for _, state := range states {
+		t.Log("State:", state)
+		t.Logf("  Value: %q", state.Value())
+		t.Log("  Name:", state.Name())
+		t.Log("  Domain:", state.Domain())
+		t.Log("  Class:", state.Class())
+		if unit := state.UnitOfMeasurement(); unit != "" {
+			t.Logf("  UnitOfMeasurement: %q", unit)
+		}
+	}
 }

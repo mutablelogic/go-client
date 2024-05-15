@@ -22,18 +22,18 @@ func Test_client_001(t *testing.T) {
 // ENVIRONMENT
 
 func GetApiKey(t *testing.T) string {
-	key := os.Getenv("HA_API_KEY")
+	key := os.Getenv("HA_TOKEN")
 	if key == "" {
-		t.Skip("HA_API_KEY not set")
+		t.Skip("HA_TOKEN not set")
 		t.SkipNow()
 	}
 	return key
 }
 
 func GetEndPoint(t *testing.T) string {
-	key := os.Getenv("HA_API_URL")
+	key := os.Getenv("HA_ENDPOINT")
 	if key == "" {
-		t.Skip("HA_API_URL not set")
+		t.Skip("HA_ENDPOINT not set")
 		t.SkipNow()
 	}
 	return key

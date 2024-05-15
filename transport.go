@@ -93,14 +93,26 @@ func (transport *logtransport) RoundTrip(req *http.Request) (*http.Response, err
 
 	// If verbose is switched on, read the body
 	if transport.v && resp.Body != nil {
+		// Determine response content type
 		contentType, _, _ := mime.ParseMediaType(resp.Header.Get("Content-Type"))
-		if contentType == ContentTypeTextPlain || contentType == ContentTypeJson {
-			defer resp.Body.Close()
-			body, err := io.ReadAll(resp.Body)
-			if err == nil {
+
+		// Read in the body
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body = io.NopCloser(bytes.NewReader(body))
+		defer resp.Body.Close()
+
+		switch contentType {
+		case ContentTypeJson:
+			dst := &bytes.Buffer{}
+			if err := json.Indent(dst, body, "    ", "  "); err != nil {
 				fmt.Fprintf(transport.w, "  <= %q\n", string(body))
+			} else {
+				fmt.Fprintf(transport.w, "  <= %v\n", dst.String())
 			}
-			resp.Body = io.NopCloser(bytes.NewReader(body))
+		case ContentTypeTextPlain:
+			fmt.Fprintf(transport.w, "  <= %q\n", string(body))
+		default:
+			fmt.Fprintf(transport.w, "  <= (not displaying response of type %q)\n", contentType)
 		}
 	}
 

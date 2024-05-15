@@ -109,12 +109,18 @@ func samChat(ctx context.Context, w *tablewriter.Writer, _ []string) error {
 		// Read if there hasn't been any tool results yet
 		if !toolResult {
 			reader := bufio.NewReader(os.Stdin)
-			fmt.Print("Chat: ")
+			fmt.Print("prompt: ")
 			text, err := reader.ReadString('\n')
 			if err != nil {
 				return err
 			}
-			messages = append(messages, schema.NewMessage("user", schema.Text(strings.TrimSpace(text))))
+			if text := strings.TrimSpace(text); text == "" {
+				continue
+			} else if text == "exit" {
+				return nil
+			} else {
+				messages = append(messages, schema.NewMessage("user", schema.Text(strings.TrimSpace(text))))
+			}
 		}
 
 		// Curtail requests to the last N history

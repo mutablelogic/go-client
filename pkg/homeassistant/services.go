@@ -2,6 +2,7 @@ package homeassistant
 
 import (
 	"encoding/json"
+	"strings"
 
 	// Packages
 	"github.com/mutablelogic/go-client"
@@ -39,6 +40,10 @@ type Selector struct {
 	UnitOfMeasurement string `json:"unit_of_measurement,omitempty"`
 }
 
+type reqCall struct {
+	Entity string `json:"entity_id"`
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 // API CALLS
 
@@ -74,6 +79,30 @@ func (c *Client) Services(domain string) ([]Service, error) {
 	return nil, ErrNotFound.Withf("domain not found: %q", domain)
 }
 
+// Call a service for an entity. Returns a list of states that have
+// changed while the service was being executed.
+// TODO: This is a placeholder implementation, and requires fields to
+// be passed in the request
+func (c *Client) Call(service, entity string) ([]State, error) {
+	domain := domainForEntity(entity)
+	if domain == "" {
+		return nil, ErrBadParameter.Withf("Invalid entity: %q", entity)
+	}
+
+	// Call the service
+	var response []State
+	if payload, err := client.NewJSONRequest(reqCall{
+		Entity: entity,
+	}); err != nil {
+		return nil, err
+	} else if err := c.Do(payload, &response, client.OptPath("services", domain, service)); err != nil {
+		return nil, err
+	}
+
+	// Return success
+	return response, nil
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 // STRINGIFY
 
@@ -90,4 +119,16 @@ func (v Service) String() string {
 func (v Field) String() string {
 	data, _ := json.MarshalIndent(v, "", "  ")
 	return string(data)
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// PRIVATE METHODS
+
+func domainForEntity(entity string) string {
+	parts := strings.SplitN(entity, ".", 2)
+	if len(parts) == 2 {
+		return parts[0]
+	} else {
+		return ""
+	}
 }

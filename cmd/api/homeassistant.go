@@ -8,6 +8,7 @@ import (
 	"github.com/djthorpe/go-tablewriter"
 	"github.com/mutablelogic/go-client"
 	"github.com/mutablelogic/go-client/pkg/homeassistant"
+	"golang.org/x/exp/maps"
 )
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -26,7 +27,7 @@ type haEntity struct {
 
 type haDomain struct {
 	Name     string `json:"domain"`
-	Services string `json:"services,omitempty"`
+	Services string `json:"services,omitempty,width:40,wrap"`
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -103,10 +104,27 @@ func haDomains(_ context.Context, w *tablewriter.Writer, args []string) error {
 		classes[state.Class] = true
 	}
 
+	// Get all the domains, and make a map of them
+	domains, err := haClient.Domains()
+	if err != nil {
+		return err
+	}
+	map_domains := make(map[string]*homeassistant.Domain)
+	for _, domain := range domains {
+		map_domains[domain.Domain] = domain
+	}
+
 	result := []haDomain{}
 	for c := range classes {
+		var services []string
+		if domain, exists := map_domains[c]; exists {
+			if v := domain.Services; v != nil {
+				services = maps.Keys(v)
+			}
+		}
 		result = append(result, haDomain{
-			Name: c,
+			Name:     c,
+			Services: strings.Join(services, ", "),
 		})
 	}
 	return w.Write(result)

@@ -20,12 +20,15 @@ import (
 // GLOBALS
 
 var (
-	samName              = "sam"
-	samWeatherTool       = schema.NewTool("get_current_weather", "Get the current weather conditions for a location")
-	samNewsHeadlinesTool = schema.NewTool("get_news_headlines", "Get the news headlines")
-	samNewsSearchTool    = schema.NewTool("search_news", "Search news articles")
-	samHomeAssistantTool = schema.NewTool("get_home_devices", "Return information about home devices")
-	samSystemPrompt      = `Your name is Samantha, you are a personal assistant modelled on the personality of Samantha from the movie "Her". Your responses should be short and friendly.`
+	samName                 = "sam"
+	samWeatherTool          = schema.NewTool("get_current_weather", "Get the current weather conditions for a location")
+	samNewsHeadlinesTool    = schema.NewTool("get_news_headlines", "Get the news headlines")
+	samNewsSearchTool       = schema.NewTool("search_news", "Search news articles")
+	samHomeAssistantTool    = schema.NewTool("get_home_devices", "Return information about home devices by type, including their state and entity_id")
+	samHomeAssistantSearch  = schema.NewTool("search_home_devices", "Return information about home devices by name, including their state and entity_id")
+	samHomeAssistantTurnOn  = schema.NewTool("turn_on_device", "Turn on a device")
+	samHomeAssistantTurnOff = schema.NewTool("turn_off_device", "Turn off a device")
+	samSystemPrompt         = `Your name is Samantha, you are a personal assistant modelled on the personality of Samantha from the movie "Her". Your responses should be short and friendly.`
 )
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -74,7 +77,16 @@ func samParse(flags *Flags, opts ...client.ClientOpt) error {
 	if err := samNewsSearchTool.AddParameter("query", "The query with which to search news", true); err != nil {
 		return err
 	}
-	if err := samHomeAssistantTool.AddParameter("class", "The class of device, which should be one or more of door,lock,occupancy,motion,climate,light,switch,sensor,speaker,media_player,temperature,humidity,battery,tv,remote,light,vacuum separated by spaces", true); err != nil {
+	if err := samHomeAssistantTool.AddParameter("type", "Query for a device type, which could one or more of door,lock,occupancy,motion,climate,light,switch,sensor,speaker,media_player,temperature,humidity,battery,tv,remote,light,vacuum separated by spaces", true); err != nil {
+		return err
+	}
+	if err := samHomeAssistantSearch.AddParameter("name", "Search for device state by name", true); err != nil {
+		return err
+	}
+	if err := samHomeAssistantTurnOn.AddParameter("entity_id", "The device entity_id to turn on", true); err != nil {
+		return err
+	}
+	if err := samHomeAssistantTurnOff.AddParameter("entity_id", "The device entity_id to turn off", true); err != nil {
 		return err
 	}
 
@@ -128,14 +140,20 @@ func samChat(ctx context.Context, w *tablewriter.Writer, _ []string) error {
 		}
 
 		// Request -> Response
-		responses, err := anthropicClient.Messages(ctx, messages, anthropic.OptSystem(samSystemPrompt),
+		responses, err := anthropicClient.Messages(ctx, messages,
+			anthropic.OptSystem(samSystemPrompt),
+			anthropic.OptMaxTokens(1000),
 			anthropic.OptTool(samWeatherTool),
 			anthropic.OptTool(samNewsHeadlinesTool),
 			anthropic.OptTool(samNewsSearchTool),
 			anthropic.OptTool(samHomeAssistantTool),
+			anthropic.OptTool(samHomeAssistantSearch),
+			anthropic.OptTool(samHomeAssistantTurnOn),
+			anthropic.OptTool(samHomeAssistantTurnOff),
 		)
 		toolResult = false
 		if err != nil {
+			messages = samAppend(messages, schema.NewMessage("assistant", schema.Text(fmt.Sprint("An error occurred: ", err))))
 			fmt.Println(err)
 			fmt.Println("")
 		} else {
@@ -157,6 +175,7 @@ func samChat(ctx context.Context, w *tablewriter.Writer, _ []string) error {
 }
 
 func samCall(_ context.Context, content schema.Content) *schema.Content {
+	anthropicClient.Debugf("%v: %v: %v", content.Type, content.Name, content.Input)
 	if content.Type != "tool_use" {
 		return schema.ToolResult(content.Id, fmt.Sprint("unexpected content type:", content.Type))
 	}
@@ -205,16 +224,46 @@ func samCall(_ context.Context, content schema.Content) *schema.Content {
 			return schema.ToolResult(content.Id, string(data))
 		}
 	case samHomeAssistantTool.Name:
-		classes, exists := content.GetString(content.Name, "class")
+		classes, exists := content.GetString(content.Name, "type")
 		if !exists || classes == "" {
-			return schema.ToolResult(content.Id, "Unable to get home devices due to missing class")
+			return schema.ToolResult(content.Id, "Unable to get home devices due to missing type")
 		}
-		if states, err := haGetStates(strings.Fields(classes)); err != nil {
+		if states, err := haGetStates("", strings.Fields(classes)); err != nil {
 			return schema.ToolResult(content.Id, fmt.Sprint("Unable to get home devices, the error is ", err))
 		} else if data, err := json.MarshalIndent(states, "", "  "); err != nil {
 			return schema.ToolResult(content.Id, fmt.Sprint("Unable to marshal the states data, the error is ", err))
 		} else {
 			return schema.ToolResult(content.Id, string(data))
+		}
+	case samHomeAssistantSearch.Name:
+		name, exists := content.GetString(content.Name, "name")
+		if !exists || name == "" {
+			return schema.ToolResult(content.Id, "Unable to search home devices due to missing name")
+		}
+		if states, err := haGetStates(name, nil); err != nil {
+			return schema.ToolResult(content.Id, fmt.Sprint("Unable to get home devices, the error is ", err))
+		} else if data, err := json.MarshalIndent(states, "", "  "); err != nil {
+			return schema.ToolResult(content.Id, fmt.Sprint("Unable to marshal the states data, the error is ", err))
+		} else {
+			return schema.ToolResult(content.Id, string(data))
+		}
+	case samHomeAssistantTurnOn.Name:
+		entity, _ := content.GetString(content.Name, "entity_id")
+		if _, err := haClient.Call("turn_on", entity); err != nil {
+			return schema.ToolResult(content.Id, fmt.Sprint("Unable to turn on device, the error is ", err))
+		} else if state, err := haClient.State(entity); err != nil {
+			return schema.ToolResult(content.Id, fmt.Sprint("Unable to get device state, the error is ", err))
+		} else {
+			return schema.ToolResult(content.Id, fmt.Sprint("The updated state is: ", state))
+		}
+	case samHomeAssistantTurnOff.Name:
+		entity, _ := content.GetString(content.Name, "entity_id")
+		if _, err := haClient.Call("turn_off", entity); err != nil {
+			return schema.ToolResult(content.Id, fmt.Sprint("Unable to turn off device, the error is ", err))
+		} else if state, err := haClient.State(entity); err != nil {
+			return schema.ToolResult(content.Id, fmt.Sprint("Unable to get device state, the error is ", err))
+		} else {
+			return schema.ToolResult(content.Id, fmt.Sprint("The updated state is: ", state))
 		}
 	}
 	return schema.ToolResult(content.Id, fmt.Sprint("unable to call:", content.Name))

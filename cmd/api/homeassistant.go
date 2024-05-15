@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"time"
 
@@ -51,6 +52,7 @@ func haRegister(flags *Flags) {
 		Description: "Information from home assistant",
 		Parse:       haParse,
 		Fn: []Fn{
+			{Name: "health", Call: haHealth, Description: "Return status of home assistant"},
 			{Name: "domains", Call: haDomains, Description: "Enumerate entity domains"},
 			{Name: "states", Call: haStates, Description: "Show current entity states", MaxArgs: 1, Syntax: "(<name>)"},
 			{Name: "services", Call: haServices, Description: "Show services for an entity", MinArgs: 1, MaxArgs: 1, Syntax: "<entity>"},
@@ -74,31 +76,39 @@ func haParse(flags *Flags, opts ...client.ClientOpt) error {
 ///////////////////////////////////////////////////////////////////////////////
 // METHODS
 
+func haHealth(_ context.Context, w *tablewriter.Writer, args []string) error {
+	type respHealth struct {
+		Status string `json:"status"`
+	}
+	status, err := haClient.Health()
+	if err != nil {
+		return err
+	}
+	return w.Write(respHealth{Status: status})
+}
+
 func haStates(_ context.Context, w *tablewriter.Writer, args []string) error {
-	var result []haEntity
-	states, err := haGetStates(nil)
+	var q string
+	if len(args) > 0 {
+		q = args[0]
+	}
+
+	states, err := haGetStates(q, nil)
 	if err != nil {
 		return err
 	}
 
-	for _, state := range states {
-		if len(args) == 1 {
-			if !haMatchString(args[0], state.Name, state.Id) {
-				continue
-			}
-
-		}
-		result = append(result, state)
-	}
-	return w.Write(result)
+	return w.Write(states)
 }
 
 func haDomains(_ context.Context, w *tablewriter.Writer, args []string) error {
-	states, err := haGetStates(nil)
+	// Get all states
+	states, err := haGetStates("", nil)
 	if err != nil {
 		return err
 	}
 
+	// Enumerate all the classes
 	classes := make(map[string]bool)
 	for _, state := range states {
 		classes[state.Class] = true
@@ -166,7 +176,7 @@ func haMatchString(q string, values ...string) bool {
 	return false
 }
 
-func haGetStates(domains []string) ([]haEntity, error) {
+func haGetStates(name string, domains []string) ([]haEntity, error) {
 	var result []haEntity
 
 	// Get states from the remote service
@@ -193,15 +203,24 @@ func haGetStates(domains []string) ([]haEntity, error) {
 			continue
 		}
 
+		// Filter name
+		if name != "" {
+			if !haMatchString(name, entity.Name, entity.Id) {
+				continue
+			}
+		}
+
+		// Filter domains
+		if len(domains) > 0 {
+			if !slices.Contains(domains, entity.Domain) {
+				continue
+			}
+		}
+
 		// Add unit of measurement
 		if unit := state.UnitOfMeasurement(); unit != "" {
 			entity.State += " " + unit
 		}
-
-		// Filter domains
-		//if len(domains) > 0 && !slices.Contains(domains, entity.Domain) {
-		//	continue
-		//}
 
 		// Append results
 		result = append(result, entity)

@@ -187,6 +187,16 @@ func (client *Client) Request(req *http.Request, out any, opts ...RequestOpt) er
 	return do(client.Client, req, "", false, out, opts...)
 }
 
+// Debugf outputs debug information
+func (client *Client) Debugf(f string, args ...any) {
+	if client.Client.Transport != nil && client.Client.Transport != http.DefaultTransport {
+		if debug, ok := client.Transport.(*logtransport); ok {
+			fmt.Fprintf(debug.w, f, args...)
+			fmt.Fprint(debug.w, "\n")
+		}
+	}
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 // PRIVATE METHODS
 

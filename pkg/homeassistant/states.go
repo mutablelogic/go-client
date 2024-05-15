@@ -30,9 +30,9 @@ type State struct {
 // API CALLS
 
 // States returns all the entities and their state
-func (c *Client) States() ([]State, error) {
+func (c *Client) States() ([]*State, error) {
 	// Return the response
-	var response []State
+	var response []*State
 	if err := c.Do(nil, &response, client.OptPath("states")); err != nil {
 		return nil, err
 	}
@@ -42,9 +42,9 @@ func (c *Client) States() ([]State, error) {
 }
 
 // State returns a state for a specific entity
-func (c *Client) State(EntityId string) (State, error) {
+func (c *Client) State(EntityId string) (*State, error) {
 	// Return the response
-	var response State
+	var response *State
 	if err := c.Do(nil, &response, client.OptPath("states", EntityId)); err != nil {
 		return response, err
 	}

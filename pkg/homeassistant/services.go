@@ -49,8 +49,8 @@ type reqCall struct {
 // API CALLS
 
 // Domains returns all domains and their associated service objects
-func (c *Client) Domains() ([]Domain, error) {
-	var response []Domain
+func (c *Client) Domains() ([]*Domain, error) {
+	var response []*Domain
 	if err := c.Do(nil, &response, client.OptPath("services")); err != nil {
 		return nil, err
 	}
@@ -86,14 +86,14 @@ func (c *Client) Services(domain string) ([]*Service, error) {
 // changed while the service was being executed.
 // TODO: This is a placeholder implementation, and requires fields to
 // be passed in the request
-func (c *Client) Call(service, entity string) ([]State, error) {
+func (c *Client) Call(service, entity string) ([]*State, error) {
 	domain := domainForEntity(entity)
 	if domain == "" {
 		return nil, ErrBadParameter.Withf("Invalid entity: %q", entity)
 	}
 
 	// Call the service
-	var response []State
+	var response []*State
 	if payload, err := client.NewJSONRequest(reqCall{
 		Entity: entity,
 	}); err != nil {

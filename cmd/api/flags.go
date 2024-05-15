@@ -79,7 +79,7 @@ func (flags *Flags) Parse(args []string) (*Fn, []string, error) {
 	// Parse command line
 	err := flags.FlagSet.Parse(args)
 
-	// If there is a version argument, print the version and exit
+	// Check for global commands
 	if flags.NArg() == 1 {
 		switch flags.Arg(0) {
 		case "version":
@@ -97,15 +97,25 @@ func (flags *Flags) Parse(args []string) (*Fn, []string, error) {
 		// If the name of the command is the same as the name of the application
 		flags.cmd = cmd
 		flags.root = cmd.Name
-		flags.fn = ""
-		flags.args = flags.Args()
+		if len(flags.Args()) > 0 {
+			flags.fn = flags.Arg(0)
+			if len(flags.Args()) > 1 {
+				flags.args = flags.Args()[1:]
+			}
+		}
 	} else if flags.NArg() > 0 {
 		if cmd := flags.getCommandSet(flags.Arg(0)); cmd != nil {
 			flags.cmd = cmd
 			flags.root = strings.Join([]string{flags.Name(), cmd.Name}, " ")
 			flags.fn = flags.Arg(1)
-			flags.args = flags.Args()[1:]
+			if len(flags.Args()) > 1 {
+				flags.args = flags.Args()[2:]
+			}
 		}
+	}
+
+	if flags.GetBool("debug") {
+		fmt.Fprintf(os.Stderr, "Function: %q Args: %q\n", flags.fn, flags.args)
 	}
 
 	// Print usage
@@ -117,7 +127,7 @@ func (flags *Flags) Parse(args []string) (*Fn, []string, error) {
 		}
 		return nil, nil, err
 	} else if flags.cmd == nil {
-		fmt.Fprintln(os.Stderr, "Unknown command, try -help")
+		fmt.Fprintf(os.Stderr, "Unknown command, try \"%s -help\"\n", flags.Name())
 		return nil, nil, ErrHelp
 	}
 
@@ -140,7 +150,7 @@ func (flags *Flags) Parse(args []string) (*Fn, []string, error) {
 	// Set the function to call
 	fn := flags.cmd.Get(flags.fn)
 	if fn == nil {
-		fmt.Fprintf(os.Stderr, "Unknown command %q, try -help\n", flags.fn)
+		fmt.Fprintf(os.Stderr, "Unknown command, try \"%s -help\"\n", flags.Name())
 		return nil, nil, ErrHelp
 	}
 
@@ -151,7 +161,7 @@ func (flags *Flags) Parse(args []string) (*Fn, []string, error) {
 	}
 
 	// Return success
-	return fn, args, nil
+	return fn, flags.args, nil
 }
 
 // Get returns the value of a flag, and returns true if the flag exists
@@ -252,7 +262,7 @@ func (flags *Flags) PrintCommandUsage(cmd *Cmd) {
 	// Help for command sets
 	fmt.Fprintln(w, "Commands:")
 	for _, fn := range cmd.Fn {
-		fmt.Fprintln(w, "  ", flags.root, fn.Name)
+		fmt.Fprintln(w, "  ", flags.root, fn.Name, fn.Syntax)
 		fmt.Fprintln(w, "    ", fn.Description)
 		fmt.Fprintln(w, "")
 	}

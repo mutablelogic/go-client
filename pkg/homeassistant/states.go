@@ -13,28 +13,26 @@ import (
 // TYPES
 
 type State struct {
-	Entity      string         `json:"entity_id"`
-	LastChanged time.Time      `json:"last_changed"`
-	State       string         `json:"state"`
-	Attributes  map[string]any `json:"attributes"`
-}
-
-type Sensor struct {
-	Type   string `json:"type"`
-	Entity string `json:"entity_id"`
-	Name   string `json:"friendly_name"`
-	Value  string `json:"state,omitempty"`
-	Unit   string `json:"unit_of_measurement,omitempty"`
-	Class  string `json:"device_class,omitempty"`
+	Entity       string         `json:"entity_id"`
+	LastChanged  time.Time      `json:"last_changed,omitempty"`
+	LastReported time.Time      `json:"last_reported,omitempty"`
+	LastUpdated  time.Time      `json:"last_updated,omitempty"`
+	State        string         `json:"state"`
+	Attributes   map[string]any `json:"attributes"`
+	Context      struct {
+		Id       string `json:"id,omitempty"`
+		ParentId string `json:"parent_id,omitempty"`
+		UserId   string `json:"user_id,omitempty"`
+	} `json:"context"`
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 // API CALLS
 
 // States returns all the entities and their state
-func (c *Client) States() ([]State, error) {
+func (c *Client) States() ([]*State, error) {
 	// Return the response
-	var response []State
+	var response []*State
 	if err := c.Do(nil, &response, client.OptPath("states")); err != nil {
 		return nil, err
 	}
@@ -43,85 +41,16 @@ func (c *Client) States() ([]State, error) {
 	return response, nil
 }
 
-// Sensors returns all sensor entities and their state
-func (c *Client) Sensors() ([]Sensor, error) {
+// State returns a state for a specific entity
+func (c *Client) State(EntityId string) (*State, error) {
 	// Return the response
-	var response []State
-	if err := c.Do(nil, &response, client.OptPath("states")); err != nil {
-		return nil, err
-	}
-
-	// Filter out sensors
-	var sensors []Sensor
-	for _, state := range response {
-		if !strings.HasPrefix(state.Entity, "sensor.") && !strings.HasPrefix(state.Entity, "binary_sensor.") {
-			continue
-		}
-		sensors = append(sensors, Sensor{
-			Type:   "sensor",
-			Entity: state.Entity,
-			Name:   state.Name(),
-			Value:  state.State,
-			Unit:   state.UnitOfMeasurement(),
-			Class:  state.DeviceClass(),
-		})
+	var response *State
+	if err := c.Do(nil, &response, client.OptPath("states", EntityId)); err != nil {
+		return response, err
 	}
 
 	// Return success
-	return sensors, nil
-}
-
-// Actuators returns all button, switch and lock entities and their state
-func (c *Client) Actuators() ([]Sensor, error) {
-	// Return the response
-	var response []State
-	if err := c.Do(nil, &response, client.OptPath("states")); err != nil {
-		return nil, err
-	}
-
-	// Filter out buttons, locks, and switches
-	var sensors []Sensor
-	for _, state := range response {
-		if !strings.HasPrefix(state.Entity, "button.") && !strings.HasPrefix(state.Entity, "lock.") && !strings.HasPrefix(state.Entity, "switch.") {
-			continue
-		}
-		sensors = append(sensors, Sensor{
-			Type:   "actuator",
-			Entity: state.Entity,
-			Name:   state.Name(),
-			Value:  state.State,
-			Class:  state.DeviceClass(),
-		})
-	}
-
-	// Return success
-	return sensors, nil
-}
-
-// Lights returns all light entities and their state
-func (c *Client) Lights() ([]Sensor, error) {
-	// Return the response
-	var response []State
-	if err := c.Do(nil, &response, client.OptPath("states")); err != nil {
-		return nil, err
-	}
-
-	// Filter out sensors
-	var lights []Sensor
-	for _, state := range response {
-		if !strings.HasPrefix(state.Entity, "light.") {
-			continue
-		}
-		lights = append(lights, Sensor{
-			Type:   "light",
-			Entity: state.Entity,
-			Name:   state.Name(),
-			Value:  state.State,
-		})
-	}
-
-	// Return success
-	return lights, nil
+	return response, nil
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -132,14 +61,20 @@ func (s State) String() string {
 	return string(data)
 }
 
-func (s Sensor) String() string {
-	data, _ := json.MarshalIndent(s, "", "  ")
-	return string(data)
-}
-
 ///////////////////////////////////////////////////////////////////////////////
 // METHODS
 
+// Domain is used to determine the services which can be called on the entity
+func (s State) Domain() string {
+	parts := strings.SplitN(s.Entity, ".", 2)
+	if len(parts) == 2 {
+		return parts[0]
+	} else {
+		return ""
+	}
+}
+
+// Name is the friendly name of the entity
 func (s State) Name() string {
 	name, ok := s.Attributes["friendly_name"]
 	if !ok {
@@ -151,10 +86,22 @@ func (s State) Name() string {
 	}
 }
 
-func (s State) DeviceClass() string {
+// Value is the current state of the entity, or empty if the state is unavailable
+func (s State) Value() string {
+	switch strings.ToLower(s.State) {
+	case "unavailable", "unknown", "--":
+		return ""
+	default:
+		return s.State
+	}
+}
+
+// Class determines how the state should be interpreted, or will return "" if it's
+// unknown
+func (s State) Class() string {
 	class, ok := s.Attributes["device_class"]
 	if !ok {
-		return ""
+		return s.Domain()
 	} else if class_, ok := class.(string); !ok {
 		return ""
 	} else {
@@ -162,6 +109,8 @@ func (s State) DeviceClass() string {
 	}
 }
 
+// UnitOfMeasurement provides the unit of measurement for the state, or "" if there
+// is no unit of measurement
 func (s State) UnitOfMeasurement() string {
 	unit, ok := s.Attributes["unit_of_measurement"]
 	if !ok {

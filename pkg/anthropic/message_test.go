@@ -71,3 +71,21 @@ func Test_message_004(t *testing.T) {
 	assert.NoError(err)
 	t.Log(content)
 }
+
+func Test_message_005(t *testing.T) {
+	assert := assert.New(t)
+	client, err := anthropic.New(GetApiKey(t), opts.OptTrace(os.Stderr, true))
+	assert.NoError(err)
+	assert.NotNil(client)
+	msg := schema.NewMessage("user", "Provide me with a caption for this image")
+	content, err := schema.ImageData("../../etc/test/IMG_20130413_095348.JPG")
+	if !assert.NoError(err) {
+		t.SkipNow()
+	}
+	msg.Add(content)
+
+	// Request -> Response
+	response, err := client.Messages(context.Background(), []*schema.Message{msg, schema.NewMessage("assistant", "The caption is:")})
+	assert.NoError(err)
+	t.Log(response)
+}

@@ -8,6 +8,7 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"strings"
 	"time"
 
 	// Packages
@@ -101,15 +102,15 @@ func (transport *logtransport) RoundTrip(req *http.Request) (*http.Response, err
 		resp.Body = io.NopCloser(bytes.NewReader(body))
 		defer resp.Body.Close()
 
-		switch contentType {
-		case ContentTypeJson:
+		switch {
+		case contentType == ContentTypeJson:
 			dst := &bytes.Buffer{}
 			if err := json.Indent(dst, body, "    ", "  "); err != nil {
 				fmt.Fprintf(transport.w, "  <= %q\n", string(body))
 			} else {
 				fmt.Fprintf(transport.w, "  <= %v\n", dst.String())
 			}
-		case ContentTypeTextPlain:
+		case strings.HasPrefix(contentType, "text/"):
 			fmt.Fprintf(transport.w, "  <= %q\n", string(body))
 		default:
 			fmt.Fprintf(transport.w, "  <= (not displaying response of type %q)\n", contentType)

@@ -60,6 +60,7 @@ func NewFlags(name string) *Flags {
 	flags.FlagSet.Usage = func() {}
 
 	// Register global flags
+	flags.String("", "out", "", "Set output (csv,txt,tsv) or filename")
 	flags.Bool("", "debug", false, "Enable debug logging")
 	flags.Bool("", "verbose", false, "Enable verbose output")
 	flags.Duration("", "timeout", 0, "Client timeout")

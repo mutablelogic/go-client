@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path"
 	"syscall"
@@ -45,13 +46,13 @@ func main() {
 	ctx := mycontext.ContextForSignal(os.Interrupt, syscall.SIGQUIT)
 
 	// Run function
-	if err := Run(ctx, fn, args); err != nil {
+	if err := Run(ctx, os.Stdout, fn, args); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(-2)
 	}
 }
 
-func Run(ctx context.Context, fn *Fn, args []string) error {
-	writer := tablewriter.New(os.Stdout, tablewriter.OptOutputText(), tablewriter.OptHeader())
+func Run(ctx context.Context, w io.Writer, fn *Fn, args []string) error {
+	writer := tablewriter.New(w, tablewriter.OptTerminalWidth(w), tablewriter.OptOutputText(), tablewriter.OptHeader())
 	return fn.Call(ctx, writer, args)
 }

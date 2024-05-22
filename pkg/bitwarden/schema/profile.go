@@ -18,20 +18,20 @@ import (
 // TYPES
 
 type Profile struct {
-	Id                      string          `json:"id,width:36"`
+	Id                      string          `json:"id" writer:",width:36"`
 	Name                    string          `json:"name"`
 	Email                   string          `json:"email"`
-	EmailVerified           bool            `json:"emailVerified,width:5,right"`
-	Key                     string          `json:"key,wrap"`
-	Premium                 bool            `json:"premium,width:5,right"`
-	PremiumFromOrganization bool            `json:"premiumFromOrganization,width:5,right"`
-	Culture                 string          `json:"culture,width:5,right"`
-	TwoFactorEnabled        bool            `json:"twoFactorEnabled,width:5,right"`
-	SecurityStamp           *string         `json:"securityStamp,omitempty,width:5,right"`
-	ForcePasswordReset      bool            `json:"forcePasswordReset,width:5,right"`
-	UsesKeyConnector        bool            `json:"usesKeyConnector,width:5,right"`
+	EmailVerified           bool            `json:"emailVerified" writer:",width:5,right,omitempty"`
+	Key                     string          `json:"key" writer:",wrap,omitempty"`
+	Premium                 bool            `json:"premium" writer:",width:5,right,omitempty"`
+	PremiumFromOrganization bool            `json:"premiumFromOrganization" writer:",width:5,right,omitempty"`
+	Culture                 string          `json:"culture" writer:",width:5,right,omitempty"`
+	TwoFactorEnabled        bool            `json:"twoFactorEnabled" writer:",width:5,right,omitempty"`
+	SecurityStamp           *string         `json:"securityStamp" writer:",width:5,right,omitempty"`
+	ForcePasswordReset      bool            `json:"forcePasswordReset" writer:",width:5,right,omitempty"`
+	UsesKeyConnector        bool            `json:"usesKeyConnector" writer:",width:5,right,omitempty"`
 	Organizations           []*Organization `json:"organizations,omitempty"`
-	Object                  string          `json:"object,width:7,right"`
+	Object                  string          `json:"object" writer:"-"`
 }
 
 ///////////////////////////////////////////////////////////////////////////////

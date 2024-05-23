@@ -135,7 +135,7 @@ func (flags *Flags) Parse(args []string) (*Fn, []string, error) {
 	// Print usage
 	if err != nil {
 		if err != flag.ErrHelp {
-			fmt.Fprintf(os.Stderr, "%v: %v\n", flags.cmd.Name, err)
+			// TODO: Do nothing
 		} else {
 			flags.PrintUsage()
 		}
@@ -179,11 +179,18 @@ func (flags *Flags) Parse(args []string) (*Fn, []string, error) {
 }
 
 // Get returns the value of a flag, and returns true if the flag exists
+// and has been changed from the default
 func (flags *Flags) Get(name string) (string, bool) {
+	var visited bool
+	flags.Visit(func(f *flag.Flag) {
+		if f.Name == name {
+			visited = true
+		}
+	})
 	if value := flags.FlagSet.Lookup(name); value == nil {
 		return "", false
 	} else {
-		return value.Value.String(), true
+		return value.Value.String(), visited
 	}
 }
 
@@ -426,17 +433,15 @@ func (flags *Flags) GetBool(name string) bool {
 // GetString returns a flag value as a string, and expands
 // any environment variables in the returned value
 func (flags *Flags) GetString(name string) string {
-	if value, exists := flags.Get(name); !exists {
-		return ""
-	} else {
-		return os.ExpandEnv(value)
-	}
+	value, _ := flags.Get(name)
+	return os.ExpandEnv(value)
 }
 
-// GetValue returns a flag value
+// GetValue returns a flag value, if it has been changed from the default
+// value
 func (flags *Flags) GetValue(name string) (any, error) {
-	value, exists := flags.Get(name)
-	if !exists {
+	value, visited := flags.Get(name)
+	if !visited {
 		return nil, ErrNotFound.With(name)
 	} else {
 		value = os.ExpandEnv(value)

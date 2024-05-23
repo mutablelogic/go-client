@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"regexp"
@@ -10,8 +11,8 @@ import (
 
 	// Packages
 	tablewriter "github.com/djthorpe/go-tablewriter"
-	"github.com/go-audio/audio"
-	"github.com/go-audio/wav"
+	audio "github.com/go-audio/audio"
+	wav "github.com/go-audio/wav"
 	client "github.com/mutablelogic/go-client"
 	elevenlabs "github.com/mutablelogic/go-client/pkg/elevenlabs"
 
@@ -23,12 +24,16 @@ import (
 // GLOBALS
 
 var (
-	elName       = "elevenlabs"
-	elClient     *elevenlabs.Client
-	elExt        = "mp3"
-	elBitrate    = uint64(32)    // in kbps
-	elSamplerate = uint64(44100) // in Hz
-	reVoiceId    = regexp.MustCompile("^[a-z0-9-]{20}$")
+	elName            = "elevenlabs"
+	elClient          *elevenlabs.Client
+	elExt             = "mp3"
+	elBitrate         = uint64(32)    // in kbps
+	elSamplerate      = uint64(44100) // in Hz
+	elSimilarityBoost = float64(0.0)
+	elStability       = float64(0.0)
+	elUseSpeakerBoost = false
+	elWriteSettings   = false
+	reVoiceId         = regexp.MustCompile("^[a-z0-9-]{20}$")
 )
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -51,8 +56,7 @@ func elRegister(flags *Flags) {
 		Fn: []Fn{
 			{Name: "voices", Call: elVoices, Description: "Return registered voices"},
 			{Name: "voice", Call: elVoice, Description: "Return one voice", MinArgs: 1, MaxArgs: 1, Syntax: "<voice-id>"},
-			{Name: "settings", Call: elGetVoiceSettings, Description: "Return voice settings, or default settings", MaxArgs: 1, Syntax: "(<voice-id>)"},
-			{Name: "set", Call: elSetVoiceSettings, Description: "Set voice settings from -stability, -similarity-boost and -use-speaker-boost flags", MinArgs: 1, MaxArgs: 1, Syntax: "<voice-id>"},
+			{Name: "settings", Call: elVoiceSettings, Description: "Return voice settings, or default settings. Set voice settings from -stability, -similarity-boost and -use-speaker-boost flags", MaxArgs: 1, Syntax: "(<voice-id>)"},
 			{Name: "say", Call: elTextToSpeech, Description: "Text to speech", MinArgs: 2, Syntax: "<voice-id> <text>..."},
 		},
 	})
@@ -86,6 +90,30 @@ func elParse(flags *Flags, opts ...client.ClientOpt) error {
 		}
 	}
 
+	// Similarity boost
+	if value, err := flags.GetValue("similarity-boost"); err == nil {
+		elSimilarityBoost = value.(float64)
+		elWriteSettings = true
+	} else if !errors.Is(err, ErrNotFound) {
+		return err
+	}
+
+	// Stability
+	if value, err := flags.GetValue("stability"); err == nil {
+		elStability = value.(float64)
+		elWriteSettings = true
+	} else if !errors.Is(err, ErrNotFound) {
+		return err
+	}
+
+	// Use speaker boost
+	if value, err := flags.GetValue("use-speaker-boost"); err == nil {
+		elUseSpeakerBoost = value.(bool)
+		elWriteSettings = true
+	} else if !errors.Is(err, ErrNotFound) {
+		return err
+	}
+
 	// Return success
 	return nil
 }
@@ -111,23 +139,7 @@ func elVoice(ctx context.Context, w *tablewriter.Writer, args []string) error {
 	}
 }
 
-func elGetVoiceSettings(ctx context.Context, w *tablewriter.Writer, args []string) error {
-	var voice string
-	if len(args) > 0 {
-		if v, err := elVoiceId(args[0]); err != nil {
-			return err
-		} else {
-			voice = v
-		}
-	}
-	if voice, err := elClient.VoiceSettings(voice); err != nil {
-		return err
-	} else {
-		return w.Write(voice)
-	}
-}
-
-func elSetVoiceSettings(ctx context.Context, w *tablewriter.Writer, args []string) error {
+func elVoiceSettings(ctx context.Context, w *tablewriter.Writer, args []string) error {
 	var voice string
 	if len(args) > 0 {
 		if v, err := elVoiceId(args[0]); err != nil {
@@ -143,15 +155,31 @@ func elSetVoiceSettings(ctx context.Context, w *tablewriter.Writer, args []strin
 		return err
 	}
 
-	// TODO: Modify settings
-	fmt.Println("TODO: elSetVoiceSettings: Modify settings")
+	// Modify settings
+	if elWriteSettings {
+		// We need a voice in order to write the settings
+		if voice == "" {
+			return ErrBadParameter.With("Missing voice-id")
+		}
 
-	// Set voice settings
-	if err := elClient.SetVoiceSettings(voice, settings); err != nil {
-		return err
-	} else {
-		return w.Write(settings)
+		// Change parameters
+		if elStability != 0.0 {
+			settings.Stability = float32(elStability)
+		}
+		if elSimilarityBoost != 0.0 {
+			settings.SimilarityBoost = float32(elSimilarityBoost)
+		}
+		if elUseSpeakerBoost != settings.UseSpeakerBoost {
+			settings.UseSpeakerBoost = elUseSpeakerBoost
+		}
+
+		// Set voice settings
+		if err := elClient.SetVoiceSettings(voice, settings); err != nil {
+			return err
+		}
 	}
+
+	return w.Write(settings)
 }
 
 func elTextToSpeech(ctx context.Context, w *tablewriter.Writer, args []string) error {
@@ -225,14 +253,14 @@ func elOutputFormat() elevenlabs.Opt {
 /////////////////////////////////////////////////////////////////////
 // AUDIO WRITER
 
-type audioWriter struct {
+type wavWriter struct {
 	enc *wav.Encoder
 	buf *bytes.Buffer
 	pcm *audio.IntBuffer
 }
 
-func NewAudioWriter(w io.WriteSeeker, sampleRate, channels int) *audioWriter {
-	this := new(audioWriter)
+func NewAudioWriter(w io.WriteSeeker, sampleRate, channels int) *wavWriter {
+	this := new(wavWriter)
 
 	// Create a WAV encoder
 	this.enc = wav.NewEncoder(w, sampleRate, 16, channels, 1)
@@ -257,7 +285,7 @@ func NewAudioWriter(w io.WriteSeeker, sampleRate, channels int) *audioWriter {
 	return this
 }
 
-func (a *audioWriter) Write(data []byte) (int, error) {
+func (a *wavWriter) Write(data []byte) (int, error) {
 	// Write the data to the buffer
 	if n, err := a.buf.Write(data); err != nil {
 		return 0, err
@@ -268,7 +296,7 @@ func (a *audioWriter) Write(data []byte) (int, error) {
 	}
 }
 
-func (a *audioWriter) Flush() error {
+func (a *wavWriter) Flush() error {
 	var n int
 	var sample [2]byte
 
@@ -301,7 +329,7 @@ func (a *audioWriter) Flush() error {
 	return nil
 }
 
-func (a *audioWriter) Close() error {
+func (a *wavWriter) Close() error {
 	if err := a.Flush(); err != nil {
 		return err
 	}

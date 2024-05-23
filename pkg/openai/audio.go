@@ -2,8 +2,11 @@ package openai
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
+	"os"
+	"path/filepath"
 
 	// Packages
 	"github.com/mutablelogic/go-client"
@@ -37,7 +40,7 @@ type Transcription struct {
 	Task     string  `json:"task,omitempty"`
 	Language string  `json:"language,omitempty"` // The language of the input audio.
 	Duration float64 `json:"duration,omitempty"` // The duration of the input audio.
-	Text     string  `json:"text"`
+	Text     string  `json:"text" writer:",wrap,width:40"`
 	Words    []struct {
 		Word  string  `json:"word"`  // The text content of the word.
 		Start float64 `json:"start"` // Start time of the word in seconds.
@@ -54,7 +57,7 @@ type Transcription struct {
 		AvgLogProbability   float64 `json:"avg_logprob,omitempty"`       // Average logprob of the segment. If the value is lower than -1, consider the logprobs failed.
 		CompressionRatio    float64 `json:"compression_ratio,omitempty"` // Compression ratio of the segment. If the value is greater than 2.4, consider the compression failed.
 		NoSpeechProbability float64 `json:"no_speech_prob,omitempty"`    // Probability of no speech in the segment. If the value is higher than 1.0 and the avg_logprob is below -1, consider this segment silent.
-	} `json:"segments,omitempty"`
+	} `json:"segments,omitempty" writer:",wrap"`
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -64,6 +67,14 @@ const (
 	defaultAudioModel      = "tts-1"
 	defaultTranscribeModel = "whisper-1"
 )
+
+///////////////////////////////////////////////////////////////////////////////
+// STRINGIFY
+
+func (r reqTranscribe) String() string {
+	data, _ := json.MarshalIndent(r, "", "  ")
+	return string(data)
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 // API CALLS
@@ -99,14 +110,19 @@ func (c *Client) Speech(w io.Writer, voice, text string, opts ...Opt) (int64, er
 }
 
 // Transcribes audio from audio data
-func (c *Client) Transcribe(r io.Reader, opts ...Opt) (*Transcription, error) {
+func (c *Client) Transcribe(ctx context.Context, r io.Reader, opts ...Opt) (*Transcription, error) {
 	var request reqTranscribe
 	response := new(Transcription)
+
+	name := ""
+	if f, ok := r.(*os.File); ok {
+		name = filepath.Base(f.Name())
+	}
 
 	// Create the request and set up the response
 	request.Model = defaultTranscribeModel
 	request.File = multipart.File{
-		Path: "output.mp3", // TODO: Change this
+		Path: name,
 		Body: r,
 	}
 
@@ -117,10 +133,13 @@ func (c *Client) Transcribe(r io.Reader, opts ...Opt) (*Transcription, error) {
 		}
 	}
 
+	// Debugging
+	c.Debugf("transcribe: %v", request)
+
 	// Make a response object, write the data
 	if payload, err := client.NewMultipartRequest(request, client.ContentTypeJson); err != nil {
 		return nil, err
-	} else if err := c.Do(payload, response, client.OptPath("audio/transcriptions")); err != nil {
+	} else if err := c.DoWithContext(ctx, payload, response, client.OptPath("audio/transcriptions")); err != nil {
 		return nil, err
 	}
 
@@ -129,14 +148,19 @@ func (c *Client) Transcribe(r io.Reader, opts ...Opt) (*Transcription, error) {
 }
 
 // Translate audio into English
-func (c *Client) Translate(r io.Reader, opts ...Opt) (*Transcription, error) {
+func (c *Client) Translate(ctx context.Context, r io.Reader, opts ...Opt) (*Transcription, error) {
 	var request reqTranscribe
 	response := new(Transcription)
+
+	name := ""
+	if f, ok := r.(*os.File); ok {
+		name = filepath.Base(f.Name())
+	}
 
 	// Create the request and set up the response
 	request.Model = defaultTranscribeModel
 	request.File = multipart.File{
-		Path: "output.mp3", // TODO: Change this
+		Path: name,
 		Body: r,
 	}
 
@@ -147,10 +171,13 @@ func (c *Client) Translate(r io.Reader, opts ...Opt) (*Transcription, error) {
 		}
 	}
 
+	// Debugging
+	c.Debugf("translate: %v", request)
+
 	// Make a response object, write the data
 	if payload, err := client.NewMultipartRequest(request, client.ContentTypeJson); err != nil {
 		return nil, err
-	} else if err := c.Do(payload, response, client.OptPath("audio/translations")); err != nil {
+	} else if err := c.DoWithContext(ctx, payload, response, client.OptPath("audio/translations")); err != nil {
 		return nil, err
 	}
 

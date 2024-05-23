@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 
 	// Packages
@@ -34,6 +35,8 @@ var (
 	openaiTemperature      *float64
 	openaiUser             string
 	openaiSystemPrompt     string
+	openaiPrompt           string
+	openaiLanguage         string
 )
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -54,6 +57,8 @@ func openaiRegister(flags *Flags) {
 	// TODO flags.String(openaiName, "system", "", "The system prompt")
 	// TODO flags.Bool(openaiName, "stream", false, "If set, partial message deltas will be sent, like in ChatGPT")
 	// TODO flags.Float(openaiName, "temperature", 0, "Sampling temperature to use, between 0.0 and 2.0")
+	flags.String(openaiName, "prompt", "", "An optional text to guide the model's style or continue a previous audio segment")
+	//flags.String(openaiName, "language", "", "The language of the input audio in ISO-639-1 format")
 
 	// Register commands
 	flags.Register(Cmd{
@@ -65,6 +70,8 @@ func openaiRegister(flags *Flags) {
 			{Name: "model", Call: openaiGetModel, Description: "Return model information", MinArgs: 1, MaxArgs: 1, Syntax: "<model>"},
 			{Name: "image", Call: openaiImage, Description: "Create image from a prompt", MinArgs: 1, Syntax: "<prompt>"},
 			{Name: "chat", Call: openaiChat, Description: "Create a chat completion", MinArgs: 1, Syntax: "<text>..."},
+			{Name: "transcribe", Call: openaiTranscribe, Description: "Transcribes audio into the input language", MinArgs: 1, MaxArgs: 1, Syntax: "<filename>"},
+			{Name: "translate", Call: openaiTranslate, Description: "Translates audio into English", MinArgs: 1, MaxArgs: 1, Syntax: "<filename>"},
 		},
 	})
 }
@@ -87,6 +94,8 @@ func openaiParse(flags *Flags, opts ...client.ClientOpt) error {
 	openaiStream = flags.GetBool("stream")
 	openaiUser = flags.GetString("user")
 	openaiSystemPrompt = flags.GetString("system")
+	openaiPrompt = flags.GetString("prompt")
+	openaiLanguage = flags.GetString("language")
 
 	if temp, err := flags.GetValue("temperature"); err == nil {
 		t := temp.(float64)
@@ -226,4 +235,71 @@ func openaiChat(ctx context.Context, w *tablewriter.Writer, args []string) error
 	}
 
 	return w.Write(responses)
+}
+
+func openaiTranscribe(ctx context.Context, w *tablewriter.Writer, args []string) error {
+	opts := []openai.Opt{}
+	if openaiModel != "" {
+		opts = append(opts, openai.OptModel(openaiModel))
+	}
+	if openaiPrompt != "" {
+		opts = append(opts, openai.OptPrompt(openaiPrompt))
+	}
+	if openaiLanguage != "" {
+		opts = append(opts, openai.OptLanguage(openaiLanguage))
+	}
+	if openaiResponseFormat != "" {
+		opts = append(opts, openai.OptResponseFormat(openaiResponseFormat))
+	}
+	if openaiTemperature != nil {
+		opts = append(opts, openai.OptTemperature(float32(*openaiTemperature)))
+	}
+
+	// Open audio file for reading
+	r, err := os.Open(args[0])
+	if err != nil {
+		return err
+	}
+	defer r.Close()
+
+	// Perform transcription
+	transcription, err := openaiClient.Transcribe(ctx, r, opts...)
+	if err != nil {
+		return err
+	}
+
+	// Write output
+	return w.Write(transcription)
+}
+
+func openaiTranslate(ctx context.Context, w *tablewriter.Writer, args []string) error {
+	opts := []openai.Opt{}
+	if openaiModel != "" {
+		opts = append(opts, openai.OptModel(openaiModel))
+	}
+	if openaiPrompt != "" {
+		opts = append(opts, openai.OptPrompt(openaiPrompt))
+	}
+	if openaiResponseFormat != "" {
+		opts = append(opts, openai.OptResponseFormat(openaiResponseFormat))
+	}
+	if openaiTemperature != nil {
+		opts = append(opts, openai.OptTemperature(float32(*openaiTemperature)))
+	}
+
+	// Open audio file for reading
+	r, err := os.Open(args[0])
+	if err != nil {
+		return err
+	}
+	defer r.Close()
+
+	// Perform translation
+	transcription, err := openaiClient.Translate(ctx, r, opts...)
+	if err != nil {
+		return err
+	}
+
+	// Write output
+	return w.Write(transcription)
 }

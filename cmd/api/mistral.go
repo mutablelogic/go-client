@@ -137,8 +137,8 @@ func mistralChat(ctx context.Context, w *tablewriter.Writer, args []string) erro
 		opts = append(opts, mistral.OptMaxTokens(int(*mistralMaxTokens)))
 	}
 	if mistralStream != nil {
-		opts = append(opts, mistral.OptStream(func() {
-			fmt.Println("STREAM")
+		opts = append(opts, mistral.OptStream(func(choice schema.MessageChoice) {
+			fmt.Printf("%v\n", choice)
 		}))
 	}
 	if mistralSafePrompt {

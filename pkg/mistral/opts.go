@@ -1,6 +1,9 @@
 package mistral
 
 import (
+	// Packages
+	schema "github.com/mutablelogic/go-client/pkg/openai/schema"
+
 	// Namespace imports
 	. "github.com/djthorpe/go-errors"
 )
@@ -24,7 +27,8 @@ type options struct {
 // Opt is a function which can be used to set options on a request
 type Opt func(*options) error
 
-type Callback func()
+// Callback when new stream data is received
+type Callback func(schema.MessageChoice)
 
 ///////////////////////////////////////////////////////////////////////////////
 // OPTIONS

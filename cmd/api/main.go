@@ -24,6 +24,7 @@ func main() {
 	elRegister(flags)
 	haRegister(flags)
 	ipifyRegister(flags)
+	mistralRegister(flags)
 	newsapiRegister(flags)
 	samRegister(flags)
 	weatherapiRegister(flags)

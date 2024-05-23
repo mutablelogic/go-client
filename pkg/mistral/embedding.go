@@ -14,9 +14,8 @@ import (
 
 // A request to create embeddings
 type reqCreateEmbedding struct {
-	Input          []string `json:"input"`
-	Model          string   `json:"model"`
-	EncodingFormat string   `json:"encoding_format,omitempty"`
+	Input []string `json:"input"`
+	options
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -30,12 +29,17 @@ const (
 // API CALLS
 
 // CreateEmbedding creates an embedding from a string or array of strings
-func (c *Client) CreateEmbedding(content any) (schema.Embeddings, error) {
+func (c *Client) CreateEmbedding(content any, opts ...Opt) (schema.Embeddings, error) {
 	var request reqCreateEmbedding
 	var response schema.Embeddings
 
-	// Set default model
+	// Set options
 	request.Model = defaultEmbeddingModel
+	for _, opt := range opts {
+		if err := opt(&request.options); err != nil {
+			return response, err
+		}
+	}
 
 	// Set the input, which is either a string or array of strings
 	switch v := content.(type) {
@@ -44,7 +48,7 @@ func (c *Client) CreateEmbedding(content any) (schema.Embeddings, error) {
 	case []string:
 		request.Input = v
 	default:
-		return response, ErrBadParameter
+		return response, ErrBadParameter.With("CreateEmbedding")
 	}
 
 	// Request->Response

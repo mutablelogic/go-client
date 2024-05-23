@@ -76,6 +76,7 @@ func openaiRegister(flags *Flags) {
 			{Name: "transcribe", Call: openaiTranscribe, Description: "Transcribes audio into the input language", MinArgs: 1, MaxArgs: 1, Syntax: "<filename>"},
 			{Name: "translate", Call: openaiTranslate, Description: "Translates audio into English", MinArgs: 1, MaxArgs: 1, Syntax: "<filename>"},
 			{Name: "say", Call: openaiTextToSpeech, Description: "Text to speech", MinArgs: 2, Syntax: "<voice-id> <text>..."},
+			{Name: "moderations", Call: openaiModerations, Description: "Classifies text across several categories", MinArgs: 1, Syntax: "<text>..."},
 		},
 	})
 }
@@ -341,4 +342,20 @@ func openaiTextToSpeech(ctx context.Context, w *tablewriter.Writer, args []strin
 
 	// Return success
 	return nil
+}
+
+func openaiModerations(ctx context.Context, w *tablewriter.Writer, args []string) error {
+	opts := []openai.Opt{}
+	if openaiModel != "" {
+		opts = append(opts, openai.OptModel(openaiModel))
+	}
+
+	// Request -> Response
+	response, err := openaiClient.Moderations(ctx, args, opts...)
+	if err != nil {
+		return err
+	}
+
+	// Write output
+	return w.Write(response)
 }

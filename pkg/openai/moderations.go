@@ -21,6 +21,7 @@ type responseModerations struct {
 	Results []Moderation `json:"results"`
 }
 
+// Moderation represents the moderation of a text, including whether it is flagged
 type Moderation struct {
 	Flagged    bool `json:"flagged"`
 	Categories struct {

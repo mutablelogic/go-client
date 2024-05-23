@@ -149,6 +149,10 @@ func (m MessageChoice) String() string {
 	return string(data)
 }
 
+func (m MessageDelta) String() string {
+	data, _ := json.MarshalIndent(m, "", "  ")
+	return string(data)
+}
 func (c Content) String() string {
 	data, _ := json.MarshalIndent(c, "", "  ")
 	return string(data)

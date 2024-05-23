@@ -138,7 +138,19 @@ func mistralChat(ctx context.Context, w *tablewriter.Writer, args []string) erro
 	}
 	if mistralStream != nil {
 		opts = append(opts, mistral.OptStream(func(choice schema.MessageChoice) {
-			fmt.Printf("%v\n", choice)
+			w := w.Output()
+			if choice.Delta == nil {
+				return
+			}
+			if choice.Delta.Role != "" {
+				fmt.Fprintf(w, "\n%v: ", choice.Delta.Role)
+			}
+			if choice.Delta.Content != "" {
+				fmt.Fprintf(w, "%v", choice.Delta.Content)
+			}
+			if choice.FinishReason != "" {
+				fmt.Printf("\nfinish_reason: %q\n", choice.FinishReason)
+			}
 		}))
 	}
 	if mistralSafePrompt {
@@ -164,6 +176,10 @@ func mistralChat(ctx context.Context, w *tablewriter.Writer, args []string) erro
 		return err
 	}
 
-	// Write table
-	return w.Write(responses)
+	// Write table (if not streaming)
+	if mistralStream == nil || !*mistralStream {
+		return w.Write(responses)
+	} else {
+		return nil
+	}
 }

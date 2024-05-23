@@ -309,7 +309,7 @@ func (flags *Flags) PrintCommandFlags(cmd string) {
 
 func printFlag(w io.Writer, f *flag.Flag) {
 	fmt.Fprintf(w, "  -%v", f.Name)
-	if len(f.DefValue) > 0 {
+	if len(f.DefValue) > 0 && f.DefValue != "false" && f.DefValue != "0" && f.DefValue != "0s" {
 		fmt.Fprintf(w, " (default %q)", f.DefValue)
 	}
 	fmt.Fprintf(w, "\n    %v\n\n", f.Usage)

@@ -2,10 +2,16 @@ package openai
 
 import (
 	// Packages
-
 	client "github.com/mutablelogic/go-client"
 	schema "github.com/mutablelogic/go-client/pkg/openai/schema"
 )
+
+///////////////////////////////////////////////////////////////////////////////
+// TYPES
+
+type responseListModels struct {
+	Data []schema.Model `json:"data"`
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 // API CALLS

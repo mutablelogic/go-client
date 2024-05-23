@@ -1,6 +1,7 @@
 package openai
 
 import (
+	"context"
 	"encoding/base64"
 	"io"
 	"net/http"
@@ -15,23 +16,35 @@ import (
 ///////////////////////////////////////////////////////////////////////////////
 // TYPES
 
+// A request for an image
+type reqImage struct {
+	options
+}
+
 type responseImages struct {
 	Created int64    `json:"created"`
 	Data    []*Image `json:"data"`
+}
+
+// An image
+type Image struct {
+	Url           string `json:"url,omitempty"`
+	Data          string `json:"b64_json,omitempty"`
+	RevisedPrompt string `json:"revised_prompt,omitempty"`
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 // API CALLS
 
 // CreateImage generates one or more images from a prompt
-func (c *Client) CreateImages(prompt string, opts ...Opt) ([]*Image, error) {
+func (c *Client) CreateImages(ctx context.Context, prompt string, opts ...Opt) ([]*Image, error) {
 	var request reqImage
 	var response responseImages
 
 	// Create the request
 	request.Prompt = prompt
 	for _, opt := range opts {
-		if err := opt(&request); err != nil {
+		if err := opt(&request.options); err != nil {
 			return nil, err
 		}
 	}
@@ -39,7 +52,7 @@ func (c *Client) CreateImages(prompt string, opts ...Opt) ([]*Image, error) {
 	// Return the response
 	if payload, err := client.NewJSONRequest(request); err != nil {
 		return nil, err
-	} else if err := c.Do(payload, &response, client.OptPath("images/generations")); err != nil {
+	} else if err := c.DoWithContext(ctx, payload, &response, client.OptPath("images/generations")); err != nil {
 		return nil, err
 	}
 

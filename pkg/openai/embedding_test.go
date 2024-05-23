@@ -1,6 +1,7 @@
 package openai_test
 
 import (
+	"context"
 	"os"
 	"testing"
 
@@ -15,7 +16,7 @@ func Test_embedding_001(t *testing.T) {
 	assert.NoError(err)
 	assert.NotNil(client)
 
-	embedding, err := client.CreateEmbedding("test", openai.OptModel("text-embedding-ada-002"))
+	embedding, err := client.CreateEmbedding(context.Background(), "test", openai.OptModel("text-embedding-ada-002"))
 	assert.NoError(err)
 	assert.NotEmpty(embedding)
 }

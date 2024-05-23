@@ -139,6 +139,8 @@ func bwFolders(_ context.Context, w *tablewriter.Writer, _ []string) error {
 	if bwPassword != "" {
 		opts = append(opts, bitwarden.OptPassword(bwPassword))
 	}
+
+	// Retrieve the folders
 	folders, err := bwClient.Folders(opts...)
 	if err != nil {
 		return err

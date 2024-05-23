@@ -6,12 +6,19 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
+	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
+	// Packages
 	"github.com/mutablelogic/go-client"
 	"github.com/mutablelogic/go-client/pkg/version"
+
+	// Namespace imports
+	. "github.com/djthorpe/go-errors"
 )
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -48,6 +55,12 @@ const (
 	Bool
 	String
 	Duration
+	Float
+	Unsigned
+)
+
+var (
+	reExt = regexp.MustCompile(`^[a-zA-Z0-9]{1,32}$`)
 )
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -60,6 +73,7 @@ func NewFlags(name string) *Flags {
 	flags.FlagSet.Usage = func() {}
 
 	// Register global flags
+	flags.String("", "out", "", "Set output filename or type")
 	flags.Bool("", "debug", false, "Enable debug logging")
 	flags.Bool("", "verbose", false, "Enable verbose output")
 	flags.Duration("", "timeout", 0, "Client timeout")
@@ -121,7 +135,7 @@ func (flags *Flags) Parse(args []string) (*Fn, []string, error) {
 	// Print usage
 	if err != nil {
 		if err != flag.ErrHelp {
-			fmt.Fprintf(os.Stderr, "%v: %v\n", flags.cmd.Name, err)
+			// TODO: Do nothing
 		} else {
 			flags.PrintUsage()
 		}
@@ -165,11 +179,18 @@ func (flags *Flags) Parse(args []string) (*Fn, []string, error) {
 }
 
 // Get returns the value of a flag, and returns true if the flag exists
+// and has been changed from the default
 func (flags *Flags) Get(name string) (string, bool) {
+	var visited bool
+	flags.Visit(func(f *flag.Flag) {
+		if f.Name == name {
+			visited = true
+		}
+	})
 	if value := flags.FlagSet.Lookup(name); value == nil {
 		return "", false
 	} else {
-		return value.Value.String(), true
+		return value.Value.String(), visited
 	}
 }
 
@@ -288,7 +309,7 @@ func (flags *Flags) PrintCommandFlags(cmd string) {
 
 func printFlag(w io.Writer, f *flag.Flag) {
 	fmt.Fprintf(w, "  -%v", f.Name)
-	if len(f.DefValue) > 0 {
+	if len(f.DefValue) > 0 && f.DefValue != "false" && f.DefValue != "0" && f.DefValue != "0s" {
 		fmt.Fprintf(w, " (default %q)", f.DefValue)
 	}
 	fmt.Fprintf(w, "\n    %v\n\n", f.Usage)
@@ -357,6 +378,46 @@ func (flags *Flags) Duration(cmd, name string, value time.Duration, usage string
 	return result
 }
 
+func (flags *Flags) Float(cmd, name string, value float64, usage string) *Value {
+	// TODO: Panic if the flag already exists
+	if _, ok := flags.names[name]; ok {
+		panic(fmt.Sprintf("flag redefined: %q", name))
+	}
+
+	// Create the flag
+	result := &Value{
+		cmd:      cmd,
+		flagType: Float,
+	}
+
+	// Set up flag
+	flags.FlagSet.Float64(name, value, usage)
+	flags.names[name] = result
+
+	// Return success
+	return result
+}
+
+func (flags *Flags) Unsigned(cmd, name string, value uint64, usage string) *Value {
+	// TODO: Panic if the flag already exists
+	if _, ok := flags.names[name]; ok {
+		panic(fmt.Sprintf("flag redefined: %q", name))
+	}
+
+	// Create the flag
+	result := &Value{
+		cmd:      cmd,
+		flagType: Unsigned,
+	}
+
+	// Set up flag
+	flags.FlagSet.Uint64(name, value, usage)
+	flags.names[name] = result
+
+	// Return success
+	return result
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 // PUBLIC METHODS - GET FLAGS
 
@@ -372,10 +433,61 @@ func (flags *Flags) GetBool(name string) bool {
 // GetString returns a flag value as a string, and expands
 // any environment variables in the returned value
 func (flags *Flags) GetString(name string) string {
-	if value, exists := flags.Get(name); !exists {
+	value, _ := flags.Get(name)
+	return os.ExpandEnv(value)
+}
+
+// GetValue returns a flag value, if it has been changed from the default
+// value
+func (flags *Flags) GetValue(name string) (any, error) {
+	value, visited := flags.Get(name)
+	if !visited {
+		return nil, ErrNotFound.With(name)
+	} else {
+		value = os.ExpandEnv(value)
+	}
+	switch flags.names[name].flagType {
+	case Bool:
+		return strconv.ParseBool(value)
+	case String:
+		return value, nil
+	case Duration:
+		return time.ParseDuration(value)
+	case Float:
+		return strconv.ParseFloat(value, 64)
+	case Unsigned:
+		return strconv.ParseUint(value, 10, 64)
+	default:
+		return nil, ErrNotImplemented.With(flags.names[name].flagType)
+	}
+}
+
+// GetOutExt returns the extension of the output file, or an empty string
+// if the output file is not set. It does not include the initial '.' character
+func (flags *Flags) GetOutExt() string {
+	value, exists := flags.Get("out")
+	if !exists {
+		return ""
+	} else if ext := filepath.Ext(value); ext == "" && reExt.MatchString(value) {
+		return value
+	} else if len(ext) > 1 && ext[0] == '.' && reExt.MatchString(ext[1:]) {
+		return ext[1:]
+	} else {
+		return ""
+	}
+}
+
+// GetOutPath returns the full pathname of the output file, or an empty string
+// if the output file is not set.
+func (flags *Flags) GetOutPath() string {
+	value, exists := flags.Get("out")
+	if !exists {
+		return ""
+	} else if flags.GetOutExt() == value {
+		// -output csv or something, without a file extension
 		return ""
 	} else {
-		return os.ExpandEnv(value)
+		return value
 	}
 }
 

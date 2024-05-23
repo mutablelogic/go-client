@@ -82,6 +82,7 @@ type Usage struct {
 type Delta struct {
 	Type string `json:"type"`
 	Text string `json:"text,omitempty"`
+	Json string `json:"partial_json,omitempty"`
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -137,6 +138,14 @@ func (c *Client) Messages(ctx context.Context, messages []*schema.Message, opt .
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+// STRINGIFY
+
+func (d Delta) String() string {
+	data, _ := json.MarshalIndent(d, "", "  ")
+	return string(data)
+}
+
+///////////////////////////////////////////////////////////////////////////////
 // UNMARSHAL TEXT STREAM
 
 func (m *respMessage) Unmarshal(mimetype string, r io.Reader) error {
@@ -182,6 +191,7 @@ func (m *respMessage) decodeTextStream(r io.Reader) error {
 				// TODO: Set input_tokens from stream.Usage.InputTokens
 			case "message_stop":
 				if m.delta != nil {
+					// Callback with nil to indicate end of message
 					m.delta(nil)
 				}
 			case "content_block_start":
@@ -192,11 +202,13 @@ func (m *respMessage) decodeTextStream(r io.Reader) error {
 				case stream.Delta.Type == "text_delta" && content.Type == "text":
 					// Append text
 					content.Text += stream.Delta.Text
+				case stream.Delta.Type == "input_json_delta":
+					// Append partial_json
+					content.Text += stream.Delta.Json
 				}
 			case "content_block_stop":
 				// Append content
 				m.Content = append(m.Content, content)
-
 				// Reset content
 				content = schema.Content{}
 			case "message_delta":

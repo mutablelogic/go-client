@@ -212,6 +212,9 @@ func (enc *Encoder) writeField(name string, value any) error {
 // Check field index for a parent, which should be ignored
 func hasParentIndex(ignore [][]int, index []int) bool {
 	for _, ignore := range ignore {
+		if len(index) < len(ignore) {
+			continue
+		}
 		if slices.Equal(ignore, index[:len(ignore)]) {
 			return true
 		}

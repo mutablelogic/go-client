@@ -13,13 +13,13 @@ type Embedding struct {
 
 // An set of created embeddings
 type Embeddings struct {
-	Id    string      `json:"id"`
-	Data  []Embedding `json:"data"`
+	Id    string      `json:"id" writer:",width:32"`
+	Data  []Embedding `json:"data" writer:",wrap"`
 	Model string      `json:"model"`
 	Usage struct {
 		PromptTokerns int `json:"prompt_tokens"`
 		TotalTokens   int `json:"total_tokens"`
-	} `json:"usage"`
+	} `json:"usage" writer:",wrap"`
 }
 
 ///////////////////////////////////////////////////////////////////////////////

@@ -7,8 +7,9 @@ toolchain go1.22.3
 require (
 	github.com/andreburgaud/crypt2go v1.5.0
 	github.com/djthorpe/go-errors v1.0.3
-	github.com/djthorpe/go-tablewriter v0.0.5
-	github.com/pkg/errors v0.9.1
+	github.com/djthorpe/go-tablewriter v0.0.6
+	github.com/go-audio/audio v1.0.0
+	github.com/go-audio/wav v1.1.0
 	github.com/stretchr/testify v1.9.0
 	github.com/xdg-go/pbkdf2 v1.0.0
 	golang.org/x/crypto v0.23.0
@@ -18,6 +19,7 @@ require (
 
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/go-audio/riff v1.0.0 // indirect
 	github.com/mattn/go-runewidth v0.0.15 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect

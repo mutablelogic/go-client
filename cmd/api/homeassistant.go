@@ -212,7 +212,7 @@ func haGetStates(name string, domains []string) ([]haEntity, error) {
 
 		// Filter domains
 		if len(domains) > 0 {
-			if !slices.Contains(domains, entity.Domain) {
+			if !(slices.Contains(domains, entity.Domain) || slices.Contains(domains, entity.Class)) {
 				continue
 			}
 		}

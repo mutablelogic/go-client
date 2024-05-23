@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"reflect"
 	"strings"
 
 	// Packages
@@ -65,28 +66,28 @@ func samParse(flags *Flags, opts ...client.ClientOpt) error {
 	}
 
 	// Add tool parameters
-	if err := samWeatherTool.AddParameter("location", `City to get the weather for. If a country, use the capital city. To get weather for the current location, use "auto:ip"`, true); err != nil {
+	if err := samWeatherTool.Add("location", `City to get the weather for. If a country, use the capital city. To get weather for the current location, use "auto:ip"`, true, reflect.TypeOf("")); err != nil {
 		return err
 	}
-	if err := samNewsHeadlinesTool.AddParameter("category", "The cateogry of news, which should be one of business, entertainment, general, health, science, sports or technology", true); err != nil {
+	if err := samNewsHeadlinesTool.Add("category", "The cateogry of news, which should be one of business, entertainment, general, health, science, sports or technology", true, reflect.TypeOf("")); err != nil {
 		return err
 	}
-	if err := samNewsHeadlinesTool.AddParameter("country", "Headlines from agencies in a specific country. Optional. Use ISO 3166 country code.", false); err != nil {
+	if err := samNewsHeadlinesTool.Add("country", "Headlines from agencies in a specific country. Optional. Use ISO 3166 country code.", false, reflect.TypeOf("")); err != nil {
 		return err
 	}
-	if err := samNewsSearchTool.AddParameter("query", "The query with which to search news", true); err != nil {
+	if err := samNewsSearchTool.Add("query", "The query with which to search news", true, reflect.TypeOf("")); err != nil {
 		return err
 	}
-	if err := samHomeAssistantTool.AddParameter("type", "Query for a device type, which could one or more of door,lock,occupancy,motion,climate,light,switch,sensor,speaker,media_player,temperature,humidity,battery,tv,remote,light,vacuum separated by spaces", true); err != nil {
+	if err := samHomeAssistantTool.Add("type", "Query for a device type, which could one or more of door,lock,occupancy,motion,climate,light,switch,sensor,speaker,media_player,temperature,humidity,battery,tv,remote,light,vacuum separated by spaces", true, reflect.TypeOf("")); err != nil {
 		return err
 	}
-	if err := samHomeAssistantSearch.AddParameter("name", "Search for device state by name", true); err != nil {
+	if err := samHomeAssistantSearch.Add("name", "Search for device state by name", true, reflect.TypeOf("")); err != nil {
 		return err
 	}
-	if err := samHomeAssistantTurnOn.AddParameter("entity_id", "The device entity_id to turn on", true); err != nil {
+	if err := samHomeAssistantTurnOn.Add("entity_id", "The device entity_id to turn on", true, reflect.TypeOf("")); err != nil {
 		return err
 	}
-	if err := samHomeAssistantTurnOff.AddParameter("entity_id", "The device entity_id to turn off", true); err != nil {
+	if err := samHomeAssistantTurnOff.Add("entity_id", "The device entity_id to turn off", true, reflect.TypeOf("")); err != nil {
 		return err
 	}
 
@@ -109,12 +110,18 @@ func samChat(ctx context.Context, w *tablewriter.Writer, _ []string) error {
 		// Read if there hasn't been any tool results yet
 		if !toolResult {
 			reader := bufio.NewReader(os.Stdin)
-			fmt.Print("Chat: ")
+			fmt.Print("prompt: ")
 			text, err := reader.ReadString('\n')
 			if err != nil {
 				return err
 			}
-			messages = append(messages, schema.NewMessage("user", schema.Text(strings.TrimSpace(text))))
+			if text := strings.TrimSpace(text); text == "" {
+				continue
+			} else if text == "exit" {
+				return nil
+			} else {
+				messages = append(messages, schema.NewMessage("user", schema.Text(strings.TrimSpace(text))))
+			}
 		}
 
 		// Curtail requests to the last N history

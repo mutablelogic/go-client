@@ -40,8 +40,7 @@ func anthropicParse(flags *Flags, opts ...client.ClientOpt) error {
 	apiKey := flags.GetString("anthropic-api-key")
 	if apiKey == "" {
 		return fmt.Errorf("missing -anthropic-api-key flag")
-	}
-	if client, err := anthropic.New(flags.GetString("anthropic-api-key"), opts...); err != nil {
+	} else if client, err := anthropic.New(apiKey, opts...); err != nil {
 		return err
 	} else {
 		anthropicClient = client

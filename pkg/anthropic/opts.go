@@ -1,9 +1,11 @@
 package anthropic
 
 import (
+	// Package imports
+	schema "github.com/mutablelogic/go-client/pkg/openai/schema"
+
 	// Namespace imports
 	. "github.com/djthorpe/go-errors"
-	"github.com/mutablelogic/go-client/pkg/openai/schema"
 )
 
 ///////////////////////////////////////////////////////////////////////////////

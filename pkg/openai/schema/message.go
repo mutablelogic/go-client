@@ -18,8 +18,8 @@ import (
 
 // A chat completion message
 type Message struct {
-	// user or assistant
-	Role string `json:"role"`
+	// user, system or assistant
+	Role string `json:"role,omitempty"`
 
 	// Message Id
 	Id string `json:"id,omitempty"`
@@ -30,20 +30,30 @@ type Message struct {
 	// Content can be a string, array of strings, content
 	// object or an array of content objects
 	Content any `json:"content,omitempty"`
+
+	// Time the message was created, in unix seconds
+	Created int64 `json:"created,omitempty"`
 }
 
 // One choice of chat completion messages
 type MessageChoice struct {
-	Message      `json:"message"`
-	Index        int    `json:"index"`
-	FinishReason string `json:"finish_reason"`
+	Message      *Message      `json:"message,omitempty"`
+	Delta        *MessageDelta `json:"delta,omitempty"`
+	Index        int           `json:"index"`
+	FinishReason string        `json:"finish_reason,omitempty"`
+}
+
+// Delta between messages (for streaming responses)
+type MessageDelta struct {
+	Role    string `json:"role,omitempty"`
+	Content string `json:"content,omitempty"`
 }
 
 // Message Content
 type Content struct {
 	Id     string         `json:"id,omitempty"`
-	Type   string         `json:"type,width:4"`
-	Text   string         `json:"text,omitempty,wrap,width:60"`
+	Type   string         `json:"type" writer:",width:4"`
+	Text   string         `json:"text,omitempty" writer:",width:60,wrap"`
 	Source *contentSource `json:"source,omitempty"`
 	toolUse
 
@@ -134,6 +144,15 @@ func (m Message) String() string {
 	return string(data)
 }
 
+func (m MessageChoice) String() string {
+	data, _ := json.MarshalIndent(m, "", "  ")
+	return string(data)
+}
+
+func (m MessageDelta) String() string {
+	data, _ := json.MarshalIndent(m, "", "  ")
+	return string(data)
+}
 func (c Content) String() string {
 	data, _ := json.MarshalIndent(c, "", "  ")
 	return string(data)

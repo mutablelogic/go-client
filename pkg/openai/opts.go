@@ -1,44 +1,84 @@
 package openai
 
 import (
-	"fmt"
 
 	// Packages
 	"github.com/mutablelogic/go-client"
+	"github.com/mutablelogic/go-client/pkg/openai/schema"
+
+	// Namespace imports
+	. "github.com/djthorpe/go-errors"
 )
 
 ///////////////////////////////////////////////////////////////////////////////
 // TYPES
 
-// type ChatCompletionOpt func(*chatRequest) error
-// type ImageOpt func(*imageRequest) error
-type Opt func(Request) error
+type options struct {
+	Model            string         `json:"model,omitempty"`
+	FrequencyPenalty float32        `json:"frequency_penalty,omitempty"`
+	PresencePenalty  float32        `json:"presence_penalty,omitempty"`
+	MaxTokens        int            `json:"max_tokens,omitempty"`
+	Count            int            `json:"n,omitempty"`
+	ResponseFormat   string         `json:"response_format,omitempty"`
+	Seed             int            `json:"seed,omitempty"`
+	Stop             []string       `json:"stop,omitempty"`
+	Temperature      *float32       `json:"temperature,omitempty"`
+	Tools            []schema.Tool  `json:"tools,omitempty"`
+	User             string         `json:"user,omitempty"`
+	Stream           bool           `json:"stream,omitempty"`
+	StreamOptions    *streamoptions `json:"stream_options,omitempty"`
+
+	// Options for audio
+	Speed    *float32 `json:"speed,omitempty"`
+	Prompt   string   `json:"prompt,omitempty"`
+	Language string   `json:"language,omitempty"`
+
+	// Options for images
+	Quality string `json:"quality,omitempty"`
+	Size    string `json:"size,omitempty"`
+	Style   string `json:"style,omitempty"`
+}
+
+type streamoptions struct {
+	IncludeUsage bool `json:"include_usage,omitempty"`
+}
+
+type Opt func(*options) error
 
 ///////////////////////////////////////////////////////////////////////////////
 // PUBLIC METHODS
 
 // ID of the model to use
 func OptModel(value string) Opt {
-	return func(r Request) error {
-		return r.setModel(value)
+	return func(o *options) error {
+		o.Model = value
+		return nil
 	}
 }
 
 // Number between -2.0 and 2.0. Positive values penalize new tokens based on
 // their existing frequency in the text so far, decreasing the model's likelihood
 // to repeat the same line verbatim.
-func OptFrequencyPenalty(value float64) Opt {
-	return func(r Request) error {
-		return r.setFrequencyPenalty(value)
+func OptFrequencyPenalty(value float32) Opt {
+	return func(o *options) error {
+		if value < -2.0 || value > 2.0 {
+			return ErrBadParameter.With("OptFrequencyPenalty")
+		}
+		o.FrequencyPenalty = value
+		return nil
 	}
 }
 
 // Number between -2.0 and 2.0. Positive values penalize new tokens based on whether
 // they appear in the text so far, increasing the model's likelihood to talk about
 // new topics.
-func OptPresencePenalty(value float64) Opt {
-	return func(r Request) error {
-		return r.setPresencePenalty(value)
+func OptPresencePenalty(value float32) Opt {
+	return func(o *options) error {
+		if value < -2.0 || value > 2.0 {
+			return ErrBadParameter.With("OptPresencePenalty")
+		}
+		o.PresencePenalty = value
+		return nil
 	}
 }
 
@@ -46,15 +86,17 @@ func OptPresencePenalty(value float64) Opt {
 // Note that you will be charged based on the number of generated tokens across
 // all of the choices. Keep n as 1 to minimize costs.
 func OptMaxTokens(value int) Opt {
-	return func(r Request) error {
-		return r.setMaxTokens(value)
+	return func(o *options) error {
+		o.MaxTokens = value
+		return nil
 	}
 }
 
 // How many chat choices or images to return
 func OptCount(value int) Opt {
-	return func(r Request) error {
-		return r.setCount(value)
+	return func(o *options) error {
+		o.Count = value
+		return nil
 	}
 }
 
@@ -63,90 +105,127 @@ func OptCount(value int) Opt {
 // Important: when using JSON mode, you must also instruct the model to produce JSON
 // yourself via a system or user message.
 func OptResponseFormat(value string) Opt {
-	return func(r Request) error {
-		return r.setResponseFormat(value)
+	return func(o *options) error {
+		o.ResponseFormat = value
+		return nil
 	}
 }
 
 // When set, system will make a best effort to sample deterministically, such that repeated
 // requests with the same seed and parameters should return the same result.
 func OptSeed(value int) Opt {
-	return func(r Request) error {
-		return r.setSeed(value)
+	return func(o *options) error {
+		o.Seed = value
+		return nil
+	}
+}
+
+func OptStop(value ...string) Opt {
+	return func(o *options) error {
+		o.Stop = value
+		return nil
 	}
 }
 
 // Partial message deltas will be sent, like in ChatGPT. Tokens will be sent as data-only
 // server-sent events as they become available, with the stream terminated by a data: [DONE]
-func OptStream(value bool) Opt {
-	return func(r Request) error {
-		return r.setStream(value)
+func OptStream() Opt {
+	return func(o *options) error {
+		o.Stream = true
+		o.StreamOptions = &streamoptions{
+			IncludeUsage: true,
+		}
+		return nil
 	}
 }
 
 // When set, system will make a best effort to sample deterministically, such that repeated
 // requests with the same seed and parameters should return the same result.
-func OptTemperature(value float64) Opt {
-	return func(r Request) error {
-		return r.setTemperature(value)
+func OptTemperature(v float32) Opt {
+	return func(o *options) error {
+		if v < 0.0 || v > 2.0 {
+			return ErrBadParameter.With("OptTemperature")
+		}
+		o.Temperature = &v
+		return nil
 	}
 }
 
-// When set, system will make a best effort to sample deterministically, such that repeated
-// requests with the same seed and parameters should return the same result.
-func OptFunction(name, description string, parameters ...ToolParameter) Opt {
-	return func(r Request) error {
-		return r.setFunction(name, description, parameters...)
+// A list of tools the model may call. Currently, only functions are supported as a tool.
+// Use this to provide a list of functions the model may generate JSON inputs for.
+// A max of 128 functions are supported.
+func OptTools(value ...schema.Tool) Opt {
+	return func(o *options) error {
+		o.Tools = append(o.Tools, value...)
+		return nil
+	}
+}
+
+// A unique identifier representing your end-user, which can help OpenAI to monitor
+// and detect abuse
+func OptUser(value string) Opt {
+	return func(o *options) error {
+		o.User = value
+		return nil
+	}
+}
+
+// The speed of the generated audio.
+func OptSpeed(v float32) Opt {
+	return func(o *options) error {
+		if v < 0.25 || v > 4.0 {
+			return ErrBadParameter.With("OptSpeed")
+		}
+		o.Speed = &v
+		return nil
+	}
+}
+
+// An optional text to guide the model's style or continue a previous audio segment.
+// The prompt should match the audio language.
+func OptPrompt(value string) Opt {
+	return func(o *options) error {
+		o.Prompt = value
+		return nil
+	}
+}
+
+// The language of the input audio. Supplying the input language in ISO-639-1
+// format will improve accuracy and latency.
+func OptLanguage(value string) Opt {
+	return func(o *options) error {
+		o.Language = value
+		return nil
 	}
 }
 
 // The quality of the image that will be generated. hd creates images with
-// finer details and greater consistency across the image. This param is
-// only supported for dall-e-3.
+// finer details and greater consistency across the image.
 func OptQuality(value string) Opt {
-	return func(r Request) error {
-		return r.setQuality(value)
+	return func(o *options) error {
+		o.Quality = value
+		return nil
 	}
 }
 
-// The size of the generated images. Must be one of 256x256, 512x512, or 1024x1024 for
-// dall-e-2. Must be one of 1024x1024, 1792x1024, or 1024x1792 for dall-e-3 models.
-func OptSize(w, h uint) Opt {
-	return func(r Request) error {
-		return r.setSize(fmt.Sprintf("%dx%d", w, h))
+// The size of the generated images. Must be one of 256x256, 512x512,
+// or 1024x1024 for dall-e-2. Must be one of 1024x1024, 1792x1024,
+// or 1024x1792 for dall-e-3 models.
+func OptSize(value string) Opt {
+	return func(o *options) error {
+		o.Size = value
+		return nil
 	}
 }
 
-// The style of the generated images. Must be one of vivid or natural. Vivid causes
-// the model to lean towards generating hyper-real and dramatic images. Natural causes
-// the model to produce more natural, less hyper-real looking images. This param is
-// only supported for dall-e-3.
-func OptStyle(style string) Opt {
-	return func(r Request) error {
-		return r.setStyle(style)
-	}
-}
-
-// The speed of the generated audio. Select a value from 0.25 to 4.0. 1.0 is the default.
-func OptSpeed(speed float32) Opt {
-	return func(r Request) error {
-		return r.setSpeed(speed)
-	}
-}
-
-// The language for transcription. Supplying the input language in ISO-639-1
-// format will improve accuracy and latency.
-func OptLanguage(language string) Opt {
-	return func(r Request) error {
-		return r.setLanguage(language)
-	}
-}
-
-// An optional text to guide the model's style or continue a previous
-// audio segment. The prompt should match the audio language.
-func OptPrompt(prompt string) Opt {
-	return func(r Request) error {
-		return r.setPrompt(prompt)
+// The style of the generated images. Must be one of vivid or natural.
+// Vivid causes the model to lean towards generating hyper-real and
+// dramatic images. Natural causes the model to produce more natural,
+// less hyper-real looking images.
+func OptStyle(value string) Opt {
+	return func(o *options) error {
+		o.Style = value
+		return nil
 	}
 }
 

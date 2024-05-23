@@ -11,6 +11,8 @@ import (
 ///////////////////////////////////////////////////////////////////////////////
 // TYPES
 
+// Storage is an interface for reading and writing session, profile, folder and
+// cipher information
 type Storage interface {
 	// Read the session from storage a session id, returns nil if there is no session
 	ReadSession() (*schema.Session, error)
@@ -30,9 +32,9 @@ type Storage interface {
 	// Write the ciphers to storage
 	WriteCiphers(schema.Ciphers) error
 
-	// Read ciphers and return an iterator
+	// Read all ciphers and return an iterator
 	ReadCiphers() (schema.Iterator[*schema.Cipher], error)
 
-	// Read folders and return an iterator
+	// Read all folders and return an iterator
 	ReadFolders() (schema.Iterator[*schema.Folder], error)
 }

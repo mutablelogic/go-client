@@ -24,7 +24,7 @@ type respBinary struct {
 ///////////////////////////////////////////////////////////////////////////////
 // PUBLIC METHODS
 
-// Return current set of voices
+// Converts text into speech, returning the number of bytes written to the writer
 func (c *Client) TextToSpeech(w io.Writer, voice, text string, opts ...Opt) (int64, error) {
 	var request reqTextToSpeech
 	var response respBinary
@@ -43,7 +43,7 @@ func (c *Client) TextToSpeech(w io.Writer, voice, text string, opts ...Opt) (int
 	// Make a response object, write the data
 	if payload, err := client.NewJSONRequest(request); err != nil {
 		return 0, err
-	} else if err := c.Do(payload, &response, client.OptPath("text-to-speech", voice)); err != nil {
+	} else if err := c.Do(payload, &response, client.OptQuery(request.opts.Values), client.OptPath("text-to-speech", voice)); err != nil {
 		return 0, err
 	}
 

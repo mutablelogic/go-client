@@ -10,12 +10,19 @@ import (
 // SCHEMA
 
 type Voice struct {
-	Id          string        `json:"voice_id"`
-	Name        string        `json:"name"`
-	Description string        `json:"description,omitempty"`
-	PreviewUrl  string        `json:"preview_url,omitempty"`
-	Category    string        `json:"category,omitempty"`
-	Settings    VoiceSettings `json:"settings"`
+	Id          string `json:"voice_id" writer:",width:20"`
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty" writer:",wrap"`
+	PreviewUrl  string `json:"preview_url,omitempty" writer:",width:40,wrap"`
+	Category    string `json:"category,omitempty" writer:",width:10"`
+	Samples     []struct {
+		Id       string `json:"sample_id"`
+		Filename string `json:"file_name"`
+		MimeType string `json:"mime_type"`
+		Size     int64  `json:"size_bytes"`
+		Hash     string `json:"hash"`
+	} `json:"samples,omitempty" writer:"samples,wrap"`
+	Settings VoiceSettings `json:"settings" writer:"settings,wrap,width:20"`
 }
 
 type VoiceSettings struct {
@@ -67,8 +74,6 @@ func (c *Client) Voice(Id string) (Voice, error) {
 	return response, nil
 }
 
-/*
-
 // Return voice settings. If Id is empty, then return the default voice settings
 func (c *Client) VoiceSettings(Id string) (VoiceSettings, error) {
 	var request client.Payload
@@ -84,6 +89,17 @@ func (c *Client) VoiceSettings(Id string) (VoiceSettings, error) {
 	}
 	return response, nil
 }
+
+// Set voice settings for a voice
+func (c *Client) SetVoiceSettings(Id string, v VoiceSettings) error {
+	request, err := client.NewJSONRequest(v)
+	if err != nil {
+		return err
+	}
+	return c.Do(request, nil, client.OptPath("voices", Id, "settings", "edit"))
+}
+
+/*
 
 // Delete a voice
 func (c *Client) DeleteVoice(Id string) error {

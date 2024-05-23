@@ -81,7 +81,7 @@ func (r reqTranscribe) String() string {
 
 // Creates audio for the given text, outputs to the writer and returns
 // the number of bytes written
-func (c *Client) Speech(w io.Writer, voice, text string, opts ...Opt) (int64, error) {
+func (c *Client) TextToSpeech(ctx context.Context, w io.Writer, voice, text string, opts ...Opt) (int64, error) {
 	var request reqSpeech
 	var response respSpeech
 
@@ -101,11 +101,11 @@ func (c *Client) Speech(w io.Writer, voice, text string, opts ...Opt) (int64, er
 	// Make a response object, write the data
 	if payload, err := client.NewJSONRequest(request); err != nil {
 		return 0, err
-	} else if err := c.Do(payload, &response, client.OptPath("audio/speech")); err != nil {
+	} else if err := c.DoWithContext(ctx, payload, &response, client.OptPath("audio/speech")); err != nil {
 		return 0, err
 	}
 
-	// Return the mimetype of the response
+	// Return the number of bytes written
 	return response.bytes, nil
 }
 

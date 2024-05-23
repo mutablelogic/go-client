@@ -37,6 +37,8 @@ var (
 	openaiSystemPrompt     string
 	openaiPrompt           string
 	openaiLanguage         string
+	openaiExt              string
+	openaiSpeed            float64
 )
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -59,6 +61,7 @@ func openaiRegister(flags *Flags) {
 	// TODO flags.Float(openaiName, "temperature", 0, "Sampling temperature to use, between 0.0 and 2.0")
 	flags.String(openaiName, "prompt", "", "An optional text to guide the model's style or continue a previous audio segment")
 	//flags.String(openaiName, "language", "", "The language of the input audio in ISO-639-1 format")
+	flags.Float(openaiName, "speed", 0, "The speed of the generated audio")
 
 	// Register commands
 	flags.Register(Cmd{
@@ -72,6 +75,7 @@ func openaiRegister(flags *Flags) {
 			{Name: "chat", Call: openaiChat, Description: "Create a chat completion", MinArgs: 1, Syntax: "<text>..."},
 			{Name: "transcribe", Call: openaiTranscribe, Description: "Transcribes audio into the input language", MinArgs: 1, MaxArgs: 1, Syntax: "<filename>"},
 			{Name: "translate", Call: openaiTranslate, Description: "Translates audio into English", MinArgs: 1, MaxArgs: 1, Syntax: "<filename>"},
+			{Name: "say", Call: openaiTextToSpeech, Description: "Text to speech", MinArgs: 2, Syntax: "<voice-id> <text>..."},
 		},
 	})
 }
@@ -96,6 +100,7 @@ func openaiParse(flags *Flags, opts ...client.ClientOpt) error {
 	openaiSystemPrompt = flags.GetString("system")
 	openaiPrompt = flags.GetString("prompt")
 	openaiLanguage = flags.GetString("language")
+	openaiExt = flags.GetOutExt()
 
 	if temp, err := flags.GetValue("temperature"); err == nil {
 		t := temp.(float64)
@@ -116,6 +121,9 @@ func openaiParse(flags *Flags, opts ...client.ClientOpt) error {
 	if count, err := flags.GetValue("n"); err == nil {
 		v := count.(uint64)
 		openaiCount = &v
+	}
+	if speed, err := flags.GetValue("speed"); err == nil {
+		openaiSpeed = speed.(float64)
 	}
 
 	// Return success
@@ -274,6 +282,7 @@ func openaiTranscribe(ctx context.Context, w *tablewriter.Writer, args []string)
 
 func openaiTranslate(ctx context.Context, w *tablewriter.Writer, args []string) error {
 	opts := []openai.Opt{}
+
 	if openaiModel != "" {
 		opts = append(opts, openai.OptModel(openaiModel))
 	}
@@ -302,4 +311,34 @@ func openaiTranslate(ctx context.Context, w *tablewriter.Writer, args []string) 
 
 	// Write output
 	return w.Write(transcription)
+}
+
+func openaiTextToSpeech(ctx context.Context, w *tablewriter.Writer, args []string) error {
+	opts := []openai.Opt{}
+
+	// Set response format
+	if openaiResponseFormat != "" {
+		opts = append(opts, openai.OptResponseFormat(openaiResponseFormat))
+	} else if openaiExt != "" {
+		opts = append(opts, openai.OptResponseFormat(openaiExt))
+	}
+
+	// Set other options
+	if openaiSpeed > 0 {
+		opts = append(opts, openai.OptSpeed(float32(openaiSpeed)))
+	}
+
+	// The text to speak
+	voice := args[0]
+	text := strings.Join(args[1:], " ")
+
+	// Request -> Response
+	if n, err := openaiClient.TextToSpeech(ctx, w.Output(), voice, text, opts...); err != nil {
+		return err
+	} else {
+		openaiClient.Debugf("wrote %v bytes", n)
+	}
+
+	// Return success
+	return nil
 }

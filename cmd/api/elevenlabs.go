@@ -54,6 +54,7 @@ func elRegister(flags *Flags) {
 		Description: "Elevenlabs API",
 		Parse:       elParse,
 		Fn: []Fn{
+			{Name: "models", Call: elModels, Description: "Gets a list of available models"},
 			{Name: "voices", Call: elVoices, Description: "Return registered voices"},
 			{Name: "voice", Call: elVoice, Description: "Return one voice", MinArgs: 1, MaxArgs: 1, Syntax: "<voice-id>"},
 			{Name: "settings", Call: elVoiceSettings, Description: "Return voice settings, or default settings. Set voice settings from -stability, -similarity-boost and -use-speaker-boost flags", MaxArgs: 1, Syntax: "(<voice-id>)"},
@@ -120,6 +121,14 @@ func elParse(flags *Flags, opts ...client.ClientOpt) error {
 
 /////////////////////////////////////////////////////////////////////
 // API CALL FUNCTIONS
+
+func elModels(ctx context.Context, w *tablewriter.Writer, args []string) error {
+	models, err := elClient.Models()
+	if err != nil {
+		return err
+	}
+	return w.Write(models)
+}
 
 func elVoices(ctx context.Context, w *tablewriter.Writer, args []string) error {
 	voices, err := elClient.Voices()

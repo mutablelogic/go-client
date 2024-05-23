@@ -2,6 +2,7 @@ package elevenlabs
 
 import (
 	// Packages
+
 	"github.com/djthorpe/go-errors"
 	"github.com/mutablelogic/go-client"
 )
@@ -113,27 +114,6 @@ func (c *Client) DeleteVoice(Id string) error {
 	return nil
 }
 
-// Add a voice
-func (c *Client) AddVoice(Name, Description string) error {
-	var request voiceAddRequest
-
-	// Check parameters
-	if Name == "" {
-		return errors.ErrBadParameter.With("Name")
-	}
-
-	// Set request
-	request.Name = Name
-	request.Description = Description
-
-	// Execute request
-	if err := c.Do(request, nil, client.OptPath("voices", "add")); err != nil {
-		return err
-	}
-
-	// Return success
-	return nil
-}
 
 ///////////////////////////////////////////////////////////////////////////////
 // PAYLOAD METHODS

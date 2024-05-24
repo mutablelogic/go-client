@@ -79,7 +79,7 @@ func OptQuery(value url.Values) RequestOpt {
 	}
 }
 
-// OptReqHeader adds a header value to the request
+// OptReqHeader sets a header value to the request
 func OptReqHeader(name, value string) RequestOpt {
 	return func(r *requestOpts) error {
 		r.Header.Set(name, value)

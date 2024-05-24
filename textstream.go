@@ -26,9 +26,17 @@ type TextStream struct {
 // Implementation of a text stream, as per
 // https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events#event_stream_format
 type TextStreamEvent struct {
-	Id    string        `json:"id,omitempty"`
-	Event string        `json:"event,omitempty"`
-	Data  string        `json:"data"`
+	// The event ID to set the EventSource object's last event ID value.
+	Id string `json:"id,omitempty"`
+
+	// A string identifying the type of event described
+	Event string `json:"event,omitempty"`
+
+	// The data field for the message
+	Data string `json:"data"`
+
+	// The reconnection time. If the connection to the server is lost,
+	// the client should wait for the specified time before attempting to reconnect.
 	Retry time.Duration `json:"retry,omitempty"`
 }
 
@@ -39,6 +47,7 @@ type TextStreamCallback func(TextStreamEvent) error
 // GLOBALS
 
 const (
+	// Mime type for text stream
 	ContentTypeTextStream = "text/event-stream"
 )
 
@@ -123,7 +132,8 @@ func (t *TextStream) Decode(r io.Reader, callback TextStreamCallback) error {
 		case "event":
 			event.Event = value
 		case "data":
-			event.Data = value
+			// Concatenate data
+			event.Data = event.Data + value
 		case "retry":
 			// Retry time in milliseconds, ignore if not a number
 			if retry, err := strconv.ParseInt(value, 10, 64); err == nil {

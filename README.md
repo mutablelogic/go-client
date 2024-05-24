@@ -7,7 +7,7 @@ This repository contains a generic HTTP client which can be adapted to provide:
 * Ability to send files  and data of type `multipart/form-data`
 * Ability to send data of type `application/x-www-form-urlencoded`
 * Debugging capabilities to see the request and response data
-* Streaming JSON responses
+* Streaming text events
 
 API Documentation: https://pkg.go.dev/github.com/mutablelogic/go-client
 
@@ -58,28 +58,31 @@ func main() {
 Various options can be passed to the client `New` method to control its behaviour:
 
 * `OptEndpoint(value string)` sets the endpoint for all requests
-* `OptTimeout(value time.Duration)` sets the timeout on any request, which defaults to 30 seconds
-* `OptUserAgent(value string)` sets the user agent string on each API request
-* `OptTrace(w io.Writer, verbose bool)` allows you to debug the request and response data. 
-   When `verbose` is set to true, it also displays the payloads
-* `OptStrict()` turns on strict content type checking on anything returned from the API
-* `OptRateLimit(value float32)` sets the limit on number of requests per second and the API will sleep to regulate
-  the rate limit when exceeded
-* `OptReqToken(value Token)` sets a request token for all client requests. This can be overridden by the client 
-  for individual requests using `OptToken`
-* `OptSkipVerify()` skips TLS certificate domain verification
-* `OptHeader(key, value string)` appends a custom header to each request
+* `OptTimeout(value time.Duration)` sets the timeout on any request, which defaults to 30 seconds.
+    Timeouts can be ignored on a request-by-request basis using the `OptNoTimeout` option (see below).
+* `OptUserAgent(value string)` sets the user agent string on each API request.
+* `OptTrace(w io.Writer, verbose bool)` allows you to debug the request and response data.
+    When `verbose` is set to true, it also displays the payloads.
+* `OptStrict()` turns on strict content type checking on anything returned from the API.
+* `OptRateLimit(value float32)` sets the limit on number of requests per second and the API
+    will sleep to regulate the rate limit when exceeded.
+* `OptReqToken(value Token)` sets a request token for all client requests. This can be
+    overridden by the client for individual requests using `OptToken` (see below).
+* `OptSkipVerify()` skips TLS certificate domain verification.
+* `OptHeader(key, value string)` appends a custom header to each request.
 
 ## Usage with a payload
 
-The first argument to the `Do` method is the payload to send to the server, when set. You can create a payload
-using the following methods:
+The first argument to the `Do` method is the payload to send to the server, when set.
+You can create a payload using the following methods:
 
 * `client.NewRequest()` returns a new empty payload which defaults to GET.
-* `client.NewJSONRequest(payload any, accept string)` returns a new request with a JSON payload which defaults to POST.
-* `client.NewMultipartRequest(payload any, accept string)` returns a new request with a Multipart Form data payload which 
-  defaults to POST.
-* `client.NewFormRequest(payload any, accept string)` returns a new request with a Form data payload which defaults to POST.
+* `client.NewJSONRequest(payload any, accept string)` returns a new request with
+    a JSON payload which defaults to POST.
+* `client.NewMultipartRequest(payload any, accept string)` returns a new request with
+    a Multipart Form data payload which defaults to POST.
+* `client.NewFormRequest(payload any, accept string)` returns a new request with a 
+    Form data payload which defaults to POST.
 
 For example,
 
@@ -131,7 +134,7 @@ type Payload interface {
 
 ## Request options
 
-The signature of the `Do` method is:
+The signature of the `Do` method is as follows:
 
 ```go
 type Client interface {
@@ -143,16 +146,19 @@ type Client interface {
 }
 ```
 
-Various options can be passed to modify each individual request when using the `Do` method:
+If you pass a context to the `DoWithContext` method, then the request can be
+cancelled using the context in addition to the timeout. Various options can be passed to 
+modify each individual request when using the `Do` method:
 
 * `OptReqEndpoint(value string)` sets the endpoint for the request
 * `OptPath(value ...string)` appends path elements onto a request endpoint
 * `OptToken(value Token)` adds an authorization header (overrides the client OptReqToken option)
 * `OptQuery(value url.Values)` sets the query parameters to a request
-* `OptHeader(key, value string)` appends a custom header to the request
-* `OptResponse(func() error)` allows you to set a callback function to process a streaming response.
-  See below for more details.
+* `OptHeader(key, value string)` sets a custom header to the request
 * `OptNoTimeout()` disables the timeout on the request, which is useful for long running requests
+* `OptTextStreamCallback(func(TextStreamCallback) error)` allows you to set a callback
+    function to process a streaming text response of type `text/event-stream`. See below for
+    more details.
 
 ## Authentication
 
@@ -185,10 +191,45 @@ You can also set the token on a per-request basis using the `OptToken` option in
 
 You can create a payload with form data:
 
-* `client.NewFormRequest(payload any, accept string)` returns a new request with a Form data payload which defaults to POST.
-* `client.NewMultipartRequest(payload any, accept string)` returns a new request with a Multipart Form data payload which defaults to POST. This is useful for file uploads.
+* `client.NewFormRequest(payload any, accept string)` returns a new request with a Form 
+    data payload which defaults to POST.
+* `client.NewMultipartRequest(payload any, accept string)` returns a new request with 
+    a Multipart Form data payload which defaults to POST. This is useful for file uploads.
 
-The payload should be a `struct` where the fields are converted to form tuples. File uploads require a field of type `multipart.File`.
+The payload should be a `struct` where the fields are converted to form tuples. File uploads require a field of type `multipart.File`. For example,
+
+```go
+package main
+
+import (
+    client "github.com/mutablelogic/go-client"
+    multipart "github.com/mutablelogic/go-client/pkg/multipart"
+)
+
+type FileUpload struct {
+    File multipart.File `json:"file"`
+}
+
+func main() {
+    // Create a new client
+    c := client.New(client.OptEndpoint("https://api.example.com/api/v1"))
+
+    // Create a file upload request
+    request := FileUpload{
+        File: multipart.File{
+            Path: "helloworld.txt",
+            Body: strings.NewReader("Hello, world!"),
+        }
+    }
+
+    // Upload a file
+    if payload, err := client.NewMultipartRequest(request, "*/*"); err != nil {
+        // Handle error
+    } else if err := c.Do(payload, &response, OptPath("upload")); err != nil {
+        // Handle error
+    }
+}
+```
 
 ## Unmarshalling responses
 
@@ -202,6 +243,32 @@ type Unmarshaler interface {
 
 ## Streaming Responses
 
-If the returned content is a stream of JSON responses, then you can use the `OptResponse(fn func() error)` option, which
-will be called by the `Do` method for each response. The function should return an error if the stream should be terminated.
+The client implements a streaming text event callback which can be used to process a stream of text events, as per the [Mozilla specification](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events).
+
+In order to process streamed events, pass the `OptTextStreamCallback()` option to the request
+with a callback function, which should have the following signature:
+
+```go
+func Callback(event client.TextStreamEvent) error {
+    // Finish processing successfully
+    if event.Event == "close" {
+        return io.EOF
+    }
+
+    // Decode the data into a JSON object
+    var data map[string]any
+    if err := event.Json(data); err != nil {
+        return err
+    }
+
+    // Return success - continue streaming
+    return nil
+}
+```
+
+The `TextStreamEvent` object has the following 
+
+If you return an error of type `io.EOF` from the callback, then the stream will be closed.
+Similarly, if you return any other error the stream will be closed and the error returned.
+
 Usually, you would pair this option with `OptNoTimeout` to prevent the request from timing out.

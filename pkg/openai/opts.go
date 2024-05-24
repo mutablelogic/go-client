@@ -27,6 +27,7 @@ type options struct {
 	User             string         `json:"user,omitempty"`
 	Stream           bool           `json:"stream,omitempty"`
 	StreamOptions    *streamoptions `json:"stream_options,omitempty"`
+	StreamCallback   Callback       `json:"-"`
 
 	// Options for audio
 	Speed    *float32 `json:"speed,omitempty"`
@@ -44,6 +45,9 @@ type streamoptions struct {
 }
 
 type Opt func(*options) error
+
+// Callback when new stream data is received
+type Callback func(schema.MessageChoice)
 
 ///////////////////////////////////////////////////////////////////////////////
 // PUBLIC METHODS
@@ -127,14 +131,14 @@ func OptStop(value ...string) Opt {
 	}
 }
 
-// Partial message deltas will be sent, like in ChatGPT. Tokens will be sent as data-only
-// server-sent events as they become available, with the stream terminated by a data: [DONE]
-func OptStream() Opt {
+// Stream the response, which will be returned as a series of message chunks.
+func OptStream(fn Callback) Opt {
 	return func(o *options) error {
 		o.Stream = true
 		o.StreamOptions = &streamoptions{
 			IncludeUsage: true,
 		}
+		o.StreamCallback = fn
 		return nil
 	}
 }

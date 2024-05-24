@@ -221,7 +221,21 @@ func openaiChat(ctx context.Context, w *tablewriter.Writer, args []string) error
 		opts = append(opts, openai.OptResponseFormat(openaiResponseFormat))
 	}
 	if openaiStream {
-		opts = append(opts, openai.OptStream())
+		opts = append(opts, openai.OptStream(func(choice schema.MessageChoice) {
+			w := w.Output()
+			if choice.Delta == nil {
+				return
+			}
+			if choice.Delta.Role != "" {
+				fmt.Fprintf(w, "\nrole: %q\n", choice.Delta.Role)
+			}
+			if choice.Delta.Content != "" {
+				fmt.Fprintf(w, "%v", choice.Delta.Content)
+			}
+			if choice.FinishReason != "" {
+				fmt.Printf("\nfinish_reason: %q\n", choice.FinishReason)
+			}
+		}))
 	}
 	if openaiUser != "" {
 		opts = append(opts, openai.OptUser(openaiUser))
@@ -243,7 +257,12 @@ func openaiChat(ctx context.Context, w *tablewriter.Writer, args []string) error
 		return err
 	}
 
-	return w.Write(responses)
+	// Write table (if not streaming)
+	if !openaiStream {
+		return w.Write(responses)
+	} else {
+		return nil
+	}
 }
 
 func openaiTranscribe(ctx context.Context, w *tablewriter.Writer, args []string) error {

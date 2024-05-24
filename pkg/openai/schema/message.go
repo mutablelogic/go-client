@@ -35,6 +35,23 @@ type Message struct {
 	Created int64 `json:"created,omitempty"`
 }
 
+// Chat completion chunk
+type MessageChunk struct {
+	Id                string          `json:"id,omitempty"`
+	Model             string          `json:"model,omitempty"`
+	Created           int64           `json:"created,omitempty"`
+	SystemFingerprint string          `json:"system_fingerprint,omitempty"`
+	TokenUsage        *TokenUsage     `json:"usage,omitempty"`
+	Choices           []MessageChoice `json:"choices,omitempty"`
+}
+
+// Token usage
+type TokenUsage struct {
+	PromptTokens     int `json:"prompt_tokens,omitempty"`
+	CompletionTokens int `json:"completion_tokens,omitempty"`
+	TotalTokens      int `json:"total_tokens,omitempty"`
+}
+
 // One choice of chat completion messages
 type MessageChoice struct {
 	Message      *Message      `json:"message,omitempty"`
@@ -145,6 +162,11 @@ func (m Message) String() string {
 }
 
 func (m MessageChoice) String() string {
+	data, _ := json.MarshalIndent(m, "", "  ")
+	return string(data)
+}
+
+func (m MessageChunk) String() string {
 	data, _ := json.MarshalIndent(m, "", "  ")
 	return string(data)
 }

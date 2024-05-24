@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"encoding/xml"
-	"errors"
 	"fmt"
 	"io"
 	"mime"
@@ -57,7 +56,6 @@ const (
 	PathSeparator             = string(os.PathSeparator)
 	ContentTypeAny            = "*/*"
 	ContentTypeJson           = "application/json"
-	ContentTypeJsonStream     = "application/x-ndjson"
 	ContentTypeTextXml        = "text/xml"
 	ContentTypeApplicationXml = "application/xml"
 	ContentTypeTextPlain      = "text/plain"
@@ -301,30 +299,19 @@ func do(client *http.Client, req *http.Request, accept string, strict bool, out 
 		return nil
 	}
 
-	// Decode the body - and call any callback once the body has been decoded
+	// Decode the body
 	switch mimetype {
-	case ContentTypeJson, ContentTypeJsonStream:
-		dec := json.NewDecoder(response.Body)
-		for {
-			if err := dec.Decode(out); errors.Is(err, io.EOF) {
-				break
-			} else if err != nil {
-				return err
-			}
-			if reqopts.callback != nil {
-				if err := reqopts.callback(); err != nil {
-					return err
-				}
-			}
+	case ContentTypeJson:
+		if err := json.NewDecoder(response.Body).Decode(out); err != nil {
+			return err
+		}
+	case ContentTypeTextStream:
+		if err := NewTextStream().Decode(response.Body, reqopts.textStreamCallback); err != nil {
+			return err
 		}
 	case ContentTypeTextXml, ContentTypeApplicationXml:
 		if err := xml.NewDecoder(response.Body).Decode(out); err != nil {
 			return err
-		}
-		if reqopts.callback != nil {
-			if err := reqopts.callback(); err != nil {
-				return err
-			}
 		}
 	default:
 		if v, ok := out.(Unmarshaler); ok {
@@ -335,11 +322,6 @@ func do(client *http.Client, req *http.Request, accept string, strict bool, out 
 			}
 		} else {
 			return ErrInternalAppError.Withf("do: response does not implement Unmarshaler for %q", mimetype)
-		}
-		if reqopts.callback != nil {
-			if err := reqopts.callback(); err != nil {
-				return err
-			}
 		}
 	}
 

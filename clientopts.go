@@ -56,7 +56,7 @@ func OptUserAgent(value string) ClientOpt {
 // Setting verbose to true also displays the JSON response
 func OptTrace(w io.Writer, verbose bool) ClientOpt {
 	return func(client *Client) error {
-		client.Client.Transport = NewLogTransport(w, client.Client.Transport, verbose)
+		client.Client.Transport = newLogTransport(w, client.Client.Transport, verbose)
 		return nil
 	}
 }

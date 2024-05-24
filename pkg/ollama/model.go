@@ -3,7 +3,6 @@ package ollama
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"time"
 
@@ -148,10 +147,7 @@ func (c *Client) PullModel(ctx context.Context, name string) error {
 
 	// Send the request
 	var response respPullModel
-	return c.DoWithContext(ctx, req, &response, client.OptPath("pull"), client.OptNoTimeout(), client.OptResponse(func() error {
-		fmt.Println("TOOD:", response)
-		return nil
-	}))
+	return c.DoWithContext(ctx, req, &response, client.OptPath("pull"), client.OptNoTimeout())
 }
 
 // Create a new model with a name and contents of the Modelfile

@@ -15,12 +15,8 @@ import (
 
 type requestOpts struct {
 	*http.Request
-
-	// OptResponse
-	callback func() error
-
-	// OptNoTimeout
-	noTimeout bool
+	noTimeout          bool               // OptNoTimeout
+	textStreamCallback TextStreamCallback // OptTextStreamCallback
 }
 
 type RequestOpt func(*requestOpts) error
@@ -83,20 +79,10 @@ func OptQuery(value url.Values) RequestOpt {
 	}
 }
 
-// OptReqHeader adds a header value to the request
+// OptReqHeader sets a header value to the request
 func OptReqHeader(name, value string) RequestOpt {
 	return func(r *requestOpts) error {
 		r.Header.Set(name, value)
-		return nil
-	}
-}
-
-// OptResponse calls a function when a response has been decoded,
-// used for streaming responses. The function can return an error to
-// stop the request immediately
-func OptResponse(fn func() error) RequestOpt {
-	return func(r *requestOpts) error {
-		r.callback = fn
 		return nil
 	}
 }
@@ -106,6 +92,14 @@ func OptResponse(fn func() error) RequestOpt {
 func OptNoTimeout() RequestOpt {
 	return func(r *requestOpts) error {
 		r.noTimeout = true
+		return nil
+	}
+}
+
+// OptTextStreamCallback is called for each event in a text stream
+func OptTextStreamCallback(fn TextStreamCallback) RequestOpt {
+	return func(r *requestOpts) error {
+		r.textStreamCallback = fn
 		return nil
 	}
 }

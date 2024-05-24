@@ -32,10 +32,10 @@ type readwrapper struct {
 ///////////////////////////////////////////////////////////////////////////////
 // LIFECYCLE
 
-// NewLogTransport creates middleware into the request/response so you can log
+// newLogTransport creates middleware into the request/response so you can log
 // the transmission on the wire. Setting verbose to true also displays the
 // body of each response
-func NewLogTransport(w io.Writer, parent http.RoundTripper, verbose bool) http.RoundTripper {
+func newLogTransport(w io.Writer, parent http.RoundTripper, verbose bool) http.RoundTripper {
 	this := new(logtransport)
 	this.w = w
 	this.v = verbose

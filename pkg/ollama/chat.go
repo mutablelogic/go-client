@@ -69,12 +69,7 @@ func (c *Client) ChatGenerate(ctx context.Context, model, prompt string, opts ..
 	// Create a new request
 	if req, err := client.NewJSONRequest(request); err != nil {
 		return response.ChatStatus, err
-	} else if err := c.DoWithContext(ctx, req, &response, client.OptPath("generate"), client.OptNoTimeout(), client.OptResponse(func() error {
-		if request.callback != nil && response.Response != "" {
-			request.callback(response.Response)
-		}
-		return nil
-	})); err != nil {
+	} else if err := c.DoWithContext(ctx, req, &response, client.OptPath("generate"), client.OptNoTimeout()); err != nil {
 		return response.ChatStatus, err
 	}
 

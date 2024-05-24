@@ -17,7 +17,8 @@ import (
 type Tool struct {
 	Name        string          `json:"name"`
 	Description string          `json:"description"`
-	Parameters  *toolParameters `json:"input_schema,omitempty"`
+	Type        string          `json:"type,omitempty"`
+	Parameters  *toolParameters `json:"parameters,omitempty"`
 }
 
 // Tool function parameters

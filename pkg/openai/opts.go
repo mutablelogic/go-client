@@ -14,25 +14,28 @@ import (
 // TYPES
 
 type options struct {
-	Model            string         `json:"model,omitempty"`
+	// Common options
+	Count          int      `json:"n,omitempty"`
+	MaxTokens      int      `json:"max_tokens,omitempty"`
+	Model          string   `json:"model,omitempty"`
+	ResponseFormat string   `json:"response_format,omitempty"`
+	Seed           int      `json:"seed,omitempty"`
+	Temperature    *float32 `json:"temperature,omitempty"`
+	User           string   `json:"user,omitempty"`
+
+	// Options for chat
 	FrequencyPenalty float32        `json:"frequency_penalty,omitempty"`
 	PresencePenalty  float32        `json:"presence_penalty,omitempty"`
-	MaxTokens        int            `json:"max_tokens,omitempty"`
-	Count            int            `json:"n,omitempty"`
-	ResponseFormat   string         `json:"response_format,omitempty"`
-	Seed             int            `json:"seed,omitempty"`
+	Tools            []*schema.Tool `json:"-"`
 	Stop             []string       `json:"stop,omitempty"`
-	Temperature      *float32       `json:"temperature,omitempty"`
-	Tools            []schema.Tool  `json:"tools,omitempty"`
-	User             string         `json:"user,omitempty"`
 	Stream           bool           `json:"stream,omitempty"`
 	StreamOptions    *streamoptions `json:"stream_options,omitempty"`
 	StreamCallback   Callback       `json:"-"`
 
 	// Options for audio
-	Speed    *float32 `json:"speed,omitempty"`
-	Prompt   string   `json:"prompt,omitempty"`
 	Language string   `json:"language,omitempty"`
+	Prompt   string   `json:"prompt,omitempty"`
+	Speed    *float32 `json:"speed,omitempty"`
 
 	// Options for images
 	Quality string `json:"quality,omitempty"`
@@ -158,9 +161,18 @@ func OptTemperature(v float32) Opt {
 // A list of tools the model may call. Currently, only functions are supported as a tool.
 // Use this to provide a list of functions the model may generate JSON inputs for.
 // A max of 128 functions are supported.
-func OptTools(value ...schema.Tool) Opt {
+func OptTool(value ...*schema.Tool) Opt {
 	return func(o *options) error {
+		// Check tools
+		for _, tool := range value {
+			if tool == nil {
+				return ErrBadParameter.With("OptTool")
+			}
+		}
+		// Append tools
 		o.Tools = append(o.Tools, value...)
+
+		// Return success
 		return nil
 	}
 }

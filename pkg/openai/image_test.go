@@ -1,6 +1,7 @@
 package openai_test
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -17,7 +18,7 @@ func Test_image_001(t *testing.T) {
 	assert.NoError(err)
 	assert.NotNil(client)
 
-	images, err := client.CreateImages("A painting of a cat", openai.OptCount(1))
+	images, err := client.CreateImages(context.Background(), "A painting of a cat", openai.OptCount(1))
 	assert.NoError(err)
 	assert.NotNil(images)
 	assert.NotEmpty(images)
@@ -31,7 +32,7 @@ func Test_image_002(t *testing.T) {
 	assert.NotNil(client)
 
 	// Create one image
-	images, err := client.CreateImages("A painting of a cat in the style of Salvador Dali", openai.OptResponseFormat("b64_json"), openai.OptCount(1))
+	images, err := client.CreateImages(context.Background(), "A painting of a cat in the style of Salvador Dali", openai.OptResponseFormat("b64_json"), openai.OptCount(1))
 	assert.NoError(err)
 	assert.NotNil(images)
 	assert.NotEmpty(images)
@@ -60,7 +61,7 @@ func Test_image_003(t *testing.T) {
 	assert.NotNil(client)
 
 	// Create one image
-	images, err := client.CreateImages("A painting of a cat in the style of Van Gogh", openai.OptResponseFormat("url"), openai.OptCount(1))
+	images, err := client.CreateImages(context.Background(), "A painting of a cat in the style of Van Gogh", openai.OptResponseFormat("url"), openai.OptCount(1))
 	assert.NoError(err)
 	assert.NotNil(images)
 	assert.NotEmpty(images)

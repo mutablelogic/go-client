@@ -20,7 +20,13 @@ import (
 // A request for a chat completion
 type reqChat struct {
 	options
+	Tools    []reqChatTools    `json:"tools,omitempty"`
 	Messages []*schema.Message `json:"messages,omitempty"`
+}
+
+type reqChatTools struct {
+	Type     string       `json:"type"`
+	Function *schema.Tool `json:"function"`
 }
 
 // A chat completion object
@@ -68,6 +74,14 @@ func (c *Client) Chat(ctx context.Context, messages []*schema.Message, opts ...O
 		if err := opt(&request.options); err != nil {
 			return nil, err
 		}
+	}
+
+	// Append tools
+	for _, tool := range request.options.Tools {
+		request.Tools = append(request.Tools, reqChatTools{
+			Type:     "function",
+			Function: tool,
+		})
 	}
 
 	// Set up the request

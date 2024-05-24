@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"reflect"
 	"strings"
@@ -30,6 +31,9 @@ type Message struct {
 	// Content can be a string, array of strings, content
 	// object or an array of content objects
 	Content any `json:"content,omitempty"`
+
+	// Any tool calls
+	ToolCalls []ToolCall `json:"tool_calls,omitempty"`
 
 	// Time the message was created, in unix seconds
 	Created int64 `json:"created,omitempty"`
@@ -72,8 +76,12 @@ type Content struct {
 	Type   string         `json:"type" writer:",width:4"`
 	Text   string         `json:"text,omitempty" writer:",width:60,wrap"`
 	Source *contentSource `json:"source,omitempty"`
+	Url    *contentImage  `json:"image_url,omitempty"`
+
+	// Tool Function Call
 	toolUse
 
+	// Tool Result
 	ToolId string `json:"tool_use_id,omitempty"`
 	Result string `json:"content,omitempty"`
 }
@@ -83,6 +91,25 @@ type contentSource struct {
 	Type      string `json:"type"`
 	MediaType string `json:"media_type,omitempty"`
 	Data      string `json:"data,omitempty"`
+}
+
+// Image Source
+type contentImage struct {
+	Url    string `json:"url,omitempty"`
+	Detail string `json:"detail,omitempty"`
+}
+
+// Tool Call
+type ToolCall struct {
+	Id       string       `json:"id,omitempty"`
+	Type     string       `json:"type,omitempty"`
+	Function ToolFunction `json:"function,omitempty"`
+}
+
+// Tool Function and Arguments
+type ToolFunction struct {
+	Name      string `json:"name,omitempty"`
+	Arguments string `json:"arguments,omitempty"`
 }
 
 // Tool call
@@ -146,6 +173,46 @@ func ImageData(path string) (*Content, error) {
 	}
 	defer r.Close()
 	return Image(r)
+}
+
+// Return a new content object of type image, from a Url
+func ImageUrl(v, detail string) (*Content, error) {
+	url, err := url.Parse(v)
+	if err != nil {
+		return nil, err
+	}
+	if url.Scheme != "https" {
+		return nil, ErrBadParameter.With("ImageUrl: not an https url")
+	}
+	return &Content{
+		Type: "image_url",
+		Url: &contentImage{
+			Url:    url.String(),
+			Detail: detail,
+		},
+	}, nil
+}
+
+// Return tool usage
+func ToolUse(t ToolCall) *Content {
+	var input map[string]any
+
+	// Decode the arguments
+	if t.Function.Arguments != "" {
+		if err := json.Unmarshal([]byte(t.Function.Arguments), &input); err != nil {
+			return nil
+		}
+	}
+
+	// Return the content
+	return &Content{
+		Type: t.Type,
+		Id:   t.Id,
+		toolUse: toolUse{
+			Name:  t.Function.Name,
+			Input: input,
+		},
+	}
 }
 
 // Return a tool result

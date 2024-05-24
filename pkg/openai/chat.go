@@ -104,7 +104,14 @@ func (c *Client) Chat(ctx context.Context, messages []*schema.Message, opts ...O
 	// Return all choices
 	var result []*schema.Content
 	for _, choice := range response.Choices {
-		if choice.Message == nil || choice.Message.Content == nil {
+		// A choice must have a message, content and/or tool calls
+		if choice.Message == nil || choice.Message.Content == nil && len(choice.Message.ToolCalls) == 0 {
+			continue
+		}
+		for _, tool := range choice.Message.ToolCalls {
+			result = append(result, schema.ToolUse(tool))
+		}
+		if choice.Message.Content == nil {
 			continue
 		}
 		switch v := choice.Message.Content.(type) {

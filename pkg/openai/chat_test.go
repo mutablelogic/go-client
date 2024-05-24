@@ -65,7 +65,9 @@ func Test_chat_003(t *testing.T) {
 	assert.NotNil(client)
 
 	message := schema.NewMessage("user", "What is in this image")
-	//		.AppendImageUrl("https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/Gfp-wisconsin-madison-the-nature-boardwalk.jpg/2560px-Gfp-wisconsin-madison-the-nature-boardwalk.jpg")
+	image, err := schema.ImageUrl("https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/Gfp-wisconsin-madison-the-nature-boardwalk.jpg/2560px-Gfp-wisconsin-madison-the-nature-boardwalk.jpg", "auto")
+	assert.NoError(err)
+	assert.NotNil(message.Add(image))
 	response, err := client.Chat(context.Background(), []*schema.Message{message}, openai.OptModel("gpt-4-vision-preview"))
 	assert.NoError(err)
 	assert.NotNil(response)

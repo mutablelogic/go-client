@@ -1,13 +1,10 @@
 package mistral
 
 import (
-	"bufio"
-	"bytes"
 	"context"
 	"encoding/json"
 	"io"
 	"reflect"
-	"strings"
 
 	// Packages
 	client "github.com/mutablelogic/go-client"
@@ -20,26 +17,25 @@ import (
 ///////////////////////////////////////////////////////////////////////////////
 // TYPES
 
+// A request for a chat completion
 type reqChat struct {
 	options
+	Tools    []reqChatTools    `json:"tools,omitempty"`
 	Messages []*schema.Message `json:"messages,omitempty"`
 }
 
-type respChat struct {
-	Id      string                 `json:"id"`
-	Created int64                  `json:"created"`
-	Model   string                 `json:"model"`
-	Choices []schema.MessageChoice `json:"choices,omitempty"`
-	Usage   *respUsage             `json:"usage,omitempty"`
-
-	// Private fields
-	callback Callback `json:"-"`
+type reqChatTools struct {
+	Type     string       `json:"type"`
+	Function *schema.Tool `json:"function"`
 }
 
-type respUsage struct {
-	PromptTokens     int `json:"prompt_tokens"`
-	CompletionTokens int `json:"completion_tokens"`
-	TotalTokens      int `json:"total_tokens"`
+// A chat completion object
+type respChat struct {
+	Id         string                  `json:"id"`
+	Created    int64                   `json:"created"`
+	Model      string                  `json:"model"`
+	Choices    []*schema.MessageChoice `json:"choices,omitempty"`
+	TokenUsage schema.TokenUsage       `json:"usage,omitempty"`
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -47,9 +43,19 @@ type respUsage struct {
 
 const (
 	defaultChatCompletionModel = "mistral-small-latest"
-	contentTypeTextStream      = "text/event-stream"
-	endOfStream                = "[DONE]"
+	endOfStreamToken           = "[DONE]"
 )
+
+///////////////////////////////////////////////////////////////////////////////
+// STRINGIFY
+
+func (v respChat) String() string {
+	if data, err := json.MarshalIndent(v, "", "  "); err != nil {
+		return err.Error()
+	} else {
+		return string(data)
+	}
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 // API CALLS
@@ -58,11 +64,6 @@ const (
 func (c *Client) Chat(ctx context.Context, messages []*schema.Message, opts ...Opt) ([]*schema.Content, error) {
 	var request reqChat
 	var response respChat
-
-	// Check messages
-	if len(messages) == 0 {
-		return nil, ErrBadParameter.With("missing messages")
-	}
 
 	// Process options
 	request.Model = defaultChatCompletionModel
@@ -73,13 +74,28 @@ func (c *Client) Chat(ctx context.Context, messages []*schema.Message, opts ...O
 		}
 	}
 
-	// Set the callback
-	response.callback = request.callback
+	// Append tools
+	for _, tool := range request.options.Tools {
+		request.Tools = append(request.Tools, reqChatTools{
+			Type:     "function",
+			Function: tool,
+		})
+	}
+
+	// Set up the request
+	reqopts := []client.RequestOpt{
+		client.OptPath("chat/completions"),
+	}
+	if request.Stream {
+		reqopts = append(reqopts, client.OptTextStreamCallback(func(event client.TextStreamEvent) error {
+			return response.streamCallback(event, request.StreamCallback)
+		}))
+	}
 
 	// Request->Response
 	if payload, err := client.NewJSONRequest(request); err != nil {
 		return nil, err
-	} else if err := c.DoWithContext(ctx, payload, &response, client.OptPath("chat/completions")); err != nil {
+	} else if err := c.DoWithContext(ctx, payload, &response, reqopts...); err != nil {
 		return nil, err
 	} else if len(response.Choices) == 0 {
 		return nil, ErrUnexpectedResponse.With("no choices returned")
@@ -90,6 +106,9 @@ func (c *Client) Chat(ctx context.Context, messages []*schema.Message, opts ...O
 	for _, choice := range response.Choices {
 		if choice.Message == nil || choice.Message.Content == nil {
 			continue
+		}
+		for _, tool := range choice.Message.ToolCalls {
+			result = append(result, schema.ToolUse(tool))
 		}
 		switch v := choice.Message.Content.(type) {
 		case []string:
@@ -108,97 +127,76 @@ func (c *Client) Chat(ctx context.Context, messages []*schema.Message, opts ...O
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-// STRINGIFY
+// PRIVATE METHODS
 
-func (s respChat) String() string {
-	data, _ := json.MarshalIndent(s, "", "  ")
-	return string(data)
-}
+func (response *respChat) streamCallback(v client.TextStreamEvent, fn Callback) error {
+	var delta schema.MessageChunk
 
-///////////////////////////////////////////////////////////////////////////////
-// UNMARSHAL TEXT STREAM
-
-func (m *respChat) Unmarshal(mimetype string, r io.Reader) error {
-	switch mimetype {
-	case client.ContentTypeJson:
-		return json.NewDecoder(r).Decode(m)
-	case contentTypeTextStream:
-		return m.decodeTextStream(r)
-	default:
-		return ErrUnexpectedResponse.Withf("%q", mimetype)
+	// [DONE] indicates the end of the stream, return io.EOF
+	// or decode the data into a MessageChunk
+	if v.Data == endOfStreamToken {
+		return io.EOF
+	} else if err := v.Json(&delta); err != nil {
+		return err
 	}
-}
 
-func (m *respChat) decodeTextStream(r io.Reader) error {
-	var stream respChat
-	scanner := bufio.NewScanner(r)
-	buf := new(bytes.Buffer)
+	// Set the response fields
+	if delta.Id != "" {
+		response.Id = delta.Id
+	}
+	if delta.Model != "" {
+		response.Model = delta.Model
+	}
+	if delta.Created != 0 {
+		response.Created = delta.Created
+	}
+	if delta.TokenUsage != nil {
+		response.TokenUsage = *delta.TokenUsage
+	}
 
-FOR_LOOP:
-	for scanner.Scan() {
-		data := scanner.Text()
-		switch {
-		case data == "":
-			continue FOR_LOOP
-		case strings.HasPrefix(data, "data:") && strings.HasSuffix(data, endOfStream):
-			// [DONE] - Set usage from the stream, break the loop
-			m.Usage = stream.Usage
-			break FOR_LOOP
-		case strings.HasPrefix(data, "data:"):
-			// Reset
-			stream.Choices = nil
+	// With no choices, return success
+	if len(delta.Choices) == 0 {
+		return nil
+	}
 
-			// Decode JSON data
-			data = data[6:]
-			if _, err := buf.WriteString(data); err != nil {
-				return err
-			} else if err := json.Unmarshal(buf.Bytes(), &stream); err != nil {
-				return err
+	// Append choices
+	for _, choice := range delta.Choices {
+		// Sanity check the choice index
+		if choice.Index < 0 || choice.Index >= 6 {
+			continue
+		}
+		// Ensure message has the choice
+		for {
+			if choice.Index < len(response.Choices) {
+				break
 			}
-
-			// Check for sane data
-			if len(stream.Choices) == 0 {
-				return ErrUnexpectedResponse.With("no choices returned")
-			} else if stream.Choices[0].Index != 0 {
-				return ErrUnexpectedResponse.With("unexpected choice", stream.Choices[0].Index)
-			} else if stream.Choices[0].Delta == nil {
-				return ErrUnexpectedResponse.With("no delta returned")
+			response.Choices = append(response.Choices, new(schema.MessageChoice))
+		}
+		// Append the choice data onto the messahe
+		if response.Choices[choice.Index].Message == nil {
+			response.Choices[choice.Index].Message = new(schema.Message)
+		}
+		if choice.Index != 0 {
+			response.Choices[choice.Index].Index = choice.Index
+		}
+		if choice.FinishReason != "" {
+			response.Choices[choice.Index].FinishReason = choice.FinishReason
+		}
+		if choice.Delta != nil {
+			if choice.Delta.Role != "" {
+				response.Choices[choice.Index].Message.Role = choice.Delta.Role
 			}
-
-			// Append the choice
-			if len(m.Choices) == 0 {
-				message := schema.NewMessage(stream.Choices[0].Delta.Role, stream.Choices[0].Delta.Content)
-				m.Choices = append(m.Choices, schema.MessageChoice{
-					Index:        stream.Choices[0].Index,
-					Message:      message,
-					FinishReason: stream.Choices[0].FinishReason,
-				})
-			} else {
-				// Append text to the message
-				m.Choices[0].Message.Add(stream.Choices[0].Delta.Content)
-
-				// If the finish reason is set
-				if stream.Choices[0].FinishReason != "" {
-					m.Choices[0].FinishReason = stream.Choices[0].FinishReason
-				}
+			if choice.Delta.Content != "" {
+				response.Choices[choice.Index].Message.Add(choice.Delta.Content)
 			}
+		}
 
-			// Set the model and id
-			m.Id = stream.Id
-			m.Model = stream.Model
-
-			// Callback
-			if m.callback != nil {
-				m.callback(stream.Choices[0])
-			}
-
-			// Reset the buffer
-			buf.Reset()
-		default:
-			return ErrUnexpectedResponse.Withf("%q", data)
+		// Callback to the client
+		if fn != nil {
+			fn(choice)
 		}
 	}
 
-	// Return any errors from the scanner
-	return scanner.Err()
+	// Return success
+	return nil
 }

@@ -19,6 +19,9 @@ COPY --from=builder /usr/src/app/build/* /usr/local/bin/
 COPY etc/entrypoint.sh .
 RUN chmod +x entrypoint.sh
 
+# Install the api commands
+RUN api install
+
 # Labels
 LABEL org.opencontainers.image.source=${SOURCE}
 

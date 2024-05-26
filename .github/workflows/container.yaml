@@ -72,7 +72,7 @@ jobs:
       matrix:
         include:
           - tag: ${{ needs.var.outputs.tag }}
-          - tag: latest
+          - tag: latest # TODO: Skip this if the event calling is not publishing a release
     runs-on: ubuntu-latest
     steps:
       - name: Login

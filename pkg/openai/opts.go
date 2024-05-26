@@ -46,6 +46,7 @@ type streamoptions struct {
 	IncludeUsage bool `json:"include_usage,omitempty"`
 }
 
+// Opt is a function which can be used to set options on a request
 type Opt func(*options) error
 
 // Callback when new stream data is received
@@ -88,9 +89,7 @@ func OptPresencePenalty(value float32) Opt {
 	}
 }
 
-// How many chat completion choices to generate for each input message.
-// Note that you will be charged based on the number of generated tokens across
-// all of the choices. Keep n as 1 to minimize costs.
+// Maximum number of tokens to generate in the reply
 func OptMaxTokens(value int) Opt {
 	return func(o *options) error {
 		o.MaxTokens = value
@@ -126,6 +125,7 @@ func OptSeed(value int) Opt {
 	}
 }
 
+// Custom text sequences that will cause the model to stop generating.
 func OptStop(value ...string) Opt {
 	return func(o *options) error {
 		o.Stop = value

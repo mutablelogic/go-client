@@ -1,0 +1,95 @@
+name: Build docker container
+on:
+  release:
+    types: [ created, edited ]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'tag'
+        required: true
+        default: 'latest'
+        type: string
+jobs:
+  var:
+    name: Set variables
+    runs-on: ubuntu-latest
+    outputs:
+      platform: "linux"
+      image: "ghcr.io/${{ github.repository }}"
+      tag: ${{ steps.var.outputs.tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set variables
+        id: var
+        run: |
+          if [ "${{ github.event_name }}" != "release" ] && [ "${{ inputs.tag }}" != "latest" ]; then
+            TAG="${{ inputs.tag }}" && echo "tag=${TAG#v}" >> $GITHUB_OUTPUT
+          else
+            TAG="$(git describe --tags)" && echo "tag=${TAG#v}" >> $GITHUB_OUTPUT
+          fi
+  build:
+    name: Build
+    needs: var
+    strategy:
+      matrix:
+        arch: [ amd64, arm64 ]
+    runs-on: ${{ matrix.arch == 'amd64' && 'ubuntu-latest' || matrix.arch }}
+    steps:
+      - name: Install git
+        run: |
+          sudo apt -y update
+          sudo apt -y install build-essential git
+          git config --global advice.detachedHead false
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Login
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build
+        run: |
+          git checkout v${{ needs.var.outputs.tag }}
+          make docker  
+      - name: Push
+        run: |
+          docker image tag \
+            go-client-${{ needs.var.outputs.platform }}-${{ matrix.arch }}:${{ needs.var.outputs.tag }} \
+            ${{ needs.var.outputs.image }}-${{ matrix.arch }}:${{ needs.var.outputs.tag }} 
+          docker push ${{ needs.var.outputs.image }}-${{ matrix.arch }}:${{ needs.var.outputs.tag }}
+  manifest:
+    name: Manifest
+    needs:
+      - var 
+      - build
+    strategy:
+      matrix:
+        include:
+          - tag: ${{ needs.var.outputs.tag }}
+          - tag: latest
+    runs-on: ubuntu-latest
+    steps:
+      - name: Login
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create Manifest
+        run: |
+          docker manifest create ${{ needs.var.outputs.image }}:${{ matrix.tag }} \
+            --amend ${{ needs.var.outputs.image }}-amd64:${{ needs.var.outputs.tag }} \
+            --amend ${{ needs.var.outputs.image }}-arm64:${{ needs.var.outputs.tag }}
+          docker manifest annotate --arch arm64 \
+            ${{ needs.var.outputs.image }}:${{ matrix.tag  }} \
+            ${{ needs.var.outputs.image }}-arm64:${{ needs.var.outputs.tag }}
+          docker manifest annotate --arch amd64 \
+            ${{ needs.var.outputs.image }}:${{ matrix.tag  }} \
+            ${{ needs.var.outputs.image }}-amd64:${{ needs.var.outputs.tag }}
+          docker manifest push ${{ needs.var.outputs.image }}:${{ matrix.tag }}

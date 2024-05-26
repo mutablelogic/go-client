@@ -73,3 +73,31 @@ func (c *Client) Current(q string) (Weather, error) {
 		return response, nil
 	}
 }
+
+// Forecast weather
+func (c *Client) Forecast(q string, opts ...Opt) (Forecast, error) {
+	var request options
+	var response Forecast
+
+	// Set defaults
+	request.Values = url.Values{}
+	response.Query = q
+
+	// Set options
+	for _, opt := range opts {
+		if err := opt(&request); err != nil {
+			return Forecast{}, err
+		}
+	}
+
+	// Set query parameters
+	request.Set("key", c.key)
+	request.Set("q", q)
+
+	// Request -> Response
+	if err := c.Do(nil, &response, client.OptPath("forecast.json"), client.OptQuery(request.Values)); err != nil {
+		return Forecast{}, err
+	} else {
+		return response, nil
+	}
+}

@@ -103,15 +103,15 @@ func OptTemperature(v float32) Opt {
 // Add a tool
 func OptTool(value ...*schema.Tool) Opt {
 	return func(o *options) error {
-		// Check tools
+		// Make a copy of each tool
 		for _, tool := range value {
 			if tool == nil {
 				return ErrBadParameter.With("OptTool")
+			} else {
+				tool := *tool
+				o.Tools = append(o.Tools, &tool)
 			}
 		}
-
-		// Append tools
-		o.Tools = append(o.Tools, value...)
 
 		// Return success
 		return nil

@@ -20,13 +20,23 @@ type Location struct {
 	Localtime      Time    `json:"localtime,omitempty"`
 }
 
-type Current struct {
-	LastUpdatedEpoch int64   `json:"last_updated_epoch"`
-	LastUpdated      Time    `json:"last_updated,omitempty"`
-	TempC            float64 `json:"temp_c"`
-	TempF            float64 `json:"temp_f"`
-	IsDay            int     `json:"is_day"` // Whether to show day condition icon (1) or night icon (0)
-	Condition        struct {
+type CurrentConditions struct {
+	LastUpdatedEpoch int64 `json:"last_updated_epoch"`
+	LastUpdated      Time  `json:"last_updated,omitempty"`
+	Conditions
+}
+
+type ForecastConditions struct {
+	TimeEpoch int64 `json:"time_epoch"`
+	Time      Time  `json:"time,omitempty"`
+	Conditions
+}
+
+type Conditions struct {
+	TempC     float64 `json:"temp_c"`
+	TempF     float64 `json:"temp_f"`
+	IsDay     int     `json:"is_day"` // Whether to show day condition icon (1) or night icon (0)
+	Condition struct {
 		Text string `json:"text"`
 		Icon string `json:"icon"`
 		Code int    `json:"code"`
@@ -50,11 +60,67 @@ type Current struct {
 	GustKph    float64 `json:"gust_kph"`
 }
 
+type Day struct {
+	MaxTempC            float64 `json:"maxtemp_c"`
+	MaxTempF            float64 `json:"maxtemp_f"`
+	MinTempC            float64 `json:"mintemp_c"`
+	MinTempF            float64 `json:"mintemp_f"`
+	AvgTempC            float64 `json:"avgtemp_c"`
+	AvgTempF            float64 `json:"avgtemp_f"`
+	MaxWindMph          float64 `json:"maxwind_mph"`
+	MaxWindKph          float64 `json:"maxwind_kph"`
+	TotalPrecipMm       float64 `json:"totalprecip_mm"`
+	TotalPrecipIn       float64 `json:"totalprecip_in"`
+	TotalSnowCm         float64 `json:"totalsnow_cm"`
+	AvgVisKm            float64 `json:"avgvis_km"`
+	AvgVisMiles         float64 `json:"avgvis_miles"`
+	AvgHumidity         int     `json:"avghumidity"`
+	WillItRain          int     `json:"daily_will_it_rain"`
+	WillItSnow          int     `json:"daily_will_it_snow"`
+	ChanceOfRainPercent int     `json:"daily_chance_of_rain"`
+	ChanceOfSnowPercent int     `json:"daily_chance_of_snow"`
+	Uv                  float32 `json:"uv"`
+	Condition           struct {
+		Text string `json:"text"`
+		Icon string `json:"icon"`
+		Code int    `json:"code"`
+	} `json:"condition"`
+}
+
+type ForecastDay struct {
+	Date      string                `json:"date"`
+	DateEpoch int64                 `json:"date_epoch"`
+	Day       *Day                  `json:"day"`
+	Hour      []*ForecastConditions `json:"hour"`
+	Astro     *Astro                `json:"astro"`
+}
+
+type Astro struct {
+	SunRise          string `json:"sunrise"`
+	SunSet           string `json:"sunset"`
+	MoonRise         string `json:"moonrise"`
+	MoonSet          string `json:"moonset"`
+	MoonPhase        string `json:"moon_phase"`
+	MoonIllumination int    `json:"moon_illumination"`
+	IsMoonUp         int    `json:"is_moon_up"`
+	IsSunUp          int    `json:"is_sun_up"`
+}
+
 type Weather struct {
-	Id       int       `json:"custom_id,omitempty"`
-	Query    string    `json:"q,omitempty"`
-	Location *Location `json:"location,omitempty"`
-	Current  *Current  `json:"current,omitempty"`
+	Id       int                `json:"custom_id,omitempty"`
+	Query    string             `json:"q,omitempty"`
+	Location *Location          `json:"location,omitempty"`
+	Current  *CurrentConditions `json:"current,omitempty"`
+}
+
+type Forecast struct {
+	Id       int                `json:"custom_id,omitempty"`
+	Query    string             `json:"q,omitempty"`
+	Location *Location          `json:"location,omitempty"`
+	Current  *CurrentConditions `json:"current,omitempty"`
+	Forecast struct {
+		Day []*ForecastDay `json:"forecastday"`
+	} `json:"forecast,omitempty"`
 }
 
 type Time struct {
@@ -66,6 +132,11 @@ type Time struct {
 
 func (w Weather) String() string {
 	data, _ := json.MarshalIndent(w, "", "  ")
+	return string(data)
+}
+
+func (f Forecast) String() string {
+	data, _ := json.MarshalIndent(f, "", "  ")
 	return string(data)
 }
 

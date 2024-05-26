@@ -181,7 +181,7 @@ func samChat(ctx context.Context, w *tablewriter.Writer, _ []string) error {
 	}
 }
 
-func samCall(_ context.Context, content schema.Content) *schema.Content {
+func samCall(_ context.Context, content *schema.Content) *schema.Content {
 	anthropicClient.Debugf("%v: %v: %v", content.Type, content.Name, content.Input)
 	if content.Type != "tool_use" {
 		return schema.ToolResult(content.Id, fmt.Sprint("unexpected content type:", content.Type))

@@ -1,12 +1,9 @@
 package anthropic
 
 import (
-	"bufio"
-	"bytes"
 	"context"
 	"encoding/json"
 	"io"
-	"strings"
 
 	// Packages
 	client "github.com/mutablelogic/go-client"
@@ -19,57 +16,26 @@ import (
 ///////////////////////////////////////////////////////////////////////////////
 // TYPES
 
+// A request for a message
 type reqMessage struct {
-	Model         string            `json:"model"`
-	Messages      []*schema.Message `json:"messages,omitempty"`
-	Stream        bool              `json:"stream,omitempty"`
-	System        string            `json:"system,omitempty"`
-	MaxTokens     int               `json:"max_tokens,omitempty"`
-	Metadata      *reqMetadata      `json:"metadata,omitempty"`
-	StopSequences []string          `json:"stop_sequences,omitempty"`
-	Temperature   float64           `json:"temperature,omitempty"`
-	TopK          int               `json:"top_k,omitempty"`
-	TopP          float64           `json:"top_p,omitempty"`
-	Tools         []schema.Tool     `json:"tools,omitempty"`
-
-	// Callbacks
-	delta Callback `json:"-"`
+	options
+	Messages []*schema.Message `json:"messages,omitempty"`
 }
 
-type reqMetadata struct {
-	User string `json:"user_id,omitempty"`
-}
-
+// A response to a message generation request
 type respMessage struct {
-	Id      string           `json:"id"`
-	Type    string           `json:"type,omitempty"`
-	Role    string           `json:"role"`
-	Model   string           `json:"model"`
-	Content []schema.Content `json:"content"`
-	Usage   `json:"usage,omitempty"`
+	Id         string            `json:"id"`
+	Model      string            `json:"model"`
+	Type       string            `json:"type,omitempty"`
+	Role       string            `json:"role"`
+	Content    []*schema.Content `json:"content"`
+	TokenUsage Usage             `json:"usage,omitempty"`
 	respStopReason
-
-	// Callbacks
-	delta Callback `json:"-"`
 }
 
 type respStopReason struct {
 	StopReason   string `json:"stop_reason,omitempty"`
 	StopSequence string `json:"stop_sequence,omitempty"`
-}
-
-type respDelta struct {
-	Delta
-	respStopReason
-}
-
-type respStream struct {
-	Type    string          `json:"type"`
-	Index   int             `json:"index,omitempty"`
-	Message *schema.Message `json:"message,omitempty"`
-	Content *schema.Content `json:"content_block,omitempty"`
-	Delta   *respDelta      `json:"delta,omitempty"`
-	Usage   *Usage          `json:"usage,omitempty"`
 }
 
 // Token usage for messages
@@ -78,161 +44,207 @@ type Usage struct {
 	OutputTokens int `json:"output_tokens"`
 }
 
-// Delta for a message response which is streamed
-type Delta struct {
-	Type string `json:"type"`
-	Text string `json:"text,omitempty"`
-	Json string `json:"partial_json,omitempty"`
-}
-
-///////////////////////////////////////////////////////////////////////////////
-// CONSTANTS
-
-const (
-	contentTypeTextStream = "text/event-stream"
-)
-
 ///////////////////////////////////////////////////////////////////////////////
 // PUBLIC METHODS
 
 // Send a structured list of input messages with text and/or image content,
 // and the model will generate the next message in the conversation. Use
 // a context to cancel the request, instead of the client-related timeout.
-func (c *Client) Messages(ctx context.Context, messages []*schema.Message, opt ...Opt) ([]schema.Content, error) {
+func (c *Client) Messages(ctx context.Context, messages []*schema.Message, opts ...Opt) ([]*schema.Content, error) {
 	var request reqMessage
 	var response respMessage
 
-	// Check parameters
-	if len(messages) == 0 {
-		return nil, ErrBadParameter.With("messages")
-	}
-
-	// Set defaults
+	// Set request options
 	request.Model = defaultMessageModel
-	request.MaxTokens = defaultMaxTokens
 	request.Messages = messages
-
-	// Apply options
-	for _, o := range opt {
-		if err := o(&request); err != nil {
+	request.MaxTokens = defaultMaxTokens
+	for _, opt := range opts {
+		if err := opt(&request.options); err != nil {
 			return nil, err
 		}
 	}
 
-	// Set callback
-	response.delta = request.delta
+	// Switch parameters -> input_schema
+	for _, tool := range request.options.Tools {
+		tool.InputSchema, tool.Parameters = tool.Parameters, nil
+	}
+
+	// Set up the request
+	reqopts := []client.RequestOpt{
+		client.OptPath("messages"),
+	}
+	if request.Stream {
+		reqopts = append(reqopts, client.OptTextStreamCallback(func(event client.TextStreamEvent) error {
+			return response.streamCallback(event, request.options.StreamCallback)
+		}))
+	}
 
 	// Request -> Response
 	if payload, err := client.NewJSONRequest(request); err != nil {
 		return nil, err
-	} else if err := c.DoWithContext(ctx, payload, &response, client.OptPath("messages"), client.OptNoTimeout()); err != nil {
+	} else if err := c.DoWithContext(ctx, payload, &response, reqopts...); err != nil {
 		return nil, err
 	} else if len(response.Content) == 0 {
 		return nil, ErrInternalAppError.With("No content returned")
 	}
-
-	// TODO: Somehow return Usage and Stop information back to the caller
 
 	// Return success
 	return response.Content, nil
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-// STRINGIFY
+// PRIVATE METHODS
 
-func (d Delta) String() string {
-	data, _ := json.MarshalIndent(d, "", "  ")
-	return string(data)
-}
+func (response *respMessage) streamCallback(v client.TextStreamEvent, fn Callback) error {
+	switch v.Event {
+	case "ping":
+		// No-op
+		return nil
+	case "message_start":
+		// Populate the response
+		var message struct {
+			Type    string       `json:"type"`
+			Message *respMessage `json:"message"`
+		}
+		message.Message = response
+		if err := v.Json(&message); err != nil {
+			return err
+		}
 
-///////////////////////////////////////////////////////////////////////////////
-// UNMARSHAL TEXT STREAM
+		// Text callback
+		if fn != nil {
+			fn(schema.MessageChoice{
+				Delta: &schema.MessageDelta{
+					Role: message.Message.Role,
+				},
+			})
+		}
+	case "content_block_start":
+		// Create a new content block
+		var content struct {
+			Type    string          `json:"type"`
+			Index   int             `json:"index"`
+			Content *schema.Content `json:"content_block"`
+		}
+		if err := v.Json(&content); err != nil {
+			return err
+		}
+		// Sanity check
+		if len(response.Content) != content.Index {
+			return ErrUnexpectedResponse.With("content block index out of range")
+		}
+		// Append content block
+		response.Content = append(response.Content, content.Content)
+	case "content_block_delta":
+		// Append to an existing content block
+		var content struct {
+			Type    string          `json:"type"`
+			Index   int             `json:"index"`
+			Content *schema.Content `json:"delta"`
+		}
+		if err := v.Json(&content); err != nil {
+			return err
+		}
 
-func (m *respMessage) Unmarshal(mimetype string, r io.Reader) error {
-	switch mimetype {
-	case client.ContentTypeJson:
-		return json.NewDecoder(r).Decode(m)
-	case contentTypeTextStream:
-		return m.decodeTextStream(r)
+		// Sanity check
+		if content.Index >= len(response.Content) {
+			return ErrUnexpectedResponse.With("content block index out of range")
+		}
+
+		// Append either text or tool_use
+		contentBlock := response.Content[content.Index]
+		switch content.Content.Type {
+		case "text_delta":
+			if contentBlock.Type != "text" {
+				return ErrUnexpectedResponse.With("content block delta is not text")
+			} else {
+				contentBlock.Text += content.Content.Text
+			}
+
+			// Text callback
+			if fn != nil {
+				fn(schema.MessageChoice{
+					Index: content.Index,
+					Delta: &schema.MessageDelta{
+						Content: content.Content.Text,
+					},
+				})
+			}
+
+		case "input_json_delta":
+			if contentBlock.Type != "tool_use" {
+				return ErrUnexpectedResponse.With("content block delta is not tool_use")
+			} else if content.Content.Json != "" {
+				contentBlock.Json += content.Content.Json
+			}
+		default:
+			return ErrUnexpectedResponse.With(content.Content.Type)
+		}
+
+	case "content_block_stop":
+		// Append to an existing content block
+		var content struct {
+			Type  string `json:"type"`
+			Index int    `json:"index"`
+		}
+		if err := v.Json(&content); err != nil {
+			return err
+		}
+
+		// Sanity check
+		if content.Index >= len(response.Content) {
+			return ErrInternalAppError.With("content block index out of range")
+		}
+
+		// Decode the partial_json into the input
+		contentBlock := response.Content[content.Index]
+		if contentBlock.Type == "tool_use" {
+			if partialJson := []byte(contentBlock.Json); len(partialJson) > 0 {
+				if err := json.Unmarshal(partialJson, &contentBlock.Input); err != nil {
+					return err
+				}
+			}
+		}
+
+		// Remove the partial_json
+		contentBlock.Json = ""
+	case "message_delta":
+		// Populate the response
+		var message struct {
+			Type    string       `json:"type"`
+			Message *respMessage `json:"delta"`
+			Usage   *Usage       `json:"usage"`
+		}
+		message.Message = response
+		if err := v.Json(&message); err != nil {
+			return err
+		}
+
+		// Increment the token usage
+		if message.Usage != nil {
+			response.TokenUsage.InputTokens += message.Usage.InputTokens
+			response.TokenUsage.OutputTokens += message.Usage.OutputTokens
+		}
+
+		// Text callback - stop reason
+		if fn != nil {
+			if message.Message.StopReason != "" {
+				fn(schema.MessageChoice{
+					FinishReason: message.Message.StopReason,
+				})
+			}
+		}
+	case "message_stop":
+		// Text callback - end of message
+		if fn != nil {
+			fn(schema.MessageChoice{})
+		}
+		// End the stream
+		return io.EOF
 	default:
-		return ErrUnexpectedResponse.Withf("%q", mimetype)
+		return ErrUnexpectedResponse.Withf("%q", v.Event)
 	}
-}
 
-func (m *respMessage) decodeTextStream(r io.Reader) error {
-	var stream respStream
-	scanner := bufio.NewScanner(r)
-	buf := bytes.NewBuffer(nil)
-	var content schema.Content
-	for scanner.Scan() {
-		if scanner.Text() == "" {
-			continue
-		}
-		if strings.HasPrefix(scanner.Text(), "event:") {
-			// TODO: Let's mostly ignore this line for now
-			buf.Reset()
-			continue
-		} else if strings.HasPrefix(scanner.Text(), "data:") {
-			if _, err := buf.WriteString(scanner.Text()[6:]); err != nil {
-				return err
-			}
-			if err := json.Unmarshal(buf.Bytes(), &stream); err != nil {
-				return err
-			}
-			switch stream.Type {
-			case "ping":
-				// No-op
-			case "message_start":
-				if stream.Message != nil {
-					m.Id = stream.Message.Id
-					m.Role = stream.Message.Role
-					m.Model = stream.Message.Model
-				}
-				// TODO: Set input_tokens from stream.Usage.InputTokens
-			case "message_stop":
-				if m.delta != nil {
-					// Callback with nil to indicate end of message
-					m.delta(nil)
-				}
-			case "content_block_start":
-				content = *stream.Content
-			case "content_block_delta":
-				m.delta(&stream.Delta.Delta)
-				switch {
-				case stream.Delta.Type == "text_delta" && content.Type == "text":
-					// Append text
-					content.Text += stream.Delta.Text
-				case stream.Delta.Type == "input_json_delta":
-					// Append partial_json
-					content.Text += stream.Delta.Json
-				}
-			case "content_block_stop":
-				// Append content
-				m.Content = append(m.Content, content)
-				// Reset content
-				content = schema.Content{}
-			case "message_delta":
-				// Set the stop reason
-				if stream.Delta != nil && stream.Delta.StopReason != "" {
-					m.StopReason = stream.Delta.StopReason
-				}
-				if stream.Delta != nil && stream.Delta.StopSequence != "" {
-					m.StopSequence = stream.Delta.StopSequence
-				}
-				if stream.Usage != nil && stream.Usage.InputTokens > 0 {
-					m.InputTokens = stream.Usage.InputTokens
-				}
-				if stream.Usage != nil && stream.Usage.OutputTokens > 0 {
-					m.OutputTokens = stream.Usage.OutputTokens
-				}
-			case "error":
-				return ErrUnexpectedResponse.With(stream)
-			default:
-				// Ignore
-			}
-		} else {
-			return ErrUnexpectedResponse.Withf("%q", scanner.Text())
-		}
-	}
-	return scanner.Err()
+	// Comntinue processing stream
+	return nil
 }

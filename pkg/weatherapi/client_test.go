@@ -30,6 +30,18 @@ func Test_client_002(t *testing.T) {
 	t.Log(weather)
 }
 
+func Test_client_003(t *testing.T) {
+	assert := assert.New(t)
+	client, err := weatherapi.New(GetApiKey(t), opts.OptTrace(os.Stderr, true))
+	assert.NoError(err)
+
+	forecast, err := client.Forecast("Berlin, Germany", weatherapi.OptDays(2))
+	if !assert.NoError(err) {
+		t.SkipNow()
+	}
+	t.Log(forecast)
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 // ENVIRONMENT
 

@@ -116,6 +116,7 @@ type ToolFunction struct {
 type toolUse struct {
 	Name  string         `json:"name,omitempty"`
 	Input map[string]any `json:"input,omitempty"`
+	Json  string         `json:"partial_json,omitempty"` // Used by anthropic
 }
 
 // Tool result

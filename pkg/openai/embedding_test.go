@@ -5,6 +5,7 @@ import (
 	"os"
 	"testing"
 
+	// Packages
 	opts "github.com/mutablelogic/go-client"
 	openai "github.com/mutablelogic/go-client/pkg/openai"
 	assert "github.com/stretchr/testify/assert"

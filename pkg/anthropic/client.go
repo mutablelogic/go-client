@@ -22,7 +22,7 @@ const (
 	endPoint            = "https://api.anthropic.com/v1"
 	defaultVersion      = "2023-06-01"
 	defaultMessageModel = "claude-3-haiku-20240307"
-	defaultMaxTokens    = 4096
+	defaultMaxTokens    = 1024
 )
 
 ///////////////////////////////////////////////////////////////////////////////

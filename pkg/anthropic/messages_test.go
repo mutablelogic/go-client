@@ -29,8 +29,8 @@ func Test_message_002(t *testing.T) {
 	assert.NoError(err)
 	assert.NotNil(client)
 	msg := schema.NewMessage("user", "What is the weather today")
-	content, err := client.Messages(context.Background(), []*schema.Message{msg}, anthropic.OptStream(func(v *anthropic.Delta) {
-		t.Log(v)
+	content, err := client.Messages(context.Background(), []*schema.Message{msg}, anthropic.OptStream(func(evt schema.MessageChoice) {
+		t.Log(evt)
 	}))
 	assert.NoError(err)
 	t.Log(content)
@@ -65,8 +65,8 @@ func Test_message_004(t *testing.T) {
 	assert.NoError(weather.Add("location", "The location to get the weather for", true, reflect.TypeOf("")))
 
 	// Request -> Response
-	content, err := client.Messages(context.Background(), []*schema.Message{msg}, anthropic.OptTool(weather), anthropic.OptStream(func(v *anthropic.Delta) {
-		t.Log(v)
+	content, err := client.Messages(context.Background(), []*schema.Message{msg}, anthropic.OptTool(weather), anthropic.OptStream(func(evt schema.MessageChoice) {
+		t.Log(evt)
 	}))
 	assert.NoError(err)
 	t.Log(content)
@@ -88,4 +88,19 @@ func Test_message_005(t *testing.T) {
 	response, err := client.Messages(context.Background(), []*schema.Message{msg, schema.NewMessage("assistant", "The caption is:")})
 	assert.NoError(err)
 	t.Log(response)
+}
+
+func Test_message_006(t *testing.T) {
+	assert := assert.New(t)
+	client, err := anthropic.New(GetApiKey(t), opts.OptTrace(os.Stderr, true), opts.OptHeader("Anthropic-Beta", "tools-2024-04-04"))
+	assert.NoError(err)
+	assert.NotNil(client)
+	msg := schema.NewMessage("user", "What is Berlin most famous for?")
+
+	// Request -> Response
+	content, err := client.Messages(context.Background(), []*schema.Message{msg}, anthropic.OptMaxTokens(40), anthropic.OptStream(func(evt schema.MessageChoice) {
+		t.Log(evt)
+	}))
+	assert.NoError(err)
+	t.Log(content)
 }

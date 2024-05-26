@@ -31,13 +31,11 @@ type reqChatTools struct {
 
 // A chat completion object
 type respChat struct {
-	Id                string                  `json:"id"`
-	Object            string                  `json:"object"`
-	Created           int64                   `json:"created"`
-	Model             string                  `json:"model"`
-	Choices           []*schema.MessageChoice `json:"choices"`
-	SystemFingerprint string                  `json:"system_fingerprint,omitempty"`
-	TokenUsage        schema.TokenUsage       `json:"usage,omitempty"`
+	Id         string                  `json:"id"`
+	Created    int64                   `json:"created"`
+	Model      string                  `json:"model"`
+	Choices    []*schema.MessageChoice `json:"choices"`
+	TokenUsage schema.TokenUsage       `json:"usage,omitempty"`
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -99,6 +97,8 @@ func (c *Client) Chat(ctx context.Context, messages []*schema.Message, opts ...O
 		return nil, err
 	} else if err := c.DoWithContext(ctx, payload, &response, reqopts...); err != nil {
 		return nil, err
+	} else if len(response.Choices) == 0 {
+		return nil, ErrUnexpectedResponse.With("no choices returned")
 	}
 
 	// Return all choices
@@ -153,9 +153,6 @@ func (response *respChat) streamCallback(v client.TextStreamEvent, fn Callback) 
 	}
 	if delta.Created != 0 {
 		response.Created = delta.Created
-	}
-	if delta.SystemFingerprint != "" {
-		response.SystemFingerprint = delta.SystemFingerprint
 	}
 	if delta.TokenUsage != nil {
 		response.TokenUsage = *delta.TokenUsage

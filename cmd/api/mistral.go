@@ -131,7 +131,7 @@ func mistralChat(ctx context.Context, w *tablewriter.Writer, args []string) erro
 		opts = append(opts, mistral.OptModel(mistralModel))
 	}
 	if mistralTemperature != nil {
-		opts = append(opts, mistral.OptTemperature(*mistralTemperature))
+		opts = append(opts, mistral.OptTemperature(float32(*mistralTemperature)))
 	}
 	if mistralMaxTokens != nil {
 		opts = append(opts, mistral.OptMaxTokens(int(*mistralMaxTokens)))

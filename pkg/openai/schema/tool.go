@@ -18,7 +18,8 @@ type Tool struct {
 	Name        string          `json:"name"`
 	Description string          `json:"description"`
 	Type        string          `json:"type,omitempty"`
-	Parameters  *toolParameters `json:"parameters,omitempty"`
+	Parameters  *toolParameters `json:"parameters,omitempty"`   // Used by OpenAI, Mistral
+	InputSchema *toolParameters `json:"input_schema,omitempty"` // Used by anthropic
 }
 
 // Tool function parameters

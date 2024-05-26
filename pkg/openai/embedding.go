@@ -1,9 +1,9 @@
 package openai
 
 import (
-	// Packages
 	"context"
 
+	// Packages
 	client "github.com/mutablelogic/go-client"
 	schema "github.com/mutablelogic/go-client/pkg/openai/schema"
 

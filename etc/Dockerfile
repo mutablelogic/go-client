@@ -2,7 +2,7 @@ ARG OS
 ARG ARCH
 
 # Run makefile to build all the commands
-FROM --platform=${OS}/${ARCH} golang:1.22-bullseye AS builder
+FROM --platform=${OS}/${ARCH} golang:1.22 AS builder
 ARG OS
 ARG ARCH
 WORKDIR /usr/src/app
@@ -10,13 +10,14 @@ COPY . .
 RUN OS=${OS} ARCH=${ARCH} make
 
 # Copy server to /usr/local/bin
-FROM --platform=${OS}/${ARCH} debian:bullseye-slim
+FROM --platform=${OS}/${ARCH} debian:bookworm-slim
 ARG OS
 ARG ARCH
 ARG SOURCE
 RUN apt update && apt install -y ca-certificates
 COPY --from=builder /usr/src/app/build/* /usr/local/bin/
 COPY etc/entrypoint.sh .
+RUN chmod +x entrypoint.sh
 
 # Labels
 LABEL org.opencontainers.image.source=${SOURCE}

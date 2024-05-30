@@ -35,6 +35,7 @@ type Payload interface {
 var (
 	MethodGet    = NewRequestEx(http.MethodGet, ContentTypeAny)
 	MethodDelete = NewRequestEx(http.MethodDelete, ContentTypeAny)
+	MethodPut    = NewRequestEx(http.MethodPut, ContentTypeAny)
 )
 
 ///////////////////////////////////////////////////////////////////////////////

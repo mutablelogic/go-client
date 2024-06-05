@@ -13,13 +13,14 @@ import (
 var (
 	authClient   *auth.Client
 	authName     = "tokenauth"
-	authEndpoint string
+	authDuration time.Duration
 )
 
 func authRegister(flags *Flags) {
 	// Register flags
 	flags.String(authName, "tokenauth-endpoint", "${TOKENAUTH_ENDPOINT}", "tokenauth endpoint (ie, http://host/api/auth/)")
 	flags.String(authName, "tokenauth-token", "${TOKENAUTH_TOKEN}", "tokenauth token")
+	flags.Duration(authName, "expiry", 0, "token expiry duration")
 
 	// Register commands
 	flags.Register(Cmd{
@@ -45,6 +46,14 @@ func authParse(flags *Flags, opts ...client.ClientOpt) error {
 		}))
 	}
 
+	if duration := flags.GetString("expiry"); duration != "" {
+		if d, err := time.ParseDuration(duration); err != nil {
+			return err
+		} else {
+			authDuration = d
+		}
+	}
+
 	if client, err := auth.New(endpoint, opts...); err != nil {
 		return err
 	} else {
@@ -64,8 +73,7 @@ func authList(_ context.Context, w *tablewriter.Writer, _ []string) error {
 func authCreate(_ context.Context, w *tablewriter.Writer, params []string) error {
 	name := params[0]
 	scopes := params[1:]
-	duration := time.Duration(0)
-	token, err := authClient.Create(name, duration, scopes...)
+	token, err := authClient.Create(name, authDuration, scopes...)
 	if err != nil {
 		return err
 	}

@@ -17,6 +17,7 @@ type requestOpts struct {
 	*http.Request
 	noTimeout          bool               // OptNoTimeout
 	textStreamCallback TextStreamCallback // OptTextStreamCallback
+	jsonStreamCallback JsonStreamCallback // OptJsonStreamCallback
 }
 
 type RequestOpt func(*requestOpts) error
@@ -100,6 +101,14 @@ func OptNoTimeout() RequestOpt {
 func OptTextStreamCallback(fn TextStreamCallback) RequestOpt {
 	return func(r *requestOpts) error {
 		r.textStreamCallback = fn
+		return nil
+	}
+}
+
+// OptJsonStreamCallback is called for each decoded JSON event
+func OptJsonStreamCallback(fn JsonStreamCallback) RequestOpt {
+	return func(r *requestOpts) error {
+		r.jsonStreamCallback = fn
 		return nil
 	}
 }

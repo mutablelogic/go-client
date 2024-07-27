@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"mime"
@@ -46,6 +47,10 @@ type Client struct {
 }
 
 type ClientOpt func(*Client) error
+
+// Callback for json stream events, return an error if you want to stop streaming
+// with an error and io.EOF if you want to stop streaming and return success
+type JsonStreamCallback func(v any) error
 
 ///////////////////////////////////////////////////////////////////////////////
 // GLOBALS
@@ -302,8 +307,20 @@ func do(client *http.Client, req *http.Request, accept string, strict bool, out 
 	// Decode the body
 	switch mimetype {
 	case ContentTypeJson:
-		if err := json.NewDecoder(response.Body).Decode(out); err != nil {
-			return err
+		// JSON decode is streamable
+		dec := json.NewDecoder(response.Body)
+		for {
+			if err := dec.Decode(out); err == io.EOF {
+				break
+			} else if err != nil {
+				return err
+			} else if reqopts.jsonStreamCallback != nil {
+				if err := reqopts.jsonStreamCallback(out); errors.Is(err, io.EOF) {
+					break
+				} else if err != nil {
+					return err
+				}
+			}
 		}
 	case ContentTypeTextStream:
 		if err := NewTextStream().Decode(response.Body, reqopts.textStreamCallback); err != nil {

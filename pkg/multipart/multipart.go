@@ -55,7 +55,7 @@ func NewMultipartEncoder(w io.Writer) *Encoder {
 	}
 }
 
-// NewFormEncoder creates a new encoder object, whichwrites
+// NewFormEncoder creates a new encoder object, which writes
 // application/x-www-form-urlencoded to the io.Writer
 func NewFormEncoder(w io.Writer) *Encoder {
 	return &Encoder{

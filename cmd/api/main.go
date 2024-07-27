@@ -20,6 +20,7 @@ func main() {
 
 	// Register commands
 	anthropicRegister(flags)
+	authRegister(flags)
 	bwRegister(flags)
 	elRegister(flags)
 	haRegister(flags)

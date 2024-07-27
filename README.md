@@ -7,7 +7,7 @@ This repository contains a generic HTTP client which can be adapted to provide:
 * Ability to send files  and data of type `multipart/form-data`
 * Ability to send data of type `application/x-www-form-urlencoded`
 * Debugging capabilities to see the request and response data
-* Streaming text events
+* Streaming text and JSON events
 
 API Documentation: https://pkg.go.dev/github.com/mutablelogic/go-client
 
@@ -159,6 +159,9 @@ modify each individual request when using the `Do` method:
 * `OptTextStreamCallback(func(TextStreamCallback) error)` allows you to set a callback
     function to process a streaming text response of type `text/event-stream`. See below for
     more details.
+* `OptJsonStreamCallback(func(any) error)` allows you to set a callback for JSON streaming
+    responses. The callback should have the signature `func(any) error`. See below for
+    more details.
 
 ## Authentication
 
@@ -191,9 +194,9 @@ You can also set the token on a per-request basis using the `OptToken` option in
 
 You can create a payload with form data:
 
-* `client.NewFormRequest(payload any, accept string)` returns a new request with a Form 
+* `client.NewFormRequest(payload any, accept string)` returns a new request with a Form
     data payload which defaults to POST.
-* `client.NewMultipartRequest(payload any, accept string)` returns a new request with 
+* `client.NewMultipartRequest(payload any, accept string)` returns a new request with
     a Multipart Form data payload which defaults to POST. This is useful for file uploads.
 
 The payload should be a `struct` where the fields are converted to form tuples. File uploads require a field of type `multipart.File`. For example,
@@ -241,9 +244,10 @@ type Unmarshaler interface {
 }
 ```
 
-## Streaming Responses
+## Text Streaming Responses
 
-The client implements a streaming text event callback which can be used to process a stream of text events, as per the [Mozilla specification](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events).
+The client implements a streaming text event callback which can be used to process a stream of text events,
+as per the [Mozilla specification](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events).
 
 In order to process streamed events, pass the `OptTextStreamCallback()` option to the request
 with a callback function, which should have the following signature:
@@ -272,3 +276,12 @@ If you return an error of type `io.EOF` from the callback, then the stream will 
 Similarly, if you return any other error the stream will be closed and the error returned.
 
 Usually, you would pair this option with `OptNoTimeout` to prevent the request from timing out.
+
+## JSON Streaming Responses
+
+The client decodes JSON streaming responses by passing a callback function to the `OptJsonStreamCallback()` option.
+The callback with signature `func(any) error` is called for each JSON object in the stream, where the argument
+is the same type as the object in the request.
+
+You can return an error from the callback to stop the stream and return the error, or return `io.EOF` to stop the stream
+immediately and return success.

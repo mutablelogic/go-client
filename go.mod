@@ -13,9 +13,9 @@ require (
 	github.com/mutablelogic/go-server v1.4.7
 	github.com/stretchr/testify v1.9.0
 	github.com/xdg-go/pbkdf2 v1.0.0
-	golang.org/x/crypto v0.23.0
+	golang.org/x/crypto v0.31.0
 	golang.org/x/exp v0.0.0-20240506185415-9bf2ced13842
-	golang.org/x/term v0.20.0
+	golang.org/x/term v0.27.0
 )
 
 require (
@@ -24,6 +24,6 @@ require (
 	github.com/mattn/go-runewidth v0.0.15 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
-	golang.org/x/sys v0.20.0 // indirect
+	golang.org/x/sys v0.28.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

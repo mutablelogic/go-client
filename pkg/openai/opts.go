@@ -40,6 +40,9 @@ type options struct {
 	Quality string `json:"quality,omitempty"`
 	Size    string `json:"size,omitempty"`
 	Style   string `json:"style,omitempty"`
+
+	// Options for usage
+	Usage UsageFn `json:"-"`
 }
 
 type streamoptions struct {
@@ -51,6 +54,9 @@ type Opt func(*options) error
 
 // Callback when new stream data is received
 type Callback func(schema.MessageChoice)
+
+// Callback to set the token usage
+type UsageFn func(schema.TokenUsage)
 
 ///////////////////////////////////////////////////////////////////////////////
 // PUBLIC METHODS
@@ -168,6 +174,7 @@ func OptTool(value ...*schema.Tool) Opt {
 				return ErrBadParameter.With("OptTool")
 			}
 		}
+
 		// Append tools
 		o.Tools = append(o.Tools, value...)
 
@@ -240,6 +247,17 @@ func OptSize(value string) Opt {
 func OptStyle(value string) Opt {
 	return func(o *options) error {
 		o.Style = value
+		return nil
+	}
+}
+
+// The style of the generated images. Must be one of vivid or natural.
+// Vivid causes the model to lean towards generating hyper-real and
+// dramatic images. Natural causes the model to produce more natural,
+// less hyper-real looking images.
+func OptUsage(fn UsageFn) Opt {
+	return func(o *options) error {
+		o.Usage = fn
 		return nil
 	}
 }

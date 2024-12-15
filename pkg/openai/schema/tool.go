@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"reflect"
 
+	// Package imports
+	"github.com/djthorpe/go-tablewriter/pkg/meta"
+
 	// Namespace imports
 	. "github.com/djthorpe/go-errors"
-	"github.com/djthorpe/go-tablewriter/pkg/meta"
 )
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -57,10 +59,6 @@ func NewTool(name, description string) *Tool {
 	return &Tool{
 		Name:        name,
 		Description: description,
-		Parameters: &toolParameters{
-			Type:       "object",
-			Properties: make(map[string]toolParameter),
-		},
 	}
 }
 
@@ -87,6 +85,14 @@ func NewToolEx(name, description string, parameters any) (*Tool, error) {
 	return t, nil
 }
 
+func NewToolResult(id string, result map[string]any) *Message {
+	var message Message
+	message.Role = "tool"
+	message.ToolCallId = id
+	message.Content = []any{result}
+	return &message
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 // STRINGIFY
 
@@ -101,6 +107,12 @@ func (t Tool) String() string {
 func (tool *Tool) Add(name, description string, required bool, t reflect.Type) error {
 	if name == "" {
 		return ErrBadParameter.With("missing name")
+	}
+	if tool.Parameters == nil {
+		tool.Parameters = &toolParameters{
+			Type:       "object",
+			Properties: make(map[string]toolParameter),
+		}
 	}
 	if _, exists := tool.Parameters.Properties[name]; exists {
 		return ErrDuplicateEntry.With(name)

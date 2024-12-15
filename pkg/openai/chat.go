@@ -114,6 +114,9 @@ func (c *Client) Chat(ctx context.Context, messages []*schema.Message, opts ...O
 		if choice.Message.Content == nil {
 			continue
 		}
+		if choice.Message.Role != "assistant" {
+			return nil, ErrUnexpectedResponse.With("unexpected content role ", choice.Message.Role)
+		}
 		switch v := choice.Message.Content.(type) {
 		case []string:
 			for _, v := range v {
@@ -124,6 +127,11 @@ func (c *Client) Chat(ctx context.Context, messages []*schema.Message, opts ...O
 		default:
 			return nil, ErrUnexpectedResponse.With("unexpected content type ", reflect.TypeOf(choice.Message.Content))
 		}
+	}
+
+	// Usage callback
+	if request.Usage != nil {
+		request.Usage(response.TokenUsage)
 	}
 
 	// Return success

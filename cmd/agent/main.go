@@ -11,6 +11,7 @@ import (
 	kong "github.com/alecthomas/kong"
 	client "github.com/mutablelogic/go-client"
 	agent "github.com/mutablelogic/go-client/pkg/agent"
+	"github.com/mutablelogic/go-client/pkg/homeassistant"
 	"github.com/mutablelogic/go-client/pkg/ipify"
 	"github.com/mutablelogic/go-client/pkg/newsapi"
 	ollama "github.com/mutablelogic/go-client/pkg/ollama"
@@ -22,10 +23,12 @@ import (
 // TYPES
 
 type Globals struct {
-	OllamaUrl  string `name:"ollama-url" help:"URL of Ollama service (can be set from OLLAMA_URL env)" default:"${OLLAMA_URL}"`
-	OpenAIKey  string `name:"openai-key" help:"API key for OpenAI service (can be set from OPENAI_API_KEY env)" default:"${OPENAI_API_KEY}"`
-	WeatherKey string `name:"weather-key" help:"API key for WeatherAPI service (can be set from WEATHERAPI_KEY env)" default:"${WEATHERAPI_KEY}"`
-	NewsKey    string `name:"news-key" help:"API key for NewsAPI service (can be set from NEWSAPI_KEY env)" default:"${NEWSAPI_KEY}"`
+	OllamaUrl        string `name:"ollama-url" help:"URL of Ollama service (can be set from OLLAMA_URL env)" default:"${OLLAMA_URL}"`
+	OpenAIKey        string `name:"openai-key" help:"API key for OpenAI service (can be set from OPENAI_API_KEY env)" default:"${OPENAI_API_KEY}"`
+	WeatherKey       string `name:"weather-key" help:"API key for WeatherAPI service (can be set from WEATHERAPI_KEY env)" default:"${WEATHERAPI_KEY}"`
+	NewsKey          string `name:"news-key" help:"API key for NewsAPI service (can be set from NEWSAPI_KEY env)" default:"${NEWSAPI_KEY}"`
+	HomeAssistantUrl string `name:"homeassistant-url" help:"URL of HomeAssistant service (can be set from HA_ENDPOINT env)" default:"${HA_ENDPOINT}"`
+	HomeAssistantKey string `name:"homeassistant-key" help:"API key for HomeAssistant service (can be set from HA_TOKEN env)" default:"${HA_TOKEN}"`
 
 	// Debugging
 	Debug   bool `name:"debug" help:"Enable debug output"`
@@ -73,6 +76,8 @@ func main() {
 			"OPENAI_API_KEY": envOrDefault("OPENAI_API_KEY", ""),
 			"WEATHERAPI_KEY": envOrDefault("WEATHERAPI_KEY", ""),
 			"NEWSAPI_KEY":    envOrDefault("NEWSAPI_KEY", ""),
+			"HA_TOKEN":       envOrDefault("HA_TOKEN", ""),
+			"HA_ENDPOINT":    envOrDefault("HA_ENDPOINT", ""),
 		},
 	)
 
@@ -96,6 +101,12 @@ func main() {
 		cmd.FatalIfErrorf(err)
 		cli.Globals.tools = append(cli.Globals.tools, news.Tools()...)
 	}
+	if cli.HomeAssistantKey != "" && cli.HomeAssistantUrl != "" {
+		ha, err := homeassistant.New(cli.HomeAssistantUrl, cli.HomeAssistantKey, clientOpts(&cli)...)
+		cmd.FatalIfErrorf(err)
+		cli.Globals.tools = append(cli.Globals.tools, ha.Tools()...)
+	}
+
 	// Add ipify
 	ipify, err := ipify.New(clientOpts(&cli)...)
 	cmd.FatalIfErrorf(err)

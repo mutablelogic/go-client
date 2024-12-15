@@ -96,7 +96,7 @@ func (t *tool) Run(ctx context.Context, call *agent.ToolCall) (*agent.ToolResult
 
 // Return the current general headlines
 func (c *Client) agentCurrentHeadlines(_ context.Context, call *agent.ToolCall) (*agent.ToolResult, error) {
-	response, err := c.Headlines(OptCategory("general"))
+	response, err := c.Headlines(OptCategory("general"), OptLimit(5))
 	if err != nil {
 		return nil, err
 	}
@@ -116,7 +116,7 @@ func (c *Client) agentCountryHeadlines(_ context.Context, call *agent.ToolCall) 
 		return nil, err
 	}
 	country = strings.ToLower(country)
-	response, err := c.Headlines(OptCountry(country))
+	response, err := c.Headlines(OptCountry(country), OptLimit(5))
 	if err != nil {
 		return nil, err
 	}

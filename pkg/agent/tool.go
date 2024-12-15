@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strconv"
 
 	// Namespace imports
@@ -68,11 +69,20 @@ func (t *ToolResult) Role() string {
 	return "tool"
 }
 
+// Return parameter as a string
+func (t *ToolCall) String(name string) (string, error) {
+	v, ok := t.Args[name]
+	if !ok {
+		return "", ErrBadParameter.Withf("%q not found", name)
+	}
+	return fmt.Sprint(v), nil
+}
+
 // Return parameter as an integer
 func (t *ToolCall) Int(name string) (int, error) {
 	v, ok := t.Args[name]
 	if !ok {
-		return 0, ErrBadParameter.Withf("'%s' not found", name)
+		return 0, ErrBadParameter.Withf("%q not found", name)
 	}
 	switch v := v.(type) {
 	case int:

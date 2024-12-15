@@ -89,7 +89,14 @@ func NewToolResult(id string, result map[string]any) *Message {
 	var message Message
 	message.Role = "tool"
 	message.ToolCallId = id
-	message.Content = []any{result}
+
+	data, err := json.Marshal(result)
+	if err != nil {
+		return nil
+	} else {
+		message.Content = string(data)
+	}
+
 	return &message
 }
 

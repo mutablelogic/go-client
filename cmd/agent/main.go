@@ -11,6 +11,7 @@ import (
 	kong "github.com/alecthomas/kong"
 	client "github.com/mutablelogic/go-client"
 	agent "github.com/mutablelogic/go-client/pkg/agent"
+	"github.com/mutablelogic/go-client/pkg/ipify"
 	"github.com/mutablelogic/go-client/pkg/newsapi"
 	ollama "github.com/mutablelogic/go-client/pkg/ollama"
 	openai "github.com/mutablelogic/go-client/pkg/openai"
@@ -95,6 +96,10 @@ func main() {
 		cmd.FatalIfErrorf(err)
 		cli.Globals.tools = append(cli.Globals.tools, news.Tools()...)
 	}
+	// Add ipify
+	ipify, err := ipify.New(clientOpts(&cli)...)
+	cmd.FatalIfErrorf(err)
+	cli.Globals.tools = append(cli.Globals.tools, ipify.Tools()...)
 
 	// Create a context
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)

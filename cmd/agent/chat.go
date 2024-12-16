@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	// Packages
+	markdown "github.com/MichaelMure/go-term-markdown"
 	agent "github.com/mutablelogic/go-client/pkg/agent"
 )
 
@@ -12,7 +13,7 @@ import (
 // TYPES
 
 type ChatCmd struct {
-	Prompt string `arg:"" help:"The prompt to generate a response for"`
+	Prompt string `arg:"" optional:"" help:"The prompt to generate a response for"`
 	Agent  string `flag:"agent" help:"The agent to use"`
 	Model  string `flag:"model" help:"The model to use"`
 	Stream bool   `flag:"stream" help:"Stream the response"`
@@ -22,6 +23,7 @@ type ChatCmd struct {
 // PUBLIC METHODS
 
 func (cmd *ChatCmd) Run(globals *Globals) error {
+	// Get the agent and the model
 	model_agent, model := globals.getModel(globals.ctx, cmd.Agent, cmd.Model)
 	if model_agent == nil || model == nil {
 		return fmt.Errorf("model %q not found, or not set on command line", globals.state.Model)
@@ -40,13 +42,29 @@ func (cmd *ChatCmd) Run(globals *Globals) error {
 		opts = append(opts, agent.OptTools(tools...))
 	}
 
-	// Set the initial context
-	context := []agent.Context{
-		model_agent.UserPrompt(cmd.Prompt),
+	// If the prompt is empty, then we're in interative mode
+	context := []agent.Context{}
+	if cmd.Prompt == "" {
+		if globals.term == nil {
+			return fmt.Errorf("prompt is empty and not in interactive mode")
+		}
+	} else {
+		context = append(context, model_agent.UserPrompt(cmd.Prompt))
 	}
 
 FOR_LOOP:
 	for {
+		// When there is no context, create some
+		if len(context) == 0 {
+			if prompt, err := globals.term.ReadLine(model.Name() + "> "); err != nil {
+				return err
+			} else if prompt == "" {
+				break FOR_LOOP
+			} else {
+				context = append(context, model_agent.UserPrompt(prompt))
+			}
+		}
+
 		// Generate a chat completion
 		response, err := model_agent.Generate(globals.ctx, model, context, opts...)
 		if err != nil {
@@ -61,10 +79,15 @@ FOR_LOOP:
 			}
 			response.Context = append(response.Context, result)
 		} else {
-			fmt.Println(response.Text)
+			if globals.term != nil {
+				w, _ := globals.term.Size()
+				fmt.Println(string(markdown.Render(response.Text, w, 0)))
+			} else {
+				fmt.Println(response.Text)
+			}
 
-			// We're done
-			break FOR_LOOP
+			// Make empty context
+			response.Context = []agent.Context{}
 		}
 
 		// Context comes from the response

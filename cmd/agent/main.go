@@ -38,6 +38,9 @@ type Globals struct {
 	agents []agent.Agent
 	tools  []agent.Tool
 	state  *State
+
+	// Terminal interaction
+	term *Term
 }
 
 type CLI struct {
@@ -123,6 +126,13 @@ func main() {
 		return
 	} else {
 		cli.Globals.state = state
+	}
+
+	// Terminal from stdin
+	if term, err := NewTerm(os.Stdin); err != nil {
+		cmd.FatalIfErrorf(err)
+	} else {
+		cli.Globals.term = term
 	}
 
 	// Run the command

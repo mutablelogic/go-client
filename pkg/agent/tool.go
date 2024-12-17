@@ -73,7 +73,7 @@ func (t *ToolResult) Role() string {
 func (t *ToolCall) String(name string) (string, error) {
 	v, ok := t.Args[name]
 	if !ok {
-		return "", ErrBadParameter.Withf("%q not found", name)
+		return "", ErrNotFound.Withf("%q not found", name)
 	}
 	return fmt.Sprint(v), nil
 }
@@ -82,7 +82,7 @@ func (t *ToolCall) String(name string) (string, error) {
 func (t *ToolCall) Int(name string) (int, error) {
 	v, ok := t.Args[name]
 	if !ok {
-		return 0, ErrBadParameter.Withf("%q not found", name)
+		return 0, ErrNotFound.Withf("%q not found", name)
 	}
 	switch v := v.(type) {
 	case int:

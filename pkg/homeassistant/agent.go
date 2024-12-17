@@ -2,11 +2,15 @@ package homeassistant
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"strings"
 
 	// Packages
 	agent "github.com/mutablelogic/go-client/pkg/agent"
+
+	// Namespace imports
+	. "github.com/djthorpe/go-errors"
 )
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -106,7 +110,9 @@ var (
 // Return the current devices and their id's
 func (c *Client) agentGetDeviceIds(_ context.Context, call *agent.ToolCall) (*agent.ToolResult, error) {
 	name, err := call.String("name")
-	if err != nil {
+	if errors.Is(err, ErrNotFound) {
+		name = ""
+	} else if err != nil {
 		return nil, err
 	}
 

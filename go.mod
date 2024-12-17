@@ -5,6 +5,7 @@ go 1.22
 toolchain go1.22.3
 
 require (
+	github.com/alecthomas/kong v0.2.1-0.20190708041108-0548c6b1afae
 	github.com/andreburgaud/crypt2go v1.5.0
 	github.com/djthorpe/go-errors v1.0.3
 	github.com/djthorpe/go-tablewriter v0.0.7
@@ -31,6 +32,7 @@ require (
 	github.com/lucasb-eyer/go-colorful v1.0.3 // indirect
 	github.com/mattn/go-colorable v0.1.4 // indirect
 	github.com/mattn/go-isatty v0.0.11 // indirect
+	github.com/pkg/errors v0.8.1 // indirect
 	golang.org/x/image v0.0.0-20191206065243-da761ea9ff43 // indirect
 	golang.org/x/net v0.21.0 // indirect
 )

@@ -22,9 +22,9 @@ func Test_client_001(t *testing.T) {
 // ENVIRONMENT
 
 func GetEndpoint(t *testing.T) string {
-	key := os.Getenv("OLLAMA_ENDPOINT")
+	key := os.Getenv("OLLAMA_URL")
 	if key == "" {
-		t.Skip("OLLAMA_ENDPOINT not set")
+		t.Skip("OLLAMA_URL not set")
 		t.SkipNow()
 	}
 	return key

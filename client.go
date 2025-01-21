@@ -61,6 +61,7 @@ const (
 	PathSeparator             = string(os.PathSeparator)
 	ContentTypeAny            = "*/*"
 	ContentTypeJson           = "application/json"
+	ContentTypeJsonStream     = "application/x-ndjson"
 	ContentTypeTextXml        = "text/xml"
 	ContentTypeApplicationXml = "application/xml"
 	ContentTypeTextPlain      = "text/plain"
@@ -306,7 +307,7 @@ func do(client *http.Client, req *http.Request, accept string, strict bool, out 
 
 	// Decode the body
 	switch mimetype {
-	case ContentTypeJson:
+	case ContentTypeJson, ContentTypeJsonStream:
 		// JSON decode is streamable
 		dec := json.NewDecoder(response.Body)
 		for {

@@ -35,6 +35,9 @@ type Message struct {
 	// Any tool calls
 	ToolCalls []ToolCall `json:"tool_calls,omitempty"`
 
+	// Tool Call Id
+	ToolCallId string `json:"tool_call_id,omitempty"`
+
 	// Time the message was created, in unix seconds
 	Created int64 `json:"created,omitempty"`
 }

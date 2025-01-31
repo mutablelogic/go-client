@@ -4,33 +4,73 @@ import (
 	"context"
 
 	// Packages
-	schema "github.com/mutablelogic/go-client/pkg/openai/schema"
-
-	// Namespace imports
-	. "github.com/djthorpe/go-errors"
+	agent "github.com/mutablelogic/go-client/pkg/agent"
 )
 
 ///////////////////////////////////////////////////////////////////////////////
 // TYPES
 
+type tool struct {
+	name        string
+	description string
+	params      []agent.ToolParameter
+	run         func(context.Context, *agent.ToolCall) (*agent.ToolResult, error)
+}
+
+// Ensure tool satisfies the agent.Tool interface
+var _ agent.Tool = (*tool)(nil)
+
 ///////////////////////////////////////////////////////////////////////////////
 // PUBLIC METHODS
 
-// Return the tools available
-func (c *Client) Tools() []*schema.Tool {
-	if get_ip_address, err := schema.NewToolEx("get_ip_address", "Get the current IP address.", nil); err != nil {
-		panic(err)
-	} else {
-		return []*schema.Tool{get_ip_address}
+// Return all the agent tools for the weatherapi
+func (c *Client) Tools() []agent.Tool {
+	return []agent.Tool{
+		&tool{
+			name:        "get_ip_address",
+			description: "Return your IP address",
+			run:         c.agentGetAddress,
+		},
 	}
 }
 
-// Run a tool and return the result
-func (c *Client) Run(ctx context.Context, name string, _ any) (any, error) {
-	switch name {
-	case "get_ip_address":
-		return c.Get()
-	default:
-		return nil, ErrInternalAppError.With(name)
+///////////////////////////////////////////////////////////////////////////////
+// PRIVATE METHODS - TOOL
+
+func (*tool) Provider() string {
+	return "ipify"
+}
+
+func (t *tool) Name() string {
+	return t.name
+}
+
+func (t *tool) Description() string {
+	return t.description
+}
+
+func (t *tool) Params() []agent.ToolParameter {
+	return t.params
+}
+
+func (t *tool) Run(ctx context.Context, call *agent.ToolCall) (*agent.ToolResult, error) {
+	return t.run(ctx, call)
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// PRIVATE METHODS - TOOL
+
+// Return the current general headlines
+func (c *Client) agentGetAddress(_ context.Context, call *agent.ToolCall) (*agent.ToolResult, error) {
+	response, err := c.Get()
+	if err != nil {
+		return nil, err
 	}
+	return &agent.ToolResult{
+		Id: call.Id,
+		Result: map[string]any{
+			"type":       "text",
+			"ip_address": response,
+		},
+	}, nil
 }

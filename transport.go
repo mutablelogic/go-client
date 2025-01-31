@@ -103,7 +103,7 @@ func (transport *logtransport) RoundTrip(req *http.Request) (*http.Response, err
 		defer resp.Body.Close()
 
 		switch {
-		case contentType == ContentTypeJson:
+		case contentType == ContentTypeJson || contentType == ContentTypeJsonStream:
 			dst := &bytes.Buffer{}
 			if err := json.Indent(dst, body, "    ", "  "); err != nil {
 				fmt.Fprintf(transport.w, "  <= %q\n", string(body))

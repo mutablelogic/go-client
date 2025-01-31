@@ -7,6 +7,7 @@ package ollama
 import (
 	// Packages
 	"github.com/mutablelogic/go-client"
+	"github.com/mutablelogic/go-client/pkg/agent"
 )
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -15,6 +16,9 @@ import (
 type Client struct {
 	*client.Client
 }
+
+// Ensure it satisfies the agent.Agent interface
+var _ agent.Agent = (*Client)(nil)
 
 ///////////////////////////////////////////////////////////////////////////////
 // LIFECYCLE

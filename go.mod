@@ -1,8 +1,7 @@
 module github.com/mutablelogic/go-client
 
 go 1.22
-
-toolchain go1.22.3
+toolchain go1.23.7
 
 require (
 	github.com/alecthomas/kong v0.2.1-0.20190708041108-0548c6b1afae
@@ -14,9 +13,9 @@ require (
 	github.com/mutablelogic/go-server v1.4.7
 	github.com/stretchr/testify v1.9.0
 	github.com/xdg-go/pbkdf2 v1.0.0
-	golang.org/x/crypto v0.31.0
+	golang.org/x/crypto v0.35.0
 	golang.org/x/exp v0.0.0-20240506185415-9bf2ced13842
-	golang.org/x/term v0.27.0
+	golang.org/x/term v0.29.0
 )
 
 require (
@@ -34,7 +33,7 @@ require (
 	github.com/mattn/go-isatty v0.0.11 // indirect
 	github.com/pkg/errors v0.8.1 // indirect
 	golang.org/x/image v0.0.0-20191206065243-da761ea9ff43 // indirect
-	golang.org/x/net v0.33.0 // indirect
+	golang.org/x/net v0.36.0 // indirect
 )
 
 require (
@@ -44,6 +43,6 @@ require (
 	github.com/mattn/go-runewidth v0.0.15 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
-	golang.org/x/sys v0.28.0 // indirect
+	golang.org/x/sys v0.30.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

@@ -117,12 +117,12 @@ func OptJsonStreamCallback(fn JsonStreamCallback) RequestOpt {
 ///////////////////////////////////////////////////////////////////////////////
 // PRIVATE METHODS
 
-func join(value []any, sep string) string {
-	if len(value) == 0 {
+func join(values []any, sep string) string {
+	if len(values) == 0 {
 		return ""
 	}
-	str := make([]string, len(value))
-	for i, v := range value {
+	str := make([]string, len(values))
+	for i, v := range values {
 		str[i] = fmt.Sprint(v)
 	}
 	return strings.Join(str, sep)

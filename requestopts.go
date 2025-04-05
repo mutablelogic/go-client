@@ -1,6 +1,7 @@
 package client
 
 import (
+	"fmt"
 	"net/http"
 	"net/url"
 	"path/filepath"
@@ -43,12 +44,12 @@ func OptReqEndpoint(value string) RequestOpt {
 }
 
 // OptPath appends path elements onto a request
-func OptPath(value ...string) RequestOpt {
+func OptPath(value ...any) RequestOpt {
 	return func(r *requestOpts) error {
 		// Make a copy
 		url := *r.URL
 		// Clean up and append path
-		url.Path = PathSeparator + filepath.Join(strings.Trim(url.Path, PathSeparator), strings.TrimPrefix(strings.Join(value, PathSeparator), PathSeparator))
+		url.Path = PathSeparator + filepath.Join(strings.Trim(url.Path, PathSeparator), strings.TrimPrefix(join(value, PathSeparator), PathSeparator))
 		// Set new path
 		r.URL = &url
 		return nil
@@ -111,4 +112,18 @@ func OptJsonStreamCallback(fn JsonStreamCallback) RequestOpt {
 		r.jsonStreamCallback = fn
 		return nil
 	}
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// PRIVATE METHODS
+
+func join(value []any, sep string) string {
+	if len(value) == 0 {
+		return ""
+	}
+	str := make([]string, len(value))
+	for i, v := range value {
+		str[i] = fmt.Sprint(v)
+	}
+	return strings.Join(str, sep)
 }

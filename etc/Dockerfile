@@ -2,7 +2,7 @@ ARG OS
 ARG ARCH
 
 # Run makefile to build all the commands
-FROM --platform=${OS}/${ARCH} golang:1.22 AS builder
+FROM --platform=${OS}/${ARCH} golang:1.23 AS builder
 ARG OS
 ARG ARCH
 WORKDIR /usr/src/app

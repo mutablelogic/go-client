@@ -240,9 +240,12 @@ You can implement your own unmarshalling of responses by implementing the `Unmar
 
 ```go
 type Unmarshaler interface {
-  Unmarshal(mimetype string, r io.Reader) error
+  Unmarshal(header http.Header, r io.Reader) error
 }
 ```
+
+The first argument to the `Unmarshal` method is the HTTP header of the response, and the second
+argument is the body of the response. The method should return an error if the unmarshalling fails.
 
 ## Text Streaming Responses
 

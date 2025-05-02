@@ -24,7 +24,7 @@ import (
 // Unmarshaler is an interface which can be implemented by a type to
 // unmarshal a response body
 type Unmarshaler interface {
-	Unmarshal(mimetype string, r io.Reader) error
+	Unmarshal(header http.Header, r io.Reader) error
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -333,7 +333,7 @@ func do(client *http.Client, req *http.Request, accept string, strict bool, out 
 		}
 	default:
 		if v, ok := out.(Unmarshaler); ok {
-			return v.Unmarshal(mimetype, response.Body)
+			return v.Unmarshal(response.Header, response.Body)
 		} else if v, ok := out.(io.Writer); ok {
 			if _, err := io.Copy(v, response.Body); err != nil {
 				return err

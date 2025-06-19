@@ -194,13 +194,24 @@ func (enc *Encoder) writeFileField(name string, value File) (int64, error) {
 
 // Write a field as a string
 func (enc *Encoder) writeField(name string, value any) error {
+	rv := reflect.ValueOf(value)
+
+	// Dereference pointers
+	if rv.Kind() == reflect.Ptr {
+		if rv.IsNil() {
+			return nil // Ignore nil pointers
+		}
+		rv = rv.Elem()
+	}
+
+	// Write the field value as a string
 	switch {
 	case enc.m != nil:
-		if err := enc.m.WriteField(name, fmt.Sprint(value)); err != nil {
+		if err := enc.m.WriteField(name, fmt.Sprint(rv)); err != nil {
 			return err
 		}
 	case enc.v != nil:
-		enc.v.Add(name, fmt.Sprint(value))
+		enc.v.Add(name, fmt.Sprint(rv))
 	default:
 		return ErrNotImplemented
 	}

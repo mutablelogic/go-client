@@ -2,11 +2,12 @@ package homeassistant
 
 import (
 	"encoding/json"
+	"maps"
+	"slices"
 	"strings"
 
 	// Packages
 	"github.com/mutablelogic/go-client"
-	"golang.org/x/exp/maps"
 
 	// Namespace imports
 	. "github.com/djthorpe/go-errors"
@@ -76,7 +77,7 @@ func (c *Client) Services(domain string) ([]*Service, error) {
 		for k, v := range v.Services {
 			v.Call = k
 		}
-		return maps.Values(v.Services), nil
+		return slices.Collect(maps.Values(v.Services)), nil
 	}
 	// Return not found
 	return nil, ErrNotFound.Withf("domain not found: %q", domain)

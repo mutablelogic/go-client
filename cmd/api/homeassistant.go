@@ -2,14 +2,15 @@ package main
 
 import (
 	"context"
+	"maps"
 	"slices"
 	"strings"
 	"time"
 
+	// Packages
 	"github.com/djthorpe/go-tablewriter"
 	"github.com/mutablelogic/go-client"
 	"github.com/mutablelogic/go-client/pkg/homeassistant"
-	"golang.org/x/exp/maps"
 )
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -129,7 +130,7 @@ func haDomains(_ context.Context, w *tablewriter.Writer, args []string) error {
 		var services []string
 		if domain, exists := map_domains[c]; exists {
 			if v := domain.Services; v != nil {
-				services = maps.Keys(v)
+				services = slices.Collect(maps.Keys(v))
 			}
 		}
 		result = append(result, haDomain{

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	// Packages
 	"github.com/djthorpe/go-tablewriter"
 	"github.com/mutablelogic/go-client"
 	"github.com/mutablelogic/go-client/pkg/weatherapi"

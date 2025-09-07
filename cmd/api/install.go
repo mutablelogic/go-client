@@ -44,5 +44,5 @@ func install(flags *Flags) error {
 }
 
 func statEquals(a, b os.FileInfo) bool {
-	return a.Size() == b.Size() && a.ModTime() == b.ModTime()
+	return a.Size() == b.Size() && a.ModTime().Equal(b.ModTime())
 }

@@ -129,12 +129,18 @@ func (enc *Encoder) Encode(v any) error {
 		}
 
 		// Write field
-		value := rv.FieldByIndex(field.Index).Interface()
-		if field.Type == fileType {
-			if _, err := enc.writeFileField(name, value.(File)); err != nil {
+		value := rv.FieldByIndex(field.Index)
+		if value.Kind() == reflect.Ptr {
+			if value.IsNil() {
+				continue
+			}
+			value = value.Elem()
+		}
+		if value.Type() == fileType {
+			if _, err := enc.writeFileField(name, value.Interface().(File)); err != nil {
 				result = errors.Join(result, err)
 			}
-		} else if err := enc.writeField(name, value); err != nil {
+		} else if err := enc.writeField(name, value.Interface()); err != nil {
 			result = errors.Join(result, err)
 		}
 	}

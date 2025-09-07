@@ -9,7 +9,6 @@ require (
 	github.com/stretchr/testify v1.11.1
 	github.com/xdg-go/pbkdf2 v1.0.0
 	golang.org/x/crypto v0.41.0
-	golang.org/x/exp v0.0.0-20250819193227-8b4c13bb791b
 	golang.org/x/term v0.34.0
 )
 

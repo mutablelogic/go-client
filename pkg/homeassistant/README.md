@@ -4,5 +4,5 @@ This package provides a client for the Home Assistant API, which is used to inte
 
 References:
 
-- API https://developers.home-assistant.io/docs/api/rest/
-- Package https://pkg.go.dev/github.com/mutablelogic/go-client/pkg/homeassistant
+- API <https://developers.home-assistant.io/docs/api/rest/>
+- Package <https://pkg.go.dev/github.com/mutablelogic/go-client/pkg/homeassistant>

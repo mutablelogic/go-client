@@ -34,11 +34,11 @@ type Field struct {
 }
 
 type Selector struct {
-	Text              string `json:"text,omitempty"`
-	Mode              string `json:"mode,omitempty"`
-	Min               int    `json:"min,omitempty"`
-	Max               int    `json:"max,omitempty"`
-	UnitOfMeasurement string `json:"unit_of_measurement,omitempty"`
+	Text              string  `json:"text,omitempty"`
+	Mode              string  `json:"mode,omitempty"`
+	Min               float32 `json:"min,omitempty"`
+	Max               float32 `json:"max,omitempty"`
+	UnitOfMeasurement string  `json:"unit_of_measurement,omitempty"`
 }
 
 type reqCall struct {

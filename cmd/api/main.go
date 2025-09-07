@@ -6,29 +6,23 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
 	"path"
 	"strings"
 	"syscall"
 
 	// Packages
 	tablewriter "github.com/djthorpe/go-tablewriter"
-	mycontext "github.com/mutablelogic/go-client/pkg/context"
 )
 
 func main() {
 	flags := NewFlags(path.Base(os.Args[0]))
 
 	// Register commands
-	anthropicRegister(flags)
-	authRegister(flags)
 	bwRegister(flags)
-	elRegister(flags)
 	haRegister(flags)
 	ipifyRegister(flags)
-	mistralRegister(flags)
 	newsapiRegister(flags)
-	openaiRegister(flags)
-	samRegister(flags)
 	weatherapiRegister(flags)
 
 	// Parse command line and return function to run
@@ -48,7 +42,8 @@ func main() {
 	}
 
 	// Create a context
-	ctx := mycontext.ContextForSignal(os.Interrupt, syscall.SIGQUIT)
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGQUIT)
+	defer cancel()
 
 	// Create a tablewriter, optionally close the stream, then run the
 	// function

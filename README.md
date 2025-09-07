@@ -9,19 +9,14 @@ This repository contains a generic HTTP client which can be adapted to provide:
 * Debugging capabilities to see the request and response data
 * Streaming text and JSON events
 
-API Documentation: https://pkg.go.dev/github.com/mutablelogic/go-client
+API Documentation: <https://pkg.go.dev/github.com/mutablelogic/go-client>
 
 There are also some example clients which use this library:
 
-* [Anthropic API Client](https://github.com/mutablelogic/go-client/tree/main/pkg/anthropic) for Claude LLM
 * [Bitwarden API Client](https://github.com/mutablelogic/go-client/tree/main/pkg/bitwarden)
-* [Elevenlabs API Client](https://github.com/mutablelogic/go-client/tree/main/pkg/elevenlabs) for Text-to-Speech
 * [Home Assistant API Client](https://github.com/mutablelogic/go-client/tree/main/pkg/homeassistant)
 * [IPify Client](https://github.com/mutablelogic/go-client/tree/main/pkg/ipify)
-* [Mistral API Client](https://github.com/mutablelogic/go-client/tree/main/pkg/mistral) for Mistral LLM
 * [NewsAPI client](https://github.com/mutablelogic/go-client/tree/main/pkg/newsapi)
-* [Ollama API client](https://github.com/mutablelogic/go-client/tree/main/pkg/ollama) for locally-hosted LLM's
-* [OpenAI API client](https://github.com/mutablelogic/go-client/tree/main/pkg/openai) for OpenAI LLM's
 * [WeatherAPI client](https://github.com/mutablelogic/go-client/tree/main/pkg/weatherapi)
 
 Aiming to have compatibility with go version 1.21 and above.
@@ -81,7 +76,7 @@ You can create a payload using the following methods:
     a JSON payload which defaults to POST.
 * `client.NewMultipartRequest(payload any, accept string)` returns a new request with
     a Multipart Form data payload which defaults to POST.
-* `client.NewFormRequest(payload any, accept string)` returns a new request with a 
+* `client.NewFormRequest(payload any, accept string)` returns a new request with a
     Form data payload which defaults to POST.
 
 For example,
@@ -147,7 +142,7 @@ type Client interface {
 ```
 
 If you pass a context to the `DoWithContext` method, then the request can be
-cancelled using the context in addition to the timeout. Various options can be passed to 
+cancelled using the context in addition to the timeout. Various options can be passed to
 modify each individual request when using the `Do` method:
 
 * `OptReqEndpoint(value string)` sets the endpoint for the request
@@ -273,7 +268,7 @@ func Callback(event client.TextStreamEvent) error {
 }
 ```
 
-The `TextStreamEvent` object has the following 
+The `TextStreamEvent` object has the following
 
 If you return an error of type `io.EOF` from the callback, then the stream will be closed.
 Similarly, if you return any other error the stream will be closed and the error returned.

@@ -1,6 +1,7 @@
 package homeassistant
 
 import (
+	"context"
 	"encoding/json"
 	"maps"
 	"slices"
@@ -50,9 +51,9 @@ type reqCall struct {
 // API CALLS
 
 // Domains returns all domains and their associated service objects
-func (c *Client) Domains() ([]*Domain, error) {
+func (c *Client) Domains(ctx context.Context) ([]*Domain, error) {
 	var response []*Domain
-	if err := c.Do(nil, &response, client.OptPath("services")); err != nil {
+	if err := c.DoWithContext(ctx, nil, &response, client.OptPath("services")); err != nil {
 		return nil, err
 	}
 
@@ -61,9 +62,9 @@ func (c *Client) Domains() ([]*Domain, error) {
 }
 
 // Return callable services for a domain
-func (c *Client) Services(domain string) ([]*Service, error) {
+func (c *Client) Services(ctx context.Context, domain string) ([]*Service, error) {
 	var response []Domain
-	if err := c.Do(nil, &response, client.OptPath("services")); err != nil {
+	if err := c.DoWithContext(ctx, nil, &response, client.OptPath("services")); err != nil {
 		return nil, err
 	}
 	for _, v := range response {
@@ -87,7 +88,7 @@ func (c *Client) Services(domain string) ([]*Service, error) {
 // changed while the service was being executed.
 // TODO: This is a placeholder implementation, and requires fields to
 // be passed in the request
-func (c *Client) Call(service, entity string) ([]*State, error) {
+func (c *Client) Call(ctx context.Context, service, entity string) ([]*State, error) {
 	domain := domainForEntity(entity)
 	if domain == "" {
 		return nil, ErrBadParameter.Withf("Invalid entity: %q", entity)
@@ -99,7 +100,7 @@ func (c *Client) Call(service, entity string) ([]*State, error) {
 		Entity: entity,
 	}); err != nil {
 		return nil, err
-	} else if err := c.Do(payload, &response, client.OptPath("services", domain, service)); err != nil {
+	} else if err := c.DoWithContext(ctx, payload, &response, client.OptPath("services", domain, service)); err != nil {
 		return nil, err
 	}
 

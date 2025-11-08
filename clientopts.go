@@ -8,6 +8,9 @@ import (
 	"strings"
 	"time"
 
+	// Package imports
+	"go.opentelemetry.io/otel/trace"
+
 	// Namespace imports
 	. "github.com/djthorpe/go-errors"
 )
@@ -88,6 +91,15 @@ func OptRateLimit(value float32) ClientOpt {
 func OptReqToken(value Token) ClientOpt {
 	return func(client *Client) error {
 		client.token = value
+		return nil
+	}
+}
+
+// OptTracer sets the tracer for any request made by this client
+func OptTracer(tracer trace.Tracer, spanName string) ClientOpt {
+	return func(client *Client) error {
+		client.tracer = tracer
+		client.span = spanName
 		return nil
 	}
 }

@@ -14,6 +14,11 @@ import (
 	"sync"
 	"time"
 
+	// Package imports
+	attribute "go.opentelemetry.io/otel/attribute"
+	codes "go.opentelemetry.io/otel/codes"
+	trace "go.opentelemetry.io/otel/trace"
+
 	// Namespace imports
 	. "github.com/djthorpe/go-errors"
 )
@@ -44,6 +49,8 @@ type Client struct {
 	token    Token             // token for authentication on requests
 	headers  map[string]string // Headers for every request
 	ts       time.Time
+	tracer   trace.Tracer // Tracer used for requests
+	span     string       // Default span name (optional)
 }
 
 type ClientOpt func(*Client) error
@@ -160,7 +167,8 @@ func (client *Client) DoWithContext(ctx context.Context, in Payload, out any, op
 		opts = append([]RequestOpt{OptToken(client.token)}, opts...)
 	}
 
-	return do(client.Client, req, accept, client.strict, out, opts...)
+	// Do the request
+	return do(client.Client, req, accept, client.strict, client.tracer, client.span, out, opts...)
 }
 
 // Do a HTTP request and decode it into an object
@@ -188,7 +196,7 @@ func (client *Client) Request(req *http.Request, out any, opts ...RequestOpt) er
 		opts = append([]RequestOpt{OptToken(client.token)}, opts...)
 	}
 
-	return do(client.Client, req, "", false, out, opts...)
+	return do(client.Client, req, "", false, client.tracer, client.span, out, opts...)
 }
 
 // Debugf outputs debug information
@@ -251,7 +259,7 @@ func (client *Client) request(ctx context.Context, method, accept, mimetype stri
 }
 
 // Do will make a JSON request, populate an object with the response and return any errors
-func do(client *http.Client, req *http.Request, accept string, strict bool, out any, opts ...RequestOpt) error {
+func do(client *http.Client, req *http.Request, accept string, strict bool, tracer trace.Tracer, spanName string, out any, opts ...RequestOpt) error {
 	// Apply request options
 	reqopts := requestOpts{
 		Request: req,
@@ -270,9 +278,52 @@ func do(client *http.Client, req *http.Request, accept string, strict bool, out 
 		client.Timeout = 0
 	}
 
+	// Create span if tracer provided
+	var span trace.Span
+	if tracer != nil {
+		if spanName == "" {
+			spanName = fmt.Sprintf("%s %s", req.Method, req.URL.Path)
+		}
+		ctx, s := tracer.Start(req.Context(), spanName, trace.WithSpanKind(trace.SpanKindClient))
+		span = s
+		req = req.WithContext(ctx)
+
+		// Add request attributes
+		attrs := []attribute.KeyValue{
+			attribute.String("http.method", req.Method),
+			attribute.String("url.full", redactedUrl(req.URL)),
+			attribute.String("url.path", req.URL.Path),
+			attribute.String("server.address", req.URL.Host),
+		}
+
+		// Add request body size if present
+		if req.Body != nil && req.ContentLength > 0 {
+			attrs = append(attrs, attribute.Int64("http.request.body.size", req.ContentLength))
+		}
+
+		// Add request headers (selected ones to avoid sensitive data)
+		if userAgent := req.Header.Get("User-Agent"); userAgent != "" {
+			attrs = append(attrs, attribute.String("http.request.header.user_agent", userAgent))
+		}
+		if contentType := req.Header.Get("Content-Type"); contentType != "" {
+			attrs = append(attrs, attribute.String("http.request.header.content_type", contentType))
+		}
+		if accept := req.Header.Get("Accept"); accept != "" {
+			attrs = append(attrs, attribute.String("http.request.header.accept", accept))
+		}
+
+		span.SetAttributes(attrs...)
+		defer span.End()
+	}
+
 	// Do the request
 	response, err := client.Do(req)
 	if err != nil {
+		if span != nil {
+			span.SetStatus(codes.Error, err.Error())
+			span.RecordError(err)
+			span.SetAttributes(attribute.String("error", err.Error()))
+		}
 		return err
 	}
 	defer response.Body.Close()
@@ -283,6 +334,25 @@ func do(client *http.Client, req *http.Request, accept string, strict bool, out 
 		return ErrUnexpectedResponse.With(mimetype)
 	}
 
+	// Set response attributes on span
+	if span != nil {
+		span.SetAttributes(
+			attribute.Int("http.status_code", response.StatusCode),
+			attribute.String("http.response.status", response.Status),
+			attribute.String("http.response.header.content_type", mimetype),
+		)
+
+		// Add response body size
+		if response.ContentLength > 0 {
+			span.SetAttributes(attribute.Int64("http.response.body.size", response.ContentLength))
+		}
+
+		// Add response headers
+		if server := response.Header.Get("Server"); server != "" {
+			span.SetAttributes(attribute.String("http.response.header.server", server))
+		}
+	}
+
 	// Check status code
 	if response.StatusCode < 200 || response.StatusCode > 299 {
 		// Read any information from the body
@@ -290,13 +360,19 @@ func do(client *http.Client, req *http.Request, accept string, strict bool, out 
 		if err != nil {
 			return err
 		}
-		return ErrUnexpectedResponse.With(response.Status, ": ", string(data))
+		errResponse := ErrUnexpectedResponse.With(response.Status, ": ", string(data))
+		if span != nil {
+			span.SetStatus(codes.Error, response.Status)
+			span.RecordError(errResponse)
+			span.SetAttributes(attribute.String("http.response.body", string(data)))
+		}
+		return errResponse
 	}
 
 	// When in strict mode, check content type returned is as expected
 	if strict && (accept != "" && accept != ContentTypeAny) {
 		if mimetype != accept {
-			return ErrUnexpectedResponse.Withf("strict mode: unexpected responsse with %q", mimetype)
+			return ErrUnexpectedResponse.Withf("strict mode: unexpected response with %q", mimetype)
 		}
 	}
 

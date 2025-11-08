@@ -14,15 +14,7 @@ import (
 	kong "github.com/alecthomas/kong"
 	tablewriter "github.com/djthorpe/go-tablewriter"
 	client "github.com/mutablelogic/go-client"
-	attribute "go.opentelemetry.io/otel/attribute"
-	otlptrace "go.opentelemetry.io/otel/exporters/otlp/otlptrace"
-	otlptracehttp "go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
-	sdkresource "go.opentelemetry.io/otel/sdk/resource"
-	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	semconv "go.opentelemetry.io/otel/semconv/v1.21.0"
-
-	// Version info
-	"github.com/mutablelogic/go-client/pkg/version"
+	otel "github.com/mutablelogic/go-client/pkg/otel"
 )
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -71,35 +63,36 @@ func main() {
 	cli.Globals.tablewriter, err = NewTableWriter(&cli)
 	cmd.FatalIfErrorf(err)
 
-	// Open Telemetry
-	var rootSpanEnd func()
+	// Open Telemetry - update the context to include root span
 	if cli.Globals.OtelEndpoint != "" {
-		if provider, err := NewTracerProvider(cli.Globals.OtelEndpoint, cli.Globals.OtelHeader, cli.Globals.OtelName); err != nil {
+		provider, err := otel.NewProvider(cli.Globals.OtelEndpoint, cli.Globals.OtelHeader, cli.Globals.OtelName)
+		if err != nil {
 			cmd.Fatalf("Failed to create tracer: %v", err)
-		} else {
-			tracer := provider.Tracer(cli.Globals.OtelName)
-			cli.Globals.opts = append(cli.Globals.opts, client.OptTracer(tracer, "api"))
-			// Start root span
-			ctx, span := tracer.Start(cli.Globals.ctx, "cli."+cmd.Command())
-			cli.Globals.ctx = ctx
-			rootSpanEnd = func() { span.End() }
-			defer func() {
-				if rootSpanEnd != nil {
-					rootSpanEnd()
-				}
-				// Give the provider time to flush spans
-				shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-				defer cancel()
-				if err := provider.Shutdown(shutdownCtx); err != nil {
-					fmt.Fprintf(os.Stderr, "Error shutting down tracer provider: %v\n", err)
-				}
-			}()
 		}
+
+		tracer := provider.Tracer(cli.Globals.OtelName)
+		cli.Globals.opts = append(cli.Globals.opts, client.OptTracer(tracer, "api"))
+
+		// Start root span
+		ctx, span := tracer.Start(cli.Globals.ctx, "cli."+cmd.Command())
+		cli.Globals.ctx = ctx
+		defer func() {
+			// Give the provider time to flush spans
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+
+			// Perform shutdown
+			if err := provider.Shutdown(shutdownCtx); err != nil {
+				fmt.Fprintf(os.Stderr, "Error shutting down tracer provider: %v\n", err)
+			}
+		}()
+		defer span.End()
 	}
 
 	// Run the command
 	if err := cmd.Run(&cli.Globals); err != nil {
 		fmt.Fprintln(os.Stderr, err)
+		os.Exit(-1)
 	}
 }
 
@@ -134,64 +127,4 @@ func NewTableWriter(ctx *CLI) (*tablewriter.Writer, error) {
 
 	// Return success
 	return tablewriter.New(w, opts...), nil
-}
-
-func NewTracerProvider(endpoint, header, name string) (*sdktrace.TracerProvider, error) {
-	opts := []otlptracehttp.Option{
-		otlptracehttp.WithEndpoint(endpoint),
-		otlptracehttp.WithInsecure(), // Use HTTP instead of HTTPS
-	}
-	if header != "" {
-		headers := make(map[string]string)
-		for _, pair := range strings.Split(header, ",") {
-			kv := strings.SplitN(pair, "=", 2)
-			if len(kv) == 2 {
-				headers[strings.TrimSpace(kv[0])] = strings.TrimSpace(kv[1])
-			}
-		}
-		opts = append(opts, otlptracehttp.WithHeaders(headers))
-	}
-	exporter, err := otlptrace.New(
-		context.Background(),
-		otlptracehttp.NewClient(opts...),
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	// Build resource with service attributes
-	attrs := []attribute.KeyValue{}
-	if name != "" {
-		attrs = append(attrs, semconv.ServiceName(name))
-	}
-	if version.GitTag != "" {
-		attrs = append(attrs, semconv.ServiceVersion(version.GitTag))
-	}
-	if version.GitBranch != "" {
-		attrs = append(attrs, semconv.DeploymentEnvironment(version.GitBranch))
-	}
-
-	// Add additional process metadata
-	attrs = append(attrs,
-		semconv.TelemetrySDKLanguageGo,
-		semconv.TelemetrySDKName("opentelemetry"),
-		attribute.String("process.runtime.name", "go"),
-	)
-
-	res, err := sdkresource.New(
-		context.Background(),
-		sdkresource.WithAttributes(attrs...),
-		sdkresource.WithHost(),    // Adds hostname
-		sdkresource.WithProcess(), // Adds process info (PID, executable, etc.)
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	// Return tracer provider
-	return sdktrace.NewTracerProvider(
-		sdktrace.WithSampler(sdktrace.AlwaysSample()),
-		sdktrace.WithBatcher(exporter),
-		sdktrace.WithResource(res),
-	), nil
 }

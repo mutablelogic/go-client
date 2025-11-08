@@ -95,7 +95,7 @@ func OptReqToken(value Token) ClientOpt {
 	}
 }
 
-// OptTracer sets the tracer for any request made by this client
+// OptTracer sets the open-telemetry span for any request made by this client
 func OptTracer(tracer trace.Tracer, spanName string) ClientOpt {
 	return func(client *Client) error {
 		client.tracer = tracer

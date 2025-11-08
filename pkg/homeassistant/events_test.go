@@ -1,6 +1,7 @@
 package homeassistant_test
 
 import (
+	"context"
 	"os"
 	"testing"
 
@@ -16,7 +17,7 @@ func Test_events_001(t *testing.T) {
 	assert.NoError(err)
 	assert.NotNil(client)
 
-	events, err := client.Events()
+	events, err := client.Events(context.Background())
 	assert.NoError(err)
 	assert.NotNil(events)
 

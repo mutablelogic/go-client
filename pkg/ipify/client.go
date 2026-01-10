@@ -5,6 +5,7 @@ to test the client package.
 package ipify
 
 import (
+	"context"
 	"net/url"
 
 	// Packages
@@ -51,6 +52,15 @@ func New(opts ...client.ClientOpt) (*Client, error) {
 func (c *Client) Get() (Response, error) {
 	var response Response
 	if err := c.Do(client.NewRequest(), &response, client.OptQuery(url.Values{"format": []string{"json"}})); err != nil {
+		return Response{}, err
+	}
+	return response, nil
+}
+
+// GetWithContext returns the current IP address from the API using the provided context
+func (c *Client) GetWithContext(ctx context.Context) (Response, error) {
+	var response Response
+	if err := c.DoWithContext(ctx, client.NewRequest(), &response, client.OptQuery(url.Values{"format": []string{"json"}})); err != nil {
 		return Response{}, err
 	}
 	return response, nil

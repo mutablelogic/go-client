@@ -14,6 +14,10 @@ import (
 	"sync"
 	"time"
 
+	// Package imports
+	pkgotel "github.com/mutablelogic/go-client/pkg/otel"
+	trace "go.opentelemetry.io/otel/trace"
+
 	// Namespace imports
 	. "github.com/djthorpe/go-errors"
 )
@@ -44,6 +48,7 @@ type Client struct {
 	token    Token             // token for authentication on requests
 	headers  map[string]string // Headers for every request
 	ts       time.Time
+	tracer   trace.Tracer // Tracer used for requests
 }
 
 type ClientOpt func(*Client) error
@@ -105,7 +110,7 @@ func New(opts ...ClientOpt) (*Client, error) {
 func (client *Client) String() string {
 	str := "<client"
 	if client.endpoint != nil {
-		str += fmt.Sprintf(" endpoint=%q", redactedUrl(client.endpoint))
+		str += fmt.Sprintf(" endpoint=%q", pkgotel.RedactedURL(client.endpoint))
 	}
 	if client.Client.Timeout > 0 {
 		str += fmt.Sprint(" timeout=", client.Client.Timeout)
@@ -160,7 +165,8 @@ func (client *Client) DoWithContext(ctx context.Context, in Payload, out any, op
 		opts = append([]RequestOpt{OptToken(client.token)}, opts...)
 	}
 
-	return do(client.Client, req, accept, client.strict, out, opts...)
+	// Do the request
+	return do(client.Client, req, accept, client.strict, client.tracer, out, opts...)
 }
 
 // Do a HTTP request and decode it into an object
@@ -188,7 +194,7 @@ func (client *Client) Request(req *http.Request, out any, opts ...RequestOpt) er
 		opts = append([]RequestOpt{OptToken(client.token)}, opts...)
 	}
 
-	return do(client.Client, req, "", false, out, opts...)
+	return do(client.Client, req, "", false, client.tracer, out, opts...)
 }
 
 // Debugf outputs debug information
@@ -251,7 +257,7 @@ func (client *Client) request(ctx context.Context, method, accept, mimetype stri
 }
 
 // Do will make a JSON request, populate an object with the response and return any errors
-func do(client *http.Client, req *http.Request, accept string, strict bool, out any, opts ...RequestOpt) error {
+func do(client *http.Client, req *http.Request, accept string, strict bool, tracer trace.Tracer, out any, opts ...RequestOpt) (err error) {
 	// Apply request options
 	reqopts := requestOpts{
 		Request: req,
@@ -270,8 +276,13 @@ func do(client *http.Client, req *http.Request, accept string, strict bool, out 
 		client.Timeout = 0
 	}
 
+	// Create span if tracer provided
+	var response *http.Response
+	req, finishSpan := pkgotel.StartHTTPClientSpan(tracer, req)
+	defer func() { finishSpan(response, err) }()
+
 	// Do the request
-	response, err := client.Do(req)
+	response, err = client.Do(req)
 	if err != nil {
 		return err
 	}
@@ -296,7 +307,7 @@ func do(client *http.Client, req *http.Request, accept string, strict bool, out 
 	// When in strict mode, check content type returned is as expected
 	if strict && (accept != "" && accept != ContentTypeAny) {
 		if mimetype != accept {
-			return ErrUnexpectedResponse.Withf("strict mode: unexpected responsse with %q", mimetype)
+			return ErrUnexpectedResponse.Withf("strict mode: unexpected response with %q", mimetype)
 		}
 	}
 
@@ -358,11 +369,4 @@ func respContentType(resp *http.Response) (string, error) {
 	} else {
 		return mimetype, nil
 	}
-}
-
-// Remove any usernames and passwords before printing out
-func redactedUrl(url *url.URL) string {
-	url_ := *url // make a copy
-	url_.User = nil
-	return url_.String()
 }

@@ -1,43 +1,31 @@
 package main
 
 import (
-	"context"
-
 	// Packages
-	"github.com/djthorpe/go-tablewriter"
-	"github.com/mutablelogic/go-client"
 	"github.com/mutablelogic/go-client/pkg/ipify"
 )
 
-var (
-	ipifyClient *ipify.Client
-)
+///////////////////////////////////////////////////////////////////////////////
+// TYPES
 
-func ipifyRegister(flags *Flags) {
-	flags.Register(Cmd{
-		Name:        "ipify",
-		Description: "Get the public IP address",
-		Parse:       ipifyParse,
-		Fn: []Fn{
-			// Default caller
-			{Call: ipifyGetAddress, Description: "Get the public IP address"},
-		},
-	})
+type IPify struct {
+	CommandGetAddress IPGetAddress `cmd:"" name:"get" help:"Get public IP address"`
 }
 
-func ipifyParse(flags *Flags, opts ...client.ClientOpt) error {
-	if client, err := ipify.New(opts...); err != nil {
-		return err
-	} else {
-		ipifyClient = client
-	}
-	return nil
-}
+type IPGetAddress struct{}
 
-func ipifyGetAddress(_ context.Context, w *tablewriter.Writer, _ []string) error {
-	addr, err := ipifyClient.Get()
+///////////////////////////////////////////////////////////////////////////////
+// PUBLIC METHODS
+
+func (cmd *IPGetAddress) Run(globals *Globals) error {
+	client, err := ipify.New(globals.opts...)
 	if err != nil {
 		return err
 	}
-	return w.Write(addr)
+
+	addr, err := client.GetWithContext(globals.ctx)
+	if err != nil {
+		return err
+	}
+	return globals.tablewriter.Write(addr)
 }

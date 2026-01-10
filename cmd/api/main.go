@@ -2,69 +2,107 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"io"
 	"os"
 	"os/signal"
 	"path"
 	"strings"
 	"syscall"
+	"time"
 
 	// Packages
+	kong "github.com/alecthomas/kong"
 	tablewriter "github.com/djthorpe/go-tablewriter"
+	client "github.com/mutablelogic/go-client"
+	otel "github.com/mutablelogic/go-client/pkg/otel"
 )
 
+///////////////////////////////////////////////////////////////////////////////
+// TYPES
+
+// Kong CLI root struct
+type CLI struct {
+	Globals
+	IPify         `embed:"" prefix:"ipify."`
+	HomeAssistant `embed:"" prefix:"ha."`
+}
+
+type Globals struct {
+	ctx         context.Context
+	tablewriter *tablewriter.Writer
+	opts        []client.ClientOpt
+
+	// Global options
+	Path         string `help:"Output file path, defaults to stdout" short:"o"`
+	OtelEndpoint string `env:"OTEL_EXPORTER_OTLP_ENDPOINT" help:"OpenTelemetry collector endpoint"`
+	OtelHeader   string `env:"OTEL_EXPORTER_OTLP_HEADERS" help:"OpenTelemetry collector headers"`
+	OtelName     string `env:"OTEL_SERVICE_NAME" help:"OpenTelemetry service name" default:"go-client"`
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// LIFECYCLE
+
 func main() {
-	flags := NewFlags(path.Base(os.Args[0]))
+	var err error
 
-	// Register commands
-	bwRegister(flags)
-	haRegister(flags)
-	ipifyRegister(flags)
-	newsapiRegister(flags)
-	weatherapiRegister(flags)
-
-	// Parse command line and return function to run
-	fn, args, err := flags.Parse(os.Args[1:])
-	if errors.Is(err, ErrHelp) {
-		os.Exit(0)
-	}
-	if errors.Is(err, ErrInstall) {
-		if err := install(flags); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(-2)
-		}
-		os.Exit(0)
-	}
-	if err != nil {
-		os.Exit(-1)
-	}
+	// Parse command-line arguments
+	name, _ := os.Executable()
+	cli := CLI{}
+	cmd := kong.Parse(&cli,
+		kong.Name(path.Base(name)),
+		kong.Description("API client"),
+		kong.UsageOnError(),
+	)
 
 	// Create a context
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGQUIT)
+	var cancel context.CancelFunc
+	cli.Globals.ctx, cancel = signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGQUIT)
 	defer cancel()
 
-	// Create a tablewriter, optionally close the stream, then run the
-	// function
-	writer, err := NewTableWriter(flags)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(-1)
-	} else if w, ok := writer.Output().(io.WriteCloser); ok {
-		defer w.Close()
+	// Tablewriter
+	cli.Globals.tablewriter, err = NewTableWriter(&cli)
+	cmd.FatalIfErrorf(err)
+
+	// Open Telemetry - update the context to include root span
+	if cli.Globals.OtelEndpoint != "" {
+		provider, err := otel.NewProvider(cli.Globals.OtelEndpoint, cli.Globals.OtelHeader, cli.Globals.OtelName)
+		if err != nil {
+			cmd.Fatalf("Failed to create tracer: %v", err)
+		}
+
+		tracer := provider.Tracer(cli.Globals.OtelName)
+		cli.Globals.opts = append(cli.Globals.opts, client.OptTracer(tracer))
+
+		// Start root span
+		ctx, span := tracer.Start(cli.Globals.ctx, "cli."+cmd.Command())
+		cli.Globals.ctx = ctx
+		defer func() {
+			// Give the provider time to flush spans
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+
+			// Perform shutdown
+			if err := provider.Shutdown(shutdownCtx); err != nil {
+				fmt.Fprintf(os.Stderr, "Error shutting down tracer provider: %v\n", err)
+			}
+		}()
+		defer span.End()
 	}
 
-	if err := Run(ctx, writer, fn, args); err != nil {
+	// Run the command
+	if err := cmd.Run(&cli.Globals); err != nil {
 		fmt.Fprintln(os.Stderr, err)
-		os.Exit(-2)
+		os.Exit(-1)
 	}
 }
 
-func NewTableWriter(flags *Flags) (*tablewriter.Writer, error) {
+///////////////////////////////////////////////////////////////////////////////
+// METHODS
+
+func NewTableWriter(ctx *CLI) (*tablewriter.Writer, error) {
 	// By default, the writer is stdout
 	w := os.Stdout
-	if filename := flags.GetOutPath(); filename != "" {
+	if filename := ctx.Path; filename != "" {
 		if file, err := os.Create(filename); err != nil {
 			return nil, err
 		} else {
@@ -77,7 +115,7 @@ func NewTableWriter(flags *Flags) (*tablewriter.Writer, error) {
 		tablewriter.OptHeader(),
 		tablewriter.OptTerminalWidth(w),
 	}
-	ext := strings.ToLower(flags.GetOutExt())
+	ext := strings.ToLower(strings.TrimPrefix(path.Ext(ctx.Path), "."))
 	switch ext {
 	case "csv":
 		opts = append(opts, tablewriter.OptOutputCSV())
@@ -89,8 +127,4 @@ func NewTableWriter(flags *Flags) (*tablewriter.Writer, error) {
 
 	// Return success
 	return tablewriter.New(w, opts...), nil
-}
-
-func Run(ctx context.Context, w *tablewriter.Writer, fn *Fn, args []string) error {
-	return fn.Call(ctx, w, args)
 }

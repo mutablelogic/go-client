@@ -1,6 +1,7 @@
 package homeassistant_test
 
 import (
+	"context"
 	"os"
 	"testing"
 
@@ -16,7 +17,7 @@ func Test_health_001(t *testing.T) {
 	assert.NoError(err)
 	assert.NotNil(client)
 
-	message, err := client.Health()
+	message, err := client.Health(context.Background())
 	assert.NoError(err)
 	assert.NotEmpty(message)
 

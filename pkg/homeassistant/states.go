@@ -1,6 +1,7 @@
 package homeassistant
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"time"
@@ -13,7 +14,7 @@ import (
 // TYPES
 
 type State struct {
-	Entity       string         `json:"entity_id"`
+	Entity       string         `json:"entity_id,width:40"`
 	LastChanged  time.Time      `json:"last_changed,omitempty"`
 	LastReported time.Time      `json:"last_reported,omitempty"`
 	LastUpdated  time.Time      `json:"last_updated,omitempty"`
@@ -30,10 +31,10 @@ type State struct {
 // API CALLS
 
 // States returns all the entities and their state
-func (c *Client) States() ([]*State, error) {
+func (c *Client) States(ctx context.Context) ([]*State, error) {
 	// Return the response
 	var response []*State
-	if err := c.Do(nil, &response, client.OptPath("states")); err != nil {
+	if err := c.DoWithContext(ctx, nil, &response, client.OptPath("states")); err != nil {
 		return nil, err
 	}
 
@@ -42,10 +43,10 @@ func (c *Client) States() ([]*State, error) {
 }
 
 // State returns a state for a specific entity
-func (c *Client) State(EntityId string) (*State, error) {
+func (c *Client) State(ctx context.Context, EntityId string) (*State, error) {
 	// Return the response
 	var response *State
-	if err := c.Do(nil, &response, client.OptPath("states", EntityId)); err != nil {
+	if err := c.DoWithContext(ctx, nil, &response, client.OptPath("states", EntityId)); err != nil {
 		return response, err
 	}
 

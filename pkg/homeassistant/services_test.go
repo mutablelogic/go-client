@@ -1,6 +1,7 @@
 package homeassistant_test
 
 import (
+	"context"
 	"os"
 	"testing"
 
@@ -16,7 +17,7 @@ func Test_services_001(t *testing.T) {
 	assert.NoError(err)
 	assert.NotNil(client)
 
-	domains, err := client.Domains()
+	domains, err := client.Domains(context.Background())
 	if !assert.NoError(err) {
 		t.FailNow()
 	}

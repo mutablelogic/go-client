@@ -1,10 +1,12 @@
 package homeassistant
 
+import "context"
+
 ///////////////////////////////////////////////////////////////////////////////
 // API CALLS
 
-// ListModels returns all the models
-func (c *Client) Health() (string, error) {
+// Health returns "API Running" if the Home Assistant API is reachable
+func (c *Client) Health(ctx context.Context) (string, error) {
 	// Response schema
 	type responseHealth struct {
 		Message string `json:"message"`
@@ -12,7 +14,7 @@ func (c *Client) Health() (string, error) {
 
 	// Return the response
 	var response responseHealth
-	if err := c.Do(nil, &response); err != nil {
+	if err := c.DoWithContext(ctx, nil, &response); err != nil {
 		return "", err
 	}
 

@@ -4,10 +4,11 @@ This repository contains a generic HTTP client which can be adapted to provide:
 
 * General HTTP methods for GET and POST of data
 * Ability to send and receive JSON, plaintext and XML data
-* Ability to send files  and data of type `multipart/form-data`
+* Ability to send files and data of type `multipart/form-data`
 * Ability to send data of type `application/x-www-form-urlencoded`
 * Debugging capabilities to see the request and response data
 * Streaming text and JSON events
+* OpenTelemetry tracing for distributed observability
 
 API Documentation: <https://pkg.go.dev/github.com/mutablelogic/go-client>
 
@@ -65,6 +66,8 @@ Various options can be passed to the client `New` method to control its behaviou
     overridden by the client for individual requests using `OptToken` (see below).
 * `OptSkipVerify()` skips TLS certificate domain verification.
 * `OptHeader(key, value string)` appends a custom header to each request.
+* `OptTracer(tracer trace.Tracer)` sets an OpenTelemetry tracer for distributed tracing.
+    Span names default to "METHOD /path" format. See the OpenTelemetry section below for more details.
 
 ## Usage with a payload
 
@@ -283,3 +286,108 @@ is the same type as the object in the request.
 
 You can return an error from the callback to stop the stream and return the error, or return `io.EOF` to stop the stream
 immediately and return success.
+
+## OpenTelemetry
+
+The `pkg/otel` package provides OpenTelemetry tracing utilities for both HTTP clients and servers.
+
+### Creating a Tracer Provider
+
+Use `otel.NewProvider` to create a tracer provider that exports spans to an OTLP endpoint:
+
+```go
+package main
+
+import (
+    "context"
+    "log"
+
+    "github.com/mutablelogic/go-client/pkg/otel"
+)
+
+func main() {
+    // Create a provider with an OTLP endpoint
+    // Supports http://, https://, grpc://, and grpcs:// schemes
+    provider, err := otel.NewProvider(
+        "https://otel-collector.example.com:4318",  // OTLP endpoint
+        "api-key=your-api-key",                     // Optional headers (comma-separated key=value pairs)
+        "my-service",                               // Service name
+        otel.Attr{Key: "environment", Value: "production"},  // Optional attributes
+    )
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer provider.Shutdown(context.Background())
+
+    // Get a tracer from the provider
+    tracer := provider.Tracer("my-service")
+
+    // Use the tracer with go-client
+    client := client.New(
+        client.OptEndpoint("https://api.example.com"),
+        client.OptTracer(tracer),
+    )
+}
+```
+
+### HTTP Client Tracing
+
+When you set `OptTracer` on a client, all requests will automatically create spans with:
+
+* HTTP method, URL, and host attributes
+* Request and response body sizes
+* HTTP status codes
+* Error recording for failed requests
+
+### HTTP Server Middleware
+
+Use `otel.HTTPHandler` or `otel.HTTPHandlerFunc` to add tracing to your HTTP server:
+
+```go
+package main
+
+import (
+    "net/http"
+
+    "github.com/mutablelogic/go-client/pkg/otel"
+)
+
+func main() {
+    tracer := provider.Tracer("my-server")
+
+    // Wrap your handler with the middleware
+    handler := otel.HTTPHandler(tracer)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        w.Write([]byte("Hello, World!"))
+    }))
+
+    // Or use HTTPHandlerFunc directly
+    handlerFunc := otel.HTTPHandlerFunc(tracer)(func(w http.ResponseWriter, r *http.Request) {
+        w.Write([]byte("Hello, World!"))
+    })
+
+    http.Handle("/", handler)
+    http.ListenAndServe(":8080", nil)
+}
+```
+
+The middleware automatically:
+
+* Extracts trace context from incoming request headers (W3C Trace Context)
+* Creates server spans with HTTP method, URL, and host attributes
+* Captures response status codes
+* Marks spans as errors for 4xx and 5xx responses
+
+### Custom Spans
+
+Use `otel.StartSpan` to create custom spans in your application:
+
+```go
+ctx, endSpan := otel.StartSpan(tracer, ctx, "MyOperation",
+    attribute.String("key", "value"),
+)
+// Use a closure to capture the final value of err when the function returns.
+// defer endSpan(err) would capture err's value NOW (likely nil), not at return time.
+defer func() { endSpan(err) }()
+
+// Your code here...
+```

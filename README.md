@@ -20,7 +20,7 @@ There are also some example clients which use this library:
 * [NewsAPI client](https://github.com/mutablelogic/go-client/tree/main/pkg/newsapi)
 * [WeatherAPI client](https://github.com/mutablelogic/go-client/tree/main/pkg/weatherapi)
 
-Aiming to have compatibility with go version 1.21 and above.
+Aiming to have compatibility with go version 1.24 and above.
 
 ## Basic Usage
 

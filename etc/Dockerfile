@@ -2,7 +2,7 @@ ARG OS
 ARG ARCH
 
 # Run makefile to build all the commands
-FROM --platform=${OS}/${ARCH} golang:1.23 AS builder
+FROM --platform=${OS}/${ARCH} golang:1.24 AS builder
 ARG OS
 ARG ARCH
 WORKDIR /usr/src/app
@@ -10,20 +10,15 @@ COPY . .
 RUN OS=${OS} ARCH=${ARCH} make
 
 # Copy server to /usr/local/bin
-FROM --platform=${OS}/${ARCH} debian:bookworm-slim
+FROM --platform=${OS}/${ARCH} debian:trixie-slim
 ARG OS
 ARG ARCH
 ARG SOURCE
-RUN apt update && apt install -y ca-certificates
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /usr/src/app/build/* /usr/local/bin/
-COPY --chmod=755 etc/entrypoint.sh .
-
-# Install the api commands
-RUN api install
 
 # Labels
 LABEL org.opencontainers.image.source=${SOURCE}
 
-# Entrypoint when running the server
-ENTRYPOINT [ "/entrypoint.sh" ]
-CMD [ "/usr/local/bin/api" ]
+# Entrypoint
+ENTRYPOINT [ "/usr/local/bin/api" ]

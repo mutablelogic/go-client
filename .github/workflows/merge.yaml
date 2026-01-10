@@ -40,3 +40,5 @@ jobs:
           go-version: ${{ matrix.go-version }}
       - name: Run tests
         run: make test
+      - name: Build docker image
+        run: make docker

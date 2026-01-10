@@ -71,7 +71,7 @@ func main() {
 		}
 
 		tracer := provider.Tracer(cli.Globals.OtelName)
-		cli.Globals.opts = append(cli.Globals.opts, client.OptTracer(tracer, "api"))
+		cli.Globals.opts = append(cli.Globals.opts, client.OptTracer(tracer))
 
 		// Start root span
 		ctx, span := tracer.Start(cli.Globals.ctx, "cli."+cmd.Command())

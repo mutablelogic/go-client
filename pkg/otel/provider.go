@@ -9,10 +9,12 @@ import (
 	"strings"
 
 	// Packages
+	gootel "go.opentelemetry.io/otel"
 	attribute "go.opentelemetry.io/otel/attribute"
 	otlptrace "go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	otlptracegrpc "go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	otlptracehttp "go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
+	"go.opentelemetry.io/otel/propagation"
 	sdkresource "go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
@@ -28,7 +30,9 @@ type Attr struct {
 ////////////////////////////////////////////////////////////////////////////
 // LIFECYCLE
 
-// NewProvider creates a new OpenTelemetry tracer provider
+// NewProvider creates a new OpenTelemetry tracer provider. It expects a
+// endpoint formatted as host:port for HTTPS endpoints, or a URL with a
+// http, https, grpc or grpcs scheme, host, port and optional path.
 func NewProvider(endpoint, header, name string, attrs ...Attr) (*sdktrace.TracerProvider, error) {
 	if endpoint == "" {
 		return nil, fmt.Errorf("missing OTLP endpoint")
@@ -52,9 +56,9 @@ func NewProvider(endpoint, header, name string, attrs ...Attr) (*sdktrace.Tracer
 	var exporter sdktrace.SpanExporter
 	switch parsed.Scheme {
 	case "http", "https":
-		exporter, err = newHTTPTraceExporter(parsed, toHeaders(header))
+		exporter, err = toHTTP(parsed, toHeaders(header))
 	case "grpc", "grpcs":
-		exporter, err = newGRPCTraceExporter(parsed, toHeaders(header))
+		exporter, err = toGRPC(parsed, toHeaders(header))
 	default:
 		return nil, fmt.Errorf("unsupported OTLP scheme %q", parsed.Scheme)
 	}
@@ -81,6 +85,9 @@ func NewProvider(endpoint, header, name string, attrs ...Attr) (*sdktrace.Tracer
 		return nil, err
 	}
 
+	// Set global propagator for trace context propagation
+	gootel.SetTextMapPropagator(propagation.TraceContext{})
+
 	// Return tracer provider
 	return sdktrace.NewTracerProvider(
 		sdktrace.WithSampler(sdktrace.AlwaysSample()),
@@ -89,7 +96,7 @@ func NewProvider(endpoint, header, name string, attrs ...Attr) (*sdktrace.Tracer
 	), nil
 }
 
-func newHTTPTraceExporter(endpoint *url.URL, headers map[string]string) (sdktrace.SpanExporter, error) {
+func toHTTP(endpoint *url.URL, headers map[string]string) (sdktrace.SpanExporter, error) {
 	clientOpts := []otlptracehttp.Option{
 		otlptracehttp.WithEndpoint(endpoint.Host),
 	}
@@ -120,7 +127,7 @@ func newHTTPTraceExporter(endpoint *url.URL, headers map[string]string) (sdktrac
 	return exporter, nil
 }
 
-func newGRPCTraceExporter(endpoint *url.URL, headers map[string]string) (sdktrace.SpanExporter, error) {
+func toGRPC(endpoint *url.URL, headers map[string]string) (sdktrace.SpanExporter, error) {
 	if endpoint.Path != "" && endpoint.Path != "/" {
 		return nil, fmt.Errorf("gRPC OTLP endpoint should not include a path: %q", endpoint.Path)
 	}

@@ -42,7 +42,7 @@ func main() {
     var response struct {
         Message string `json:"message"`
     }
-    if err := c.Do(nil, &response, OptPath("test")); err != nil {
+    if err := c.Do(nil, &response, client.OptPath("test")); err != nil {
         // Handle error
     }
 

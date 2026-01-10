@@ -407,3 +407,48 @@ defer func() { endSpan(err) }()
 
 // Your code here...
 ```
+
+## License
+
+This project is licensed under the Apache License, Version 2.0. See the [LICENSE](LICENSE) file for details, and the [NOTICE](NOTICE) file for copyright attribution.
+
+### What You Can Do
+
+Under the Apache-2.0 license, you are free to:
+
+* **Use** — Use the software for any purpose, including commercial applications
+* **Modify** — Make changes to the source code
+* **Distribute** — Share the original or modified software
+* **Sublicense** — Grant rights to others under different terms
+* **Patent Use** — Use any patents held by contributors that cover this code
+
+**Requirements when redistributing:**
+
+* Include a copy of the Apache-2.0 license
+* State any significant changes you made
+* Preserve copyright, patent, trademark, and attribution notices
+
+**Not provided:**
+
+* Trademark rights
+* Warranty of any kind
+
+### Third-Party Dependencies
+
+This project uses the following third-party libraries:
+
+| Package | License |
+|---------|---------|
+| [go.opentelemetry.io/otel](https://pkg.go.dev/go.opentelemetry.io/otel) | Apache-2.0 |
+| [github.com/alecthomas/kong](https://pkg.go.dev/github.com/alecthomas/kong) | MIT |
+| [github.com/stretchr/testify](https://pkg.go.dev/github.com/stretchr/testify) | MIT |
+| [github.com/andreburgaud/crypt2go](https://pkg.go.dev/github.com/andreburgaud/crypt2go) | BSD-3-Clause |
+| [github.com/xdg-go/pbkdf2](https://pkg.go.dev/github.com/xdg-go/pbkdf2) | Apache-2.0 |
+| [github.com/djthorpe/go-errors](https://pkg.go.dev/github.com/djthorpe/go-errors) | Apache-2.0 |
+| [github.com/djthorpe/go-tablewriter](https://pkg.go.dev/github.com/djthorpe/go-tablewriter) | Apache-2.0 |
+| [golang.org/x/crypto](https://pkg.go.dev/golang.org/x/crypto) | BSD-3-Clause |
+| [golang.org/x/term](https://pkg.go.dev/golang.org/x/term) | BSD-3-Clause |
+| [google.golang.org/grpc](https://pkg.go.dev/google.golang.org/grpc) | Apache-2.0 |
+| [google.golang.org/protobuf](https://pkg.go.dev/google.golang.org/protobuf) | BSD-3-Clause |
+
+All dependencies use permissive open-source licenses (Apache-2.0, MIT, BSD-3-Clause) that are compatible with this project's Apache-2.0 license.

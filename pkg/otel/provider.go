@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net"
 	"net/url"
-	"path"
 	"strings"
 	"sync"
 
@@ -123,9 +122,9 @@ func toHTTP(endpoint *url.URL, headers map[string]string) (sdktrace.SpanExporter
 	case strings.HasSuffix(pathComponent, "v1/traces"):
 		// leave as-is
 	default:
-		pathComponent = path.Join(pathComponent, "v1/traces")
+		pathComponent = pathComponent + "/v1/traces"
 	}
-	clientOpts = append(clientOpts, otlptracehttp.WithURLPath(pathComponent))
+	clientOpts = append(clientOpts, otlptracehttp.WithURLPath("/"+pathComponent))
 
 	if len(headers) > 0 {
 		clientOpts = append(clientOpts, otlptracehttp.WithHeaders(headers))

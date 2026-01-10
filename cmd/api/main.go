@@ -115,7 +115,7 @@ func NewTableWriter(ctx *CLI) (*tablewriter.Writer, error) {
 		tablewriter.OptHeader(),
 		tablewriter.OptTerminalWidth(w),
 	}
-	ext := strings.ToLower(ctx.Path)
+	ext := strings.ToLower(strings.TrimPrefix(path.Ext(ctx.Path), "."))
 	switch ext {
 	case "csv":
 		opts = append(opts, tablewriter.OptOutputCSV())

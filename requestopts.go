@@ -19,7 +19,6 @@ type requestOpts struct {
 	noTimeout          bool               // OptNoTimeout
 	textStreamCallback TextStreamCallback // OptTextStreamCallback
 	jsonStreamCallback JsonStreamCallback // OptJsonStreamCallback
-	span               string             // OptSpan
 }
 
 type RequestOpt func(*requestOpts) error
@@ -111,14 +110,6 @@ func OptTextStreamCallback(fn TextStreamCallback) RequestOpt {
 func OptJsonStreamCallback(fn JsonStreamCallback) RequestOpt {
 	return func(r *requestOpts) error {
 		r.jsonStreamCallback = fn
-		return nil
-	}
-}
-
-// OptSpan sets a tracing span for this request
-func OptSpan(name string) RequestOpt {
-	return func(r *requestOpts) error {
-		r.span = name
 		return nil
 	}
 }

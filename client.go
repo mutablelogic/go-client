@@ -257,7 +257,7 @@ func (client *Client) request(ctx context.Context, method, accept, mimetype stri
 }
 
 // Do will make a JSON request, populate an object with the response and return any errors
-func do(client *http.Client, req *http.Request, accept string, strict bool, tracer trace.Tracer, out any, opts ...RequestOpt) error {
+func do(client *http.Client, req *http.Request, accept string, strict bool, tracer trace.Tracer, out any, opts ...RequestOpt) (err error) {
 	// Apply request options
 	reqopts := requestOpts{
 		Request: req,
@@ -277,12 +277,13 @@ func do(client *http.Client, req *http.Request, accept string, strict bool, trac
 	}
 
 	// Create span if tracer provided
+	var response *http.Response
 	req, finishSpan := pkgotel.StartHTTPClientSpan(tracer, req)
+	defer func() { finishSpan(response, err) }()
 
 	// Do the request
-	response, err := client.Do(req)
+	response, err = client.Do(req)
 	if err != nil {
-		finishSpan(nil, err)
 		return err
 	}
 	defer response.Body.Close()
@@ -290,7 +291,6 @@ func do(client *http.Client, req *http.Request, accept string, strict bool, trac
 	// Get content type
 	mimetype, err := respContentType(response)
 	if err != nil {
-		finishSpan(response, nil)
 		return ErrUnexpectedResponse.With(mimetype)
 	}
 
@@ -299,16 +299,10 @@ func do(client *http.Client, req *http.Request, accept string, strict bool, trac
 		// Read any information from the body
 		data, err := io.ReadAll(response.Body)
 		if err != nil {
-			finishSpan(response, err)
 			return err
 		}
-		errResponse := ErrUnexpectedResponse.With(response.Status, ": ", string(data))
-		finishSpan(response, errResponse)
-		return errResponse
+		return ErrUnexpectedResponse.With(response.Status, ": ", string(data))
 	}
-
-	// Finish span for successful response
-	finishSpan(response, nil)
 
 	// When in strict mode, check content type returned is as expected
 	if strict && (accept != "" && accept != ContentTypeAny) {

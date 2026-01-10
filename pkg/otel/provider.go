@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"path"
 	"strings"
+	"sync"
 
 	// Packages
 	gootel "go.opentelemetry.io/otel"
@@ -18,6 +19,11 @@ import (
 	sdkresource "go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
+
+////////////////////////////////////////////////////////////////////////////
+// GLOBALS
+
+var propagatorOnce sync.Once
 
 ////////////////////////////////////////////////////////////////////////////
 // TYPES
@@ -85,8 +91,13 @@ func NewProvider(endpoint, header, name string, attrs ...Attr) (*sdktrace.Tracer
 		return nil, err
 	}
 
-	// Set global propagator for trace context propagation
-	gootel.SetTextMapPropagator(propagation.TraceContext{})
+	// Set global propagator for trace context propagation (W3C Trace Context).
+	// Uses sync.Once to ensure the propagator is only set on the first call.
+	// For custom propagator configurations, callers should set the propagator
+	// themselves using otel.SetTextMapPropagator() before calling NewProvider.
+	propagatorOnce.Do(func() {
+		gootel.SetTextMapPropagator(propagation.TraceContext{})
+	})
 
 	// Return tracer provider
 	return sdktrace.NewTracerProvider(

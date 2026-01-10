@@ -37,10 +37,10 @@ func HTTPHandlerFunc(tracer trace.Tracer) func(http.HandlerFunc) http.HandlerFun
 			ctx, span := tracer.Start(parentCtx, r.Method+" "+r.URL.Path,
 				trace.WithSpanKind(trace.SpanKindServer),
 				trace.WithAttributes(
-					attribute.String("http.method", r.Method),
-					attribute.String("http.url", r.URL.String()),
-					attribute.String("http.target", r.URL.Path),
-					attribute.String("http.host", r.Host),
+					attribute.String("http.request.method", r.Method),
+					attribute.String("url.full", r.URL.String()),
+					attribute.String("url.path", r.URL.Path),
+					attribute.String("server.address", r.Host),
 				),
 			)
 			defer span.End()
@@ -50,7 +50,7 @@ func HTTPHandlerFunc(tracer trace.Tracer) func(http.HandlerFunc) http.HandlerFun
 			next.ServeHTTP(sw, r.WithContext(ctx))
 
 			// Record status code and mark errors
-			span.SetAttributes(attribute.Int("http.status_code", sw.status))
+			span.SetAttributes(attribute.Int("http.response.status_code", sw.status))
 			if sw.status >= 400 {
 				span.SetStatus(codes.Error, http.StatusText(sw.status))
 			}

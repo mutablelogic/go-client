@@ -64,7 +64,7 @@ func StartHTTPClientSpan(tracer trace.Tracer, req *http.Request) (*http.Request,
 	ctx, span := tracer.Start(req.Context(), spanName,
 		trace.WithSpanKind(trace.SpanKindClient),
 		trace.WithAttributes(
-			attribute.String("http.method", req.Method),
+			attribute.String("http.request.method", req.Method),
 			attribute.String("url.full", RedactedURL(req.URL)),
 			attribute.String("url.path", req.URL.Path),
 			attribute.String("server.address", req.URL.Host),
@@ -93,7 +93,7 @@ func StartHTTPClientSpan(tracer trace.Tracer, req *http.Request) (*http.Request,
 			span.SetStatus(codes.Error, err.Error())
 		} else if resp != nil {
 			span.SetAttributes(
-				attribute.Int("http.status_code", resp.StatusCode),
+				attribute.Int("http.response.status_code", resp.StatusCode),
 				attribute.String("http.response.header.content_type", resp.Header.Get("Content-Type")),
 			)
 			if resp.ContentLength > 0 {

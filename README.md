@@ -323,10 +323,16 @@ func main() {
     tracer := provider.Tracer("my-service")
 
     // Use the tracer with go-client
-    client := client.New(
+    c, err := client.New(
         client.OptEndpoint("https://api.example.com"),
         client.OptTracer(tracer),
     )
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    // Use the client...
+    _ = c
 }
 ```
 
@@ -347,12 +353,21 @@ Use `otel.HTTPHandler` or `otel.HTTPHandlerFunc` to add tracing to your HTTP ser
 package main
 
 import (
+    "context"
+    "log"
     "net/http"
 
     "github.com/mutablelogic/go-client/pkg/otel"
 )
 
 func main() {
+    // Create provider (see "Creating a Tracer Provider" above)
+    provider, err := otel.NewProvider("https://otel-collector.example.com:4318", "", "my-server")
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer provider.Shutdown(context.Background())
+
     tracer := provider.Tracer("my-server")
 
     // Wrap your handler with the middleware
@@ -366,6 +381,7 @@ func main() {
     })
 
     http.Handle("/", handler)
+    http.Handle("/func", handlerFunc)
     http.ListenAndServe(":8080", nil)
 }
 ```

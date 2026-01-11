@@ -316,7 +316,11 @@ func do(client *http.Client, req *http.Request, accept string, strict bool, trac
 		return nil
 	}
 
-	// Decode the body
+	// Decode the body, preferring custom Unmarshaler when implemented
+	if v, ok := out.(Unmarshaler); ok {
+		return v.Unmarshal(response.Header, response.Body)
+	}
+
 	switch mimetype {
 	case ContentTypeJson, ContentTypeJsonStream:
 		// JSON decode is streamable
@@ -343,9 +347,7 @@ func do(client *http.Client, req *http.Request, accept string, strict bool, trac
 			return err
 		}
 	default:
-		if v, ok := out.(Unmarshaler); ok {
-			return v.Unmarshal(response.Header, response.Body)
-		} else if v, ok := out.(io.Writer); ok {
+		if v, ok := out.(io.Writer); ok {
 			if _, err := io.Copy(v, response.Body); err != nil {
 				return err
 			}

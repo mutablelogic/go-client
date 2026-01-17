@@ -2,8 +2,6 @@ package multipart
 
 import (
 	"bytes"
-	"io"
-	"mime/multipart"
 	"strings"
 	"testing"
 )
@@ -82,7 +80,7 @@ func Test_Multipart_MultiElementSlice(t *testing.T) {
 	}
 
 	content := buf.String()
-	// Should contain multiple tags fields
+	// Verify all tags are properly encoded as separate fields
 	count := strings.Count(content, `Content-Disposition: form-data; name="tags"`)
 	if count != 3 {
 		t.Errorf("expected 3 tags fields, got %d", count)
@@ -107,7 +105,7 @@ func Test_Multipart_SliceOfIntegers(t *testing.T) {
 	}
 
 	content := buf.String()
-	// Should contain two single_number fields with integer values
+	// Verify integer values are properly encoded as separate fields
 	count := strings.Count(content, `Content-Disposition: form-data; name="single_number"`)
 	if count != 2 {
 		t.Errorf("expected 2 single_number fields, got %d", count)
@@ -245,40 +243,4 @@ func Test_Form_MultiElementSlice(t *testing.T) {
 
 ///////////////////////////////////////////////////////////////////////////////
 // HELPER FUNCTIONS
-
-// parseFormValues extracts form field values from multipart content
-func parseFormValues(t *testing.T, content string, fieldName string) []string {
-	// This is a simplified parser for testing purposes
-	reader := multipart.NewReader(strings.NewReader(content), extractBoundary(content))
-	var values []string
-
-	for {
-		part, err := reader.NextPart()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-
-		if part.FormName() == fieldName {
-			data, err := io.ReadAll(part)
-			if err != nil {
-				t.Fatalf("read error: %v", err)
-			}
-			values = append(values, string(data))
-		}
-	}
-
-	return values
-}
-
-// extractBoundary extracts the boundary from a multipart message
-func extractBoundary(content string) string {
-	parts := strings.Split(content, "\r\n")
-	if len(parts) > 0 {
-		boundary := strings.TrimPrefix(parts[0], "--")
-		return boundary
-	}
-	return ""
-}
+// (None currently - using direct string inspection in tests)

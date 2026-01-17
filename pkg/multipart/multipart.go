@@ -210,6 +210,40 @@ func (enc *Encoder) writeField(name string, value any) error {
 		rv = rv.Elem()
 	}
 
+	// Write slices/arrays as repeated form fields (except []byte which should
+	// remain a single value).
+	if rv.Kind() == reflect.Slice || rv.Kind() == reflect.Array {
+		if rv.Type().Elem().Kind() == reflect.Uint8 {
+			// Treat []byte and [N]byte as a single scalar value (convert to string)
+			// Use efficient conversion: directly get bytes or convert via interface
+			var byteStr string
+			if rv.Kind() == reflect.Slice {
+				byteStr = string(rv.Bytes())
+			} else {
+				// For byte arrays, manually iterate (arrays can't be sliced in reflect)
+				var byteSlice []byte
+				for i := 0; i < rv.Len(); i++ {
+					byteSlice = append(byteSlice, rv.Index(i).Interface().(byte))
+				}
+				byteStr = string(byteSlice)
+			}
+			rv = reflect.ValueOf(byteStr)
+		} else {
+			// Empty slices don't produce form fields
+			if rv.Len() == 0 {
+				return nil
+			}
+			// Iterate over all elements and write each as a separate form field.
+			var result error
+			for i := 0; i < rv.Len(); i++ {
+				if err := enc.writeField(name, rv.Index(i).Interface()); err != nil {
+					result = errors.Join(result, err)
+				}
+			}
+			return result
+		}
+	}
+
 	// Write the field value as a string
 	switch {
 	case enc.m != nil:

@@ -213,7 +213,7 @@ func (enc *Encoder) writeField(name string, value any) error {
 	// Write slices/arrays as repeated form fields (except []byte which should
 	// remain a single value).
 	if rv.Kind() == reflect.Slice || rv.Kind() == reflect.Array {
-		if rv.Kind() == reflect.Slice && rv.Type().Elem().Kind() == reflect.Uint8 {
+		if (rv.Kind() == reflect.Slice || rv.Kind() == reflect.Array) && rv.Type().Elem().Kind() == reflect.Uint8 {
 			// Treat []byte as a single scalar value
 			rv = reflect.ValueOf(string(rv.Bytes()))
 		} else {

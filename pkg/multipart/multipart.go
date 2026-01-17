@@ -210,6 +210,23 @@ func (enc *Encoder) writeField(name string, value any) error {
 		rv = rv.Elem()
 	}
 
+	// Write slices/arrays as repeated form fields (except []byte which should
+	// remain a single value).
+	if rv.Kind() == reflect.Slice || rv.Kind() == reflect.Array {
+		if rv.Kind() == reflect.Slice && rv.Type().Elem().Kind() == reflect.Uint8 {
+			// Treat []byte as a single scalar value
+			rv = reflect.ValueOf(string(rv.Bytes()))
+		} else {
+			var result error
+			for i := 0; i < rv.Len(); i++ {
+				if err := enc.writeField(name, rv.Index(i).Interface()); err != nil {
+					result = errors.Join(result, err)
+				}
+			}
+			return result
+		}
+	}
+
 	// Write the field value as a string
 	switch {
 	case enc.m != nil:

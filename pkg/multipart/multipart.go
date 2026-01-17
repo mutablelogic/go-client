@@ -214,9 +214,15 @@ func (enc *Encoder) writeField(name string, value any) error {
 	// remain a single value).
 	if rv.Kind() == reflect.Slice || rv.Kind() == reflect.Array {
 		if (rv.Kind() == reflect.Slice || rv.Kind() == reflect.Array) && rv.Type().Elem().Kind() == reflect.Uint8 {
-			// Treat []byte as a single scalar value
-			rv = reflect.ValueOf(string(rv.Bytes()))
+			// Treat []byte and [N]byte as a single scalar value (convert to string)
+			// Build a byte slice from the array or slice
+			var byteSlice []byte
+			for i := 0; i < rv.Len(); i++ {
+				byteSlice = append(byteSlice, rv.Index(i).Interface().(byte))
+			}
+			rv = reflect.ValueOf(string(byteSlice))
 		} else {
+			// Iterate over all elements and write each as a separate form field.
 			var result error
 			for i := 0; i < rv.Len(); i++ {
 				if err := enc.writeField(name, rv.Index(i).Interface()); err != nil {

@@ -15,11 +15,9 @@ import (
 	"time"
 
 	// Package imports
-	pkgotel "github.com/mutablelogic/go-client/pkg/otel"
+	otel "github.com/mutablelogic/go-client/pkg/otel"
+	httpresponse "github.com/mutablelogic/go-server/pkg/httpresponse"
 	trace "go.opentelemetry.io/otel/trace"
-
-	// Namespace imports
-	. "github.com/djthorpe/go-errors"
 )
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -97,7 +95,7 @@ func New(opts ...ClientOpt) (*Client, error) {
 
 	// If no endpoint, then return error
 	if this.endpoint == nil {
-		return nil, ErrBadParameter.With("missing endppint")
+		return nil, httpresponse.ErrBadRequest.With("missing endpoint")
 	}
 
 	// Return success
@@ -110,7 +108,7 @@ func New(opts ...ClientOpt) (*Client, error) {
 func (client *Client) String() string {
 	str := "<client"
 	if client.endpoint != nil {
-		str += fmt.Sprintf(" endpoint=%q", pkgotel.RedactedURL(client.endpoint))
+		str += fmt.Sprintf(" endpoint=%q", otel.RedactedURL(client.endpoint))
 	}
 	if client.Client.Timeout > 0 {
 		str += fmt.Sprint(" timeout=", client.Client.Timeout)
@@ -216,7 +214,7 @@ func (client *Client) Debugf(f string, args ...any) {
 func (client *Client) request(ctx context.Context, method, accept, mimetype string, body io.Reader) (*http.Request, error) {
 	// Return error if no endpoint is set
 	if client.endpoint == nil {
-		return nil, ErrBadParameter.With("missing endpoint")
+		return nil, httpresponse.ErrBadRequest.With("missing endpoint")
 	}
 
 	// Make a request
@@ -258,6 +256,8 @@ func (client *Client) request(ctx context.Context, method, accept, mimetype stri
 
 // Do will make a JSON request, populate an object with the response and return any errors
 func do(client *http.Client, req *http.Request, accept string, strict bool, tracer trace.Tracer, out any, opts ...RequestOpt) (err error) {
+	const maxRedirects = 10
+
 	// Apply request options
 	reqopts := requestOpts{
 		Request: req,
@@ -276,22 +276,61 @@ func do(client *http.Client, req *http.Request, accept string, strict bool, trac
 		client.Timeout = 0
 	}
 
-	// Create span if tracer provided
+	// Follow redirects manually so we can keep method and headers for HEAD/GET
 	var response *http.Response
-	req, finishSpan := pkgotel.StartHTTPClientSpan(tracer, req)
-	defer func() { finishSpan(response, err) }()
+	for redirects := 0; ; redirects++ {
+		reqWithSpan, finishSpan := otel.StartHTTPClientSpan(tracer, req)
+		resp, doErr := client.Do(reqWithSpan)
+		if doErr != nil {
+			finishSpan(nil, doErr)
+			return doErr
+		}
 
-	// Do the request
-	response, err = client.Do(req)
-	if err != nil {
-		return err
+		loc := resp.Header.Get("Location")
+		isRedirect := resp.StatusCode >= 300 && resp.StatusCode < 400 && loc != ""
+		canRedirect := req.Method == http.MethodGet || req.Method == http.MethodHead
+		if isRedirect && canRedirect {
+			if redirects >= maxRedirects {
+				resp.Body.Close()
+				finishSpan(resp, nil)
+				return httpresponse.Err(http.StatusTooManyRequests)
+			}
+
+			nextURL, parseErr := req.URL.Parse(loc)
+			if parseErr != nil {
+				resp.Body.Close()
+				finishSpan(resp, nil)
+				return parseErr
+			}
+
+			resp.Body.Close()
+			finishSpan(resp, nil)
+
+			// Clone request for next redirect
+			nextReq := req.Clone(req.Context())
+			nextReq.URL = nextURL
+			nextReq.Host = nextURL.Host
+
+			// Strip sensitive headers when redirecting to a different host
+			if req.URL.Host != nextURL.Host {
+				nextReq.Header.Del("Authorization")
+				nextReq.Header.Del("Cookie")
+			}
+
+			req = nextReq
+			continue
+		}
+
+		response = resp
+		defer func() { finishSpan(response, err) }()
+		break
 	}
 	defer response.Body.Close()
 
 	// Get content type
 	mimetype, err := respContentType(response)
 	if err != nil {
-		return ErrUnexpectedResponse.With(mimetype)
+		return err
 	}
 
 	// Check status code
@@ -301,13 +340,17 @@ func do(client *http.Client, req *http.Request, accept string, strict bool, trac
 		if err != nil {
 			return err
 		}
-		return ErrUnexpectedResponse.With(response.Status, ": ", string(data))
+		if len(data) == 0 {
+			return httpresponse.Err(response.StatusCode).With(response.Status)
+		} else {
+			return httpresponse.Err(response.StatusCode).Withf("%s: %s", response.Status, string(data))
+		}
 	}
 
 	// When in strict mode, check content type returned is as expected
 	if strict && (accept != "" && accept != ContentTypeAny) {
 		if mimetype != accept {
-			return ErrUnexpectedResponse.Withf("strict mode: unexpected response with %q", mimetype)
+			return httpresponse.Err(http.StatusUnsupportedMediaType).With(mimetype)
 		}
 	}
 
@@ -318,7 +361,16 @@ func do(client *http.Client, req *http.Request, accept string, strict bool, trac
 
 	// Decode the body, preferring custom Unmarshaler when implemented
 	if v, ok := out.(Unmarshaler); ok {
-		return v.Unmarshal(response.Header, response.Body)
+		if err := v.Unmarshal(response.Header, response.Body); err != nil {
+			// If the error is a httpresponse error, and that is "not implemented", then
+			// fall through to default unmarshaling
+			var httpErr httpresponse.Err
+			if errors.As(err, &httpErr) && int(httpErr) != http.StatusNotImplemented {
+				return err
+			}
+		} else {
+			return nil
+		}
 	}
 
 	switch mimetype {
@@ -352,7 +404,7 @@ func do(client *http.Client, req *http.Request, accept string, strict bool, trac
 				return err
 			}
 		} else {
-			return ErrInternalAppError.Withf("do: response does not implement Unmarshaler for %q", mimetype)
+			return httpresponse.ErrInternalError.Withf("do: response does not implement Unmarshaler for %q", mimetype)
 		}
 	}
 
@@ -367,7 +419,7 @@ func respContentType(resp *http.Response) (string, error) {
 		return ContentTypeBinary, nil
 	}
 	if mimetype, _, err := mime.ParseMediaType(contenttype); err != nil {
-		return contenttype, ErrUnexpectedResponse.With(contenttype)
+		return contenttype, httpresponse.Err(http.StatusUnsupportedMediaType).With(contenttype)
 	} else {
 		return mimetype, nil
 	}

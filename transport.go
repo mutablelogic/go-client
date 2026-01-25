@@ -12,7 +12,7 @@ import (
 	"time"
 
 	// Packages
-	"github.com/mutablelogic/go-client/pkg/multipart"
+	multipart "github.com/mutablelogic/go-client/pkg/multipart"
 	pkgotel "github.com/mutablelogic/go-client/pkg/otel"
 )
 

@@ -9,6 +9,7 @@ require (
 	github.com/andreburgaud/crypt2go v1.8.0
 	github.com/djthorpe/go-errors v1.0.3
 	github.com/djthorpe/go-tablewriter v0.0.11
+	github.com/mutablelogic/go-server v1.5.18
 	github.com/stretchr/testify v1.11.1
 	github.com/xdg-go/pbkdf2 v1.0.0
 	go.opentelemetry.io/otel v1.39.0

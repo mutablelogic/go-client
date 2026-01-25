@@ -31,19 +31,25 @@ to a JSON endpoint:
 package main
 
 import (
+    "fmt"
+    "log"
+
     client "github.com/mutablelogic/go-client"
 )
 
 func main() {
     // Create a new client
-    c := client.New(client.OptEndpoint("https://api.example.com/api/v1"))
+    c, err := client.New(client.OptEndpoint("https://api.example.com/api/v1"))
+    if err != nil {
+        log.Fatal(err)
+    }
 
     // Send a GET request, populating a struct with the response
     var response struct {
         Message string `json:"message"`
     }
     if err := c.Do(nil, &response, client.OptPath("test")); err != nil {
-        // Handle error
+        log.Fatal(err)
     }
 
     // Print the response
@@ -69,6 +75,16 @@ Various options can be passed to the client `New` method to control its behaviou
 * `OptTracer(tracer trace.Tracer)` sets an OpenTelemetry tracer for distributed tracing.
     Span names default to "METHOD /path" format. See the OpenTelemetry section below for more details.
 
+## Redirect Handling
+
+The client automatically follows HTTP redirects (3xx responses) for GET and HEAD requests, up to a maximum of 10 redirects. Unlike the default Go HTTP client behavior:
+
+* The HTTP method is preserved (HEAD stays HEAD, GET stays GET)
+* Request headers are preserved across redirects
+* For security, `Authorization` and `Cookie` headers are stripped when redirecting to a different host
+
+This behavior ensures that redirects work correctly for APIs that use CDNs or load balancers with temporary redirects.
+
 ## Usage with a payload
 
 The first argument to the `Do` method is the payload to send to the server, when set.
@@ -88,14 +104,20 @@ For example,
 package main
 
 import (
+    "fmt"
+    "log"
+
     client "github.com/mutablelogic/go-client"
 )
 
 func main() {
     // Create a new client
-    c := client.New(client.OptEndpoint("https://api.example.com/api/v1"))
+    c, err := client.New(client.OptEndpoint("https://api.example.com/api/v1"))
+    if err != nil {
+        log.Fatal(err)
+    }
 
-    // Send a GET request, populating a struct with the response
+    // Send a POST request with JSON payload
     var request struct {
         Prompt string `json:"prompt"`
     }
@@ -103,9 +125,9 @@ func main() {
         Reply string `json:"reply"`
     }
     request.Prompt = "Hello, world!"
-    payload := client.NewJSONRequest(request)
-    if err := c.Do(payload, &response, OptPath("test")); err != nil {
-        // Handle error
+    payload := client.NewJSONRequest(request, client.ContentTypeJson)
+    if err := c.Do(payload, &response, client.OptPath("test")); err != nil {
+        log.Fatal(err)
     }
 
     // Print the response
@@ -169,20 +191,27 @@ The authentication token can be set as follows:
 package main
 
 import (
+    "log"
+    "os"
+
     client "github.com/mutablelogic/go-client"
 )
 
 func main() {
     // Create a new client
-    c := client.New(
+    c, err := client.New(
         client.OptEndpoint("https://api.example.com/api/v1"),
         client.OptReqToken(client.Token{
             Scheme: "Bearer",
-            Value: os.GetEnv("API_TOKEN"),
+            Value:  os.Getenv("API_TOKEN"),
         }),
     )
+    if err != nil {
+        log.Fatal(err)
+    }
 
-    // ...
+    // Use the client...
+    _ = c
 }
 ```
 
@@ -203,6 +232,9 @@ The payload should be a `struct` where the fields are converted to form tuples. 
 package main
 
 import (
+    "log"
+    "strings"
+
     client "github.com/mutablelogic/go-client"
     multipart "github.com/mutablelogic/go-client/pkg/multipart"
 )
@@ -213,21 +245,27 @@ type FileUpload struct {
 
 func main() {
     // Create a new client
-    c := client.New(client.OptEndpoint("https://api.example.com/api/v1"))
+    c, err := client.New(client.OptEndpoint("https://api.example.com/api/v1"))
+    if err != nil {
+        log.Fatal(err)
+    }
 
     // Create a file upload request
     request := FileUpload{
         File: multipart.File{
             Path: "helloworld.txt",
             Body: strings.NewReader("Hello, world!"),
-        }
+        },
     }
 
     // Upload a file
-    if payload, err := client.NewMultipartRequest(request, "*/*"); err != nil {
-        // Handle error
-    } else if err := c.Do(payload, &response, OptPath("upload")); err != nil {
-        // Handle error
+    var response any
+    payload, err := client.NewMultipartRequest(request, "*/*")
+    if err != nil {
+        log.Fatal(err)
+    }
+    if err := c.Do(payload, &response, client.OptPath("upload")); err != nil {
+        log.Fatal(err)
     }
 }
 ```
@@ -243,7 +281,13 @@ type Unmarshaler interface {
 ```
 
 The first argument to the `Unmarshal` method is the HTTP header of the response, and the second
-argument is the body of the response. The method should return an error if the unmarshalling fails.
+argument is the body of the response. You can return one of the following error values from Unmarshal
+to indicate how the client should handle the response:
+
+* `nil` to indicate successful unmarshalling.
+* `httpresponse.ErrNotImplemented` (from github.com/mutablelogic/go-server/pkg/httpresponse) to fall back to the default unmarshaling behaviour.
+  In this case, the body will be unmarshaled as JSON, XML, or plain text depending on the Content-Type header.
+* Any other error to indicate a failure in unmarshaling.
 
 ## Text Streaming Responses
 
@@ -444,7 +488,7 @@ This project uses the following third-party libraries:
 | [github.com/stretchr/testify](https://pkg.go.dev/github.com/stretchr/testify) | MIT |
 | [github.com/andreburgaud/crypt2go](https://pkg.go.dev/github.com/andreburgaud/crypt2go) | BSD-3-Clause |
 | [github.com/xdg-go/pbkdf2](https://pkg.go.dev/github.com/xdg-go/pbkdf2) | Apache-2.0 |
-| [github.com/djthorpe/go-errors](https://pkg.go.dev/github.com/djthorpe/go-errors) | Apache-2.0 |
+| [github.com/mutablelogic/go-server](https://pkg.go.dev/github.com/mutablelogic/go-server) | Apache-2.0 |
 | [github.com/djthorpe/go-tablewriter](https://pkg.go.dev/github.com/djthorpe/go-tablewriter) | Apache-2.0 |
 | [golang.org/x/crypto](https://pkg.go.dev/golang.org/x/crypto) | BSD-3-Clause |
 | [golang.org/x/term](https://pkg.go.dev/golang.org/x/term) | BSD-3-Clause |

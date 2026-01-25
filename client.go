@@ -359,16 +359,18 @@ func do(client *http.Client, req *http.Request, accept string, strict bool, trac
 		return nil
 	}
 
-	// Decode the body, preferring custom Unmarshaler when implemented
+	// Decode the body, preferring custom Unmarshaler when implemented. If the Unmarshaler
+	// returns httpresponse.ErrNotImplemented, then fall through to default unmarshaling
 	if v, ok := out.(Unmarshaler); ok {
 		if err := v.Unmarshal(response.Header, response.Body); err != nil {
-			// If the error is a httpresponse error, and that is "not implemented", then
-			// fall through to default unmarshaling
 			var httpErr httpresponse.Err
-			if errors.As(err, &httpErr) && int(httpErr) != http.StatusNotImplemented {
+			if errors.As(err, &httpErr) && int(httpErr) == http.StatusNotImplemented {
+				// Fall through to default unmarshaling
+			} else {
 				return err
 			}
 		} else {
+			// Unmarshaling successful
 			return nil
 		}
 	}

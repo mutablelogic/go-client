@@ -291,7 +291,16 @@ func do(client *http.Client, req *http.Request, accept string, strict bool, trac
 		loc := resp.Header.Get("Location")
 		isRedirect := resp.StatusCode >= 300 && resp.StatusCode < 400 && loc != ""
 		canRedirect := req.Method == http.MethodGet || req.Method == http.MethodHead
-		if isRedirect && canRedirect {
+
+		// Handle redirect responses
+		if isRedirect {
+			// Only follow redirects for GET/HEAD methods
+			if !canRedirect {
+				resp.Body.Close()
+				finishSpan(resp, nil)
+				return httpresponse.Err(resp.StatusCode).Withf("cannot follow redirect for %s request", req.Method)
+			}
+
 			// Check redirect limit: redirects=0 is original, so redirects >= maxRedirects
 			// means we've already followed maxRedirects hops
 			if redirects >= maxRedirects {
@@ -316,8 +325,10 @@ func do(client *http.Client, req *http.Request, accept string, strict bool, trac
 			nextReq.Host = nextURL.Host
 
 			// Strip sensitive headers when redirecting to a different host
-			// to prevent credential leakage
-			if req.URL.Host != nextURL.Host {
+			// or downgrading from HTTPS to HTTP to prevent credential leakage
+			crossOrigin := req.URL.Host != nextURL.Host
+			insecureDowngrade := req.URL.Scheme == "https" && nextURL.Scheme == "http"
+			if crossOrigin || insecureDowngrade {
 				nextReq.Header.Del("Authorization")
 				nextReq.Header.Del("Proxy-Authorization")
 				nextReq.Header.Del("Cookie")

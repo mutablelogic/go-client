@@ -13,7 +13,7 @@ import (
 
 	// Packages
 	multipart "github.com/mutablelogic/go-client/pkg/multipart"
-	pkgotel "github.com/mutablelogic/go-client/pkg/otel"
+	otel "github.com/mutablelogic/go-client/pkg/otel"
 )
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -59,7 +59,7 @@ func (transport *logtransport) Payload(v interface{}) {
 
 // RoundTrip is called as part of the request/response cycle
 func (transport *logtransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	fmt.Fprintln(transport.w, "request:", req.Method, pkgotel.RedactedURL(req.URL))
+	fmt.Fprintln(transport.w, "request:", req.Method, otel.RedactedURL(req.URL))
 	if transport.v {
 		for key := range req.Header {
 			fmt.Fprintf(transport.w, "  => %v: %q\n", key, req.Header.Get(key))

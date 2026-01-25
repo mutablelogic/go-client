@@ -276,7 +276,9 @@ func do(client *http.Client, req *http.Request, accept string, strict bool, trac
 		client.Timeout = 0
 	}
 
-	// Follow redirects manually so we can keep method and headers for HEAD/GET
+	// Follow redirects manually so we can keep method and headers for HEAD/GET.
+	// redirects=0 is the original request, redirects=1..N are redirect follows.
+	// We allow up to maxRedirects redirect hops (not counting the original request).
 	var response *http.Response
 	for redirects := 0; ; redirects++ {
 		reqWithSpan, finishSpan := otel.StartHTTPClientSpan(tracer, req)
@@ -290,10 +292,12 @@ func do(client *http.Client, req *http.Request, accept string, strict bool, trac
 		isRedirect := resp.StatusCode >= 300 && resp.StatusCode < 400 && loc != ""
 		canRedirect := req.Method == http.MethodGet || req.Method == http.MethodHead
 		if isRedirect && canRedirect {
+			// Check redirect limit: redirects=0 is original, so redirects >= maxRedirects
+			// means we've already followed maxRedirects hops
 			if redirects >= maxRedirects {
 				resp.Body.Close()
 				finishSpan(resp, nil)
-				return httpresponse.Err(http.StatusTooManyRequests)
+				return httpresponse.Err(http.StatusLoopDetected).With("too many redirects")
 			}
 
 			nextURL, parseErr := req.URL.Parse(loc)
@@ -312,8 +316,10 @@ func do(client *http.Client, req *http.Request, accept string, strict bool, trac
 			nextReq.Host = nextURL.Host
 
 			// Strip sensitive headers when redirecting to a different host
+			// to prevent credential leakage
 			if req.URL.Host != nextURL.Host {
 				nextReq.Header.Del("Authorization")
+				nextReq.Header.Del("Proxy-Authorization")
 				nextReq.Header.Del("Cookie")
 			}
 
@@ -347,10 +353,12 @@ func do(client *http.Client, req *http.Request, accept string, strict bool, trac
 		}
 	}
 
-	// When in strict mode, check content type returned is as expected
+	// When in strict mode, check content type returned is as expected.
+	// Use 406 Not Acceptable since this is client-side validation that the
+	// server's response doesn't match our Accept header expectations.
 	if strict && (accept != "" && accept != ContentTypeAny) {
 		if mimetype != accept {
-			return httpresponse.Err(http.StatusUnsupportedMediaType).With(mimetype)
+			return httpresponse.Err(http.StatusNotAcceptable).Withf("strict mode: expected %q, got %q", accept, mimetype)
 		}
 	}
 

@@ -17,8 +17,6 @@ There are also some example clients which use this library:
 * [Bitwarden API Client](https://github.com/mutablelogic/go-client/tree/main/pkg/bitwarden)
 * [Home Assistant API Client](https://github.com/mutablelogic/go-client/tree/main/pkg/homeassistant)
 * [IPify Client](https://github.com/mutablelogic/go-client/tree/main/pkg/ipify)
-* [NewsAPI client](https://github.com/mutablelogic/go-client/tree/main/pkg/newsapi)
-* [WeatherAPI client](https://github.com/mutablelogic/go-client/tree/main/pkg/weatherapi)
 
 Aiming to have compatibility with go version 1.24 and above.
 
@@ -95,6 +93,9 @@ You can create a payload using the following methods:
     a JSON payload which defaults to POST.
 * `client.NewMultipartRequest(payload any, accept string)` returns a new request with
     a Multipart Form data payload which defaults to POST.
+* `client.NewStreamingMultipartRequest(payload any, accept string)` returns a new request with
+    a Multipart Form data payload that streams data rather than buffering in memory. Useful for
+    large file uploads.
 * `client.NewFormRequest(payload any, accept string)` returns a new request with a
     Form data payload which defaults to POST.
 
@@ -225,6 +226,9 @@ You can create a payload with form data:
     data payload which defaults to POST.
 * `client.NewMultipartRequest(payload any, accept string)` returns a new request with
     a Multipart Form data payload which defaults to POST. This is useful for file uploads.
+* `client.NewStreamingMultipartRequest(payload any, accept string)` returns a new request
+    that streams the multipart data rather than buffering in memory. This is recommended for
+    large file uploads to avoid high memory usage.
 
 The payload should be a `struct` where the fields are converted to form tuples. File uploads require a field of type `multipart.File`. For example,
 
@@ -471,28 +475,3 @@ Under the Apache-2.0 license, you are free to:
 * Include a copy of the Apache-2.0 license
 * State any significant changes you made
 * Preserve copyright, patent, trademark, and attribution notices
-
-**Not provided:**
-
-* Trademark rights
-* Warranty of any kind
-
-### Third-Party Dependencies
-
-This project uses the following third-party libraries:
-
-| Package | License |
-|---------|---------|
-| [go.opentelemetry.io/otel](https://pkg.go.dev/go.opentelemetry.io/otel) | Apache-2.0 |
-| [github.com/alecthomas/kong](https://pkg.go.dev/github.com/alecthomas/kong) | MIT |
-| [github.com/stretchr/testify](https://pkg.go.dev/github.com/stretchr/testify) | MIT |
-| [github.com/andreburgaud/crypt2go](https://pkg.go.dev/github.com/andreburgaud/crypt2go) | BSD-3-Clause |
-| [github.com/xdg-go/pbkdf2](https://pkg.go.dev/github.com/xdg-go/pbkdf2) | Apache-2.0 |
-| [github.com/mutablelogic/go-server](https://pkg.go.dev/github.com/mutablelogic/go-server) | Apache-2.0 |
-| [github.com/djthorpe/go-tablewriter](https://pkg.go.dev/github.com/djthorpe/go-tablewriter) | Apache-2.0 |
-| [golang.org/x/crypto](https://pkg.go.dev/golang.org/x/crypto) | BSD-3-Clause |
-| [golang.org/x/term](https://pkg.go.dev/golang.org/x/term) | BSD-3-Clause |
-| [google.golang.org/grpc](https://pkg.go.dev/google.golang.org/grpc) | Apache-2.0 |
-| [google.golang.org/protobuf](https://pkg.go.dev/google.golang.org/protobuf) | BSD-3-Clause |
-
-All dependencies use permissive open-source licenses (Apache-2.0, MIT, BSD-3-Clause) that are compatible with this project's Apache-2.0 license.

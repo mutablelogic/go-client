@@ -94,8 +94,8 @@ func (req *streamingRequest) Read(b []byte) (n int, err error) {
 }
 
 // Close closes the reader, which signals the encoding goroutine to terminate,
-// and waits for the goroutine to complete. This is called automatically by
-// the HTTP client when the request completes or is cancelled, preventing
+// and waits for the goroutine to complete. Callers must ensure Close is invoked
+// once the HTTP client has finished reading the request body to avoid
 // goroutine leaks.
 func (req *streamingRequest) Close() error {
 	err := req.reader.Close()

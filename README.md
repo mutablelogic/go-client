@@ -95,7 +95,8 @@ You can create a payload using the following methods:
     a Multipart Form data payload which defaults to POST.
 * `client.NewStreamingMultipartRequest(payload any, accept string)` returns a new request with
     a Multipart Form data payload that streams data rather than buffering in memory. Useful for
-    large file uploads.
+    large file uploads. The returned payload implements `io.Closer` and is automatically closed
+    by the HTTP client after the request completes.
 * `client.NewFormRequest(payload any, accept string)` returns a new request with a
     Form data payload which defaults to POST.
 
@@ -228,7 +229,8 @@ You can create a payload with form data:
     a Multipart Form data payload which defaults to POST. This is useful for file uploads.
 * `client.NewStreamingMultipartRequest(payload any, accept string)` returns a new request
     that streams the multipart data rather than buffering in memory. This is recommended for
-    large file uploads to avoid high memory usage.
+    large file uploads to avoid high memory usage. The returned payload implements `io.Closer`
+    and is automatically closed by the HTTP client after the request completes.
 
 The payload should be a `struct` where the fields are converted to form tuples. File uploads require a field of type `multipart.File`. For example,
 

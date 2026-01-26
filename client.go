@@ -131,6 +131,11 @@ func (client *Client) DoWithContext(ctx context.Context, in Payload, out any, op
 	client.Mutex.Lock()
 	defer client.Mutex.Unlock()
 
+	// Close payload if it implements io.Closer (e.g., streaming payloads)
+	if closer, ok := in.(io.Closer); ok {
+		defer closer.Close()
+	}
+
 	// Check rate limit - sleep until next request can be made
 	now := time.Now()
 	if !client.ts.IsZero() && client.rate > 0.0 {

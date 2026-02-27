@@ -81,7 +81,7 @@ func NewFormEncoder(w io.Writer) *Encoder {
 // which are added as form data and excluding any fields with a tag of json:"-"
 func (enc *Encoder) Encode(v any) error {
 	rv := reflect.ValueOf(v)
-	if rv.Kind() == reflect.Ptr {
+	if rv.Kind() == reflect.Pointer {
 		rv = rv.Elem()
 	}
 	if rv.Kind() != reflect.Struct {
@@ -90,7 +90,7 @@ func (enc *Encoder) Encode(v any) error {
 
 	// Iterate over visible fields
 	var result error
-	ignore := make([][]int, 0)
+	var ignore [][]int
 	for _, field := range reflect.VisibleFields(rv.Type()) {
 		if field.Type.Kind() == reflect.Ptr {
 			if fv := rv.FieldByIndex(field.Index); fv.IsNil() {
@@ -139,25 +139,24 @@ func (enc *Encoder) Encode(v any) error {
 		}
 
 		// Write field
-		value := rv.FieldByIndex(field.Index)
-		if value.Kind() == reflect.Ptr {
-			if value.IsNil() {
+		if fv.Kind() == reflect.Ptr {
+			if fv.IsNil() {
 				continue
 			}
-			value = value.Elem()
+			fv = fv.Elem()
 		}
-		if value.Type() == fileType {
-			if _, err := enc.writeFileField(name, value.Interface().(File)); err != nil {
+		if fv.Type() == fileType {
+			if err := enc.writeFileField(name, fv.Interface().(File)); err != nil {
 				result = errors.Join(result, err)
 			}
-		} else if value.Type() == fileSliceType {
+		} else if fv.Type() == fileSliceType {
 			// Write each file in the slice as a separate part under the same field name.
-			for _, f := range value.Interface().([]File) {
-				if _, err := enc.writeFileField(name, f); err != nil {
+			for _, f := range fv.Interface().([]File) {
+				if err := enc.writeFileField(name, f); err != nil {
 					result = errors.Join(result, err)
 				}
 			}
-		} else if err := enc.writeField(name, value.Interface()); err != nil {
+		} else if err := enc.writeField(name, fv.Interface()); err != nil {
 			result = errors.Join(result, err)
 		}
 	}
@@ -184,11 +183,8 @@ func (enc *Encoder) Close() error {
 	}
 	// form writer
 	if enc.v != nil && enc.w != nil {
-		if _, err := enc.w.Write([]byte(enc.v.Encode())); err != nil {
-			return err
-		} else {
-			return nil
-		}
+		_, err := enc.w.Write([]byte(enc.v.Encode()))
+		return err
 	}
 	return ErrNotImplemented
 }
@@ -196,17 +192,23 @@ func (enc *Encoder) Close() error {
 ///////////////////////////////////////////////////////////////////////////////
 // PRIVATE METHODS
 
-// Write a file field to the multipart writer, and return the number of bytes
-// written. The part headers are built from File.Header (if set), with
+// writeFileField writes a single file part to the multipart writer.
+// The part headers are built from File.Header (if set), with
 // Content-Disposition always set from the field name and filename, and
 // Content-Type set from File.ContentType when not already present in Header.
-func (enc *Encoder) writeFileField(name string, value File) (int64, error) {
+func (enc *Encoder) writeFileField(name string, value File) error {
 	// File not supported on form writer
 	if enc.m == nil {
-		return 0, ErrNotImplemented.Withf("%q: file upload not supported for %q", name, types.ContentTypeForm)
+		return ErrNotImplemented.Withf("%q: file upload not supported for %q", name, types.ContentTypeForm)
+	}
+	if value.Body == nil {
+		return ErrBadParameter.Withf("%q: file body is nil", name)
 	}
 
 	filename := filepath.Base(value.Path)
+	if filename == "." {
+		filename = ""
+	}
 
 	// Build the part header, starting from any headers already set on the File.
 	h := make(textproto.MIMEHeader)
@@ -216,7 +218,7 @@ func (enc *Encoder) writeFileField(name string, value File) (int64, error) {
 			continue
 		}
 		if !types.IsValidHeaderKey(k) {
-			return 0, ErrBadParameter.Withf("invalid header key %q", k)
+			return ErrBadParameter.Withf("invalid header key %q", k)
 		}
 		h[textproto.CanonicalMIMEHeaderKey(k)] = vs
 	}
@@ -233,13 +235,10 @@ func (enc *Encoder) writeFileField(name string, value File) (int64, error) {
 
 	part, err := enc.m.CreatePart(h)
 	if err != nil {
-		return 0, err
+		return err
 	}
-	if n, err := io.Copy(part, value.Body); err != nil {
-		return 0, err
-	} else {
-		return n, nil
-	}
+	_, err = io.Copy(part, value.Body)
+	return err
 }
 
 // Write a field as a string

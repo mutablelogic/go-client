@@ -12,8 +12,9 @@ import (
 	"time"
 
 	// Packages
-	multipart "github.com/mutablelogic/go-client/pkg/multipart"
+
 	otel "github.com/mutablelogic/go-client/pkg/otel"
+	"github.com/mutablelogic/go-server/pkg/types"
 )
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -153,7 +154,7 @@ func (w *readwrapper) as(mimetype string) ([]byte, error) {
 		} else {
 			return dest.Bytes(), nil
 		}
-	case multipart.ContentTypeForm:
+	case types.ContentTypeFormData, types.ContentTypeForm, types.ContentTypeTextPlain:
 		return w.data.Bytes(), nil
 	default:
 		// TODO: Make this more like a hex dump

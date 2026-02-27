@@ -5,11 +5,15 @@ import (
 	"fmt"
 	"io"
 	"mime/multipart"
+	"net/textproto"
 	"net/url"
 	"path/filepath"
 	"reflect"
 	"slices"
 	"strings"
+
+	// Packages
+	types "github.com/mutablelogic/go-server/pkg/types"
 
 	// Namespace imports
 	. "github.com/djthorpe/go-errors"
@@ -25,10 +29,16 @@ type Encoder struct {
 	v url.Values
 }
 
-// File is a file object, which is used to encode a file in a multipart request
+// File is a file object, which is used to encode a file in a multipart request.
+// ContentType is optional; when set it is used as the part Content-Type instead
+// of the default application/octet-stream. Header holds all part-level MIME
+// headers (e.g. Content-Disposition, Content-Type, and any custom headers);
+// it is populated when decoding and merged during encoding.
 type File struct {
-	Path string
-	Body io.Reader
+	Path        string
+	Body        io.Reader
+	ContentType string               // optional MIME type
+	Header      textproto.MIMEHeader // all part-level MIME headers
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -41,7 +51,8 @@ const (
 )
 
 var (
-	fileType = reflect.TypeOf(File{})
+	fileType      = reflect.TypeOf(File{})
+	fileSliceType = reflect.TypeOf([]File{})
 )
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -140,6 +151,13 @@ func (enc *Encoder) Encode(v any) error {
 			if _, err := enc.writeFileField(name, value.Interface().(File)); err != nil {
 				result = errors.Join(result, err)
 			}
+		} else if value.Type() == fileSliceType {
+			// Write each file in the slice as a separate part under the same field name.
+			for _, f := range value.Interface().([]File) {
+				if _, err := enc.writeFileField(name, f); err != nil {
+					result = errors.Join(result, err)
+				}
+			}
 		} else if err := enc.writeField(name, value.Interface()); err != nil {
 			result = errors.Join(result, err)
 		}
@@ -180,18 +198,45 @@ func (enc *Encoder) Close() error {
 // PRIVATE METHODS
 
 // Write a file field to the multipart writer, and return the number of bytes
-// written
+// written. The part headers are built from File.Header (if set), with
+// Content-Disposition always set from the field name and filename, and
+// Content-Type set from File.ContentType when not already present in Header.
 func (enc *Encoder) writeFileField(name string, value File) (int64, error) {
 	// File not supported on form writer
 	if enc.m == nil {
 		return 0, ErrNotImplemented.Withf("%q: file upload not supported for %q", name, ContentTypeForm)
 	}
 
-	// Output file
-	path := value.Path
-	if part, err := enc.m.CreateFormFile(name, filepath.Base(path)); err != nil {
+	filename := filepath.Base(value.Path)
+
+	// Build the part header, starting from any headers already set on the File.
+	h := make(textproto.MIMEHeader)
+	for k, vs := range value.Header {
+		// Skip Content-Disposition — we always derive it from name/filename.
+		if textproto.CanonicalMIMEHeaderKey(k) == "Content-Disposition" {
+			continue
+		}
+		if !types.IsValidHeaderKey(k) {
+			return 0, ErrBadParameter.Withf("invalid header key %q", k)
+		}
+		h[textproto.CanonicalMIMEHeaderKey(k)] = vs
+	}
+
+	// Always set Content-Disposition.
+	h.Set("Content-Disposition", fmt.Sprintf(`form-data; name=%q; filename=%q`, name, filename))
+
+	// Set Content-Type: prefer explicit ContentType field, then whatever was in Header.
+	if value.ContentType != "" {
+		h.Set("Content-Type", value.ContentType)
+	} else if h.Get("Content-Type") == "" {
+		h.Set("Content-Type", "application/octet-stream")
+	}
+
+	part, err := enc.m.CreatePart(h)
+	if err != nil {
 		return 0, err
-	} else if n, err := io.Copy(part, value.Body); err != nil {
+	}
+	if n, err := io.Copy(part, value.Body); err != nil {
 		return 0, err
 	} else {
 		return n, nil

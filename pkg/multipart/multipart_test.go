@@ -2,6 +2,10 @@ package multipart
 
 import (
 	"bytes"
+	"io"
+	"mime"
+	"mime/multipart"
+	"net/textproto"
 	"strings"
 	"testing"
 )
@@ -241,6 +245,192 @@ func Test_Form_MultiElementSlice(t *testing.T) {
 	}
 }
 
+func Test_Multipart_File_InvalidHeaderKey(t *testing.T) {
+	h := make(textproto.MIMEHeader)
+	h["invalid header"] = []string{"value"} // space makes it invalid
+
+	type req struct {
+		Upload File `json:"file"`
+	}
+	r := req{
+		Upload: File{
+			Path:   "test.txt",
+			Body:   strings.NewReader("data"),
+			Header: h,
+		},
+	}
+
+	buf := new(bytes.Buffer)
+	enc := NewMultipartEncoder(buf)
+	err := enc.Encode(r)
+	if err == nil {
+		t.Error("expected error for invalid header key, got nil")
+	}
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 // HELPER FUNCTIONS
 // (None currently - using direct string inspection in tests)
+
+///////////////////////////////////////////////////////////////////////////////
+// FILE ENCODING TESTS
+
+func Test_Multipart_SingleFile_ContentType(t *testing.T) {
+	type req struct {
+		Upload File `json:"file"`
+	}
+	r := req{
+		Upload: File{
+			Path:        "photo.jpg",
+			Body:        strings.NewReader("fake image data"),
+			ContentType: "image/jpeg",
+		},
+	}
+
+	buf := new(bytes.Buffer)
+	enc := NewMultipartEncoder(buf)
+	if err := enc.Encode(r); err != nil {
+		t.Fatalf("encode error: %v", err)
+	}
+	enc.Close()
+
+	parts := parseMultipart(t, buf, enc.ContentType())
+	if len(parts) != 1 {
+		t.Fatalf("expected 1 part, got %d", len(parts))
+	}
+	ct := parts[0].Header.Get("Content-Type")
+	if ct != "image/jpeg" {
+		t.Errorf("expected Content-Type image/jpeg, got %q", ct)
+	}
+	if string(parts[0].Body) != "fake image data" {
+		t.Errorf("unexpected body: %q", parts[0].Body)
+	}
+}
+
+func Test_Multipart_SingleFile_CustomHeader(t *testing.T) {
+	h := make(textproto.MIMEHeader)
+	h.Set("X-Custom-Meta", "myvalue")
+
+	type req struct {
+		Upload File `json:"file"`
+	}
+	r := req{
+		Upload: File{
+			Path:        "doc.pdf",
+			Body:        strings.NewReader("pdf bytes"),
+			ContentType: "application/pdf",
+			Header:      h,
+		},
+	}
+
+	buf := new(bytes.Buffer)
+	enc := NewMultipartEncoder(buf)
+	if err := enc.Encode(r); err != nil {
+		t.Fatalf("encode error: %v", err)
+	}
+	enc.Close()
+
+	parts := parseMultipart(t, buf, enc.ContentType())
+	if len(parts) != 1 {
+		t.Fatalf("expected 1 part, got %d", len(parts))
+	}
+	if got := parts[0].Header.Get("X-Custom-Meta"); got != "myvalue" {
+		t.Errorf("expected X-Custom-Meta=myvalue, got %q", got)
+	}
+	if got := parts[0].Header.Get("Content-Type"); got != "application/pdf" {
+		t.Errorf("expected Content-Type application/pdf, got %q", got)
+	}
+}
+
+func Test_Multipart_FileSlice(t *testing.T) {
+	type req struct {
+		Name  string `json:"name"`
+		Files []File `json:"file"`
+	}
+	r := req{
+		Name: "batch",
+		Files: []File{
+			{
+				Path:        "a.txt",
+				Body:        strings.NewReader("content a"),
+				ContentType: "text/plain",
+			},
+			{
+				Path:        "b.csv",
+				Body:        strings.NewReader("content b"),
+				ContentType: "text/csv",
+				Header: func() textproto.MIMEHeader {
+					h := make(textproto.MIMEHeader)
+					h.Set("X-Source", "pipeline")
+					return h
+				}(),
+			},
+		},
+	}
+
+	buf := new(bytes.Buffer)
+	enc := NewMultipartEncoder(buf)
+	if err := enc.Encode(r); err != nil {
+		t.Fatalf("encode error: %v", err)
+	}
+	enc.Close()
+
+	parts := parseMultipart(t, buf, enc.ContentType())
+	// 1 text field + 2 file parts
+	if len(parts) != 3 {
+		t.Fatalf("expected 3 parts, got %d", len(parts))
+	}
+	// first part is the "name" text field
+	if string(parts[0].Body) != "batch" {
+		t.Errorf("expected name=batch, got %q", parts[0].Body)
+	}
+	// second part: a.txt
+	if ct := parts[1].Header.Get("Content-Type"); ct != "text/plain" {
+		t.Errorf("expected text/plain, got %q", ct)
+	}
+	if string(parts[1].Body) != "content a" {
+		t.Errorf("unexpected body: %q", parts[1].Body)
+	}
+	// third part: b.csv with custom header
+	if ct := parts[2].Header.Get("Content-Type"); ct != "text/csv" {
+		t.Errorf("expected text/csv, got %q", ct)
+	}
+	if got := parts[2].Header.Get("X-Source"); got != "pipeline" {
+		t.Errorf("expected X-Source=pipeline, got %q", got)
+	}
+	if string(parts[2].Body) != "content b" {
+		t.Errorf("unexpected body: %q", parts[2].Body)
+	}
+}
+
+// parsedPart holds the pre-read header and body of a multipart part.
+type parsedPart struct {
+	Header textproto.MIMEHeader
+	Body   []byte
+}
+
+// parseMultipart parses the encoded buffer back into individual parts for inspection.
+func parseMultipart(t *testing.T, buf *bytes.Buffer, contentType string) []parsedPart {
+	t.Helper()
+	_, params, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		t.Fatalf("parse content type: %v", err)
+	}
+	mr := multipart.NewReader(buf, params["boundary"])
+	var parts []parsedPart
+	for {
+		p, err := mr.NextPart()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatalf("next part: %v", err)
+		}
+		body, err := io.ReadAll(p)
+		if err != nil {
+			t.Fatalf("read part body: %v", err)
+		}
+		parts = append(parts, parsedPart{Header: p.Header, Body: body})
+	}
+	return parts
+}

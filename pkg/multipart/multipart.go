@@ -5,11 +5,15 @@ import (
 	"fmt"
 	"io"
 	"mime/multipart"
+	"net/textproto"
 	"net/url"
 	"path/filepath"
 	"reflect"
 	"slices"
 	"strings"
+
+	// Packages
+	types "github.com/mutablelogic/go-server/pkg/types"
 
 	// Namespace imports
 	. "github.com/djthorpe/go-errors"
@@ -25,23 +29,29 @@ type Encoder struct {
 	v url.Values
 }
 
-// File is a file object, which is used to encode a file in a multipart request
+// File is a file object, which is used to encode a file in a multipart request.
+// ContentType is optional; when set it is used as the part Content-Type instead
+// of the default application/octet-stream. Header holds all part-level MIME
+// headers (e.g. Content-Disposition, Content-Type, and any custom headers);
+// it is populated when decoding and merged during encoding.
 type File struct {
-	Path string
-	Body io.Reader
+	Path        string
+	Body        io.Reader
+	ContentType string               // optional MIME type
+	Header      textproto.MIMEHeader // all part-level MIME headers
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 // GLOBALS
 
 const (
-	defaultTag      = "json"
-	omitemptyValue  = "omitempty"
-	ContentTypeForm = "application/x-www-form-urlencoded"
+	defaultTag     = "json"
+	omitemptyValue = "omitempty"
 )
 
 var (
-	fileType = reflect.TypeOf(File{})
+	fileType      = reflect.TypeOf(File{})
+	fileSliceType = reflect.TypeOf([]File{})
 )
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -71,7 +81,7 @@ func NewFormEncoder(w io.Writer) *Encoder {
 // which are added as form data and excluding any fields with a tag of json:"-"
 func (enc *Encoder) Encode(v any) error {
 	rv := reflect.ValueOf(v)
-	if rv.Kind() == reflect.Ptr {
+	if rv.Kind() == reflect.Pointer {
 		rv = rv.Elem()
 	}
 	if rv.Kind() != reflect.Struct {
@@ -80,7 +90,7 @@ func (enc *Encoder) Encode(v any) error {
 
 	// Iterate over visible fields
 	var result error
-	ignore := make([][]int, 0)
+	var ignore [][]int
 	for _, field := range reflect.VisibleFields(rv.Type()) {
 		if field.Type.Kind() == reflect.Ptr {
 			if fv := rv.FieldByIndex(field.Index); fv.IsNil() {
@@ -129,18 +139,24 @@ func (enc *Encoder) Encode(v any) error {
 		}
 
 		// Write field
-		value := rv.FieldByIndex(field.Index)
-		if value.Kind() == reflect.Ptr {
-			if value.IsNil() {
+		if fv.Kind() == reflect.Ptr {
+			if fv.IsNil() {
 				continue
 			}
-			value = value.Elem()
+			fv = fv.Elem()
 		}
-		if value.Type() == fileType {
-			if _, err := enc.writeFileField(name, value.Interface().(File)); err != nil {
+		if fv.Type() == fileType {
+			if err := enc.writeFileField(name, fv.Interface().(File)); err != nil {
 				result = errors.Join(result, err)
 			}
-		} else if err := enc.writeField(name, value.Interface()); err != nil {
+		} else if fv.Type() == fileSliceType {
+			// Write each file in the slice as a separate part under the same field name.
+			for _, f := range fv.Interface().([]File) {
+				if err := enc.writeFileField(name, f); err != nil {
+					result = errors.Join(result, err)
+				}
+			}
+		} else if err := enc.writeField(name, fv.Interface()); err != nil {
 			result = errors.Join(result, err)
 		}
 	}
@@ -155,7 +171,7 @@ func (enc *Encoder) ContentType() string {
 	case enc.m != nil:
 		return enc.m.FormDataContentType()
 	default:
-		return ContentTypeForm
+		return types.ContentTypeForm
 	}
 }
 
@@ -167,11 +183,8 @@ func (enc *Encoder) Close() error {
 	}
 	// form writer
 	if enc.v != nil && enc.w != nil {
-		if _, err := enc.w.Write([]byte(enc.v.Encode())); err != nil {
-			return err
-		} else {
-			return nil
-		}
+		_, err := enc.w.Write([]byte(enc.v.Encode()))
+		return err
 	}
 	return ErrNotImplemented
 }
@@ -179,23 +192,53 @@ func (enc *Encoder) Close() error {
 ///////////////////////////////////////////////////////////////////////////////
 // PRIVATE METHODS
 
-// Write a file field to the multipart writer, and return the number of bytes
-// written
-func (enc *Encoder) writeFileField(name string, value File) (int64, error) {
+// writeFileField writes a single file part to the multipart writer.
+// The part headers are built from File.Header (if set), with
+// Content-Disposition always set from the field name and filename, and
+// Content-Type set from File.ContentType when not already present in Header.
+func (enc *Encoder) writeFileField(name string, value File) error {
 	// File not supported on form writer
 	if enc.m == nil {
-		return 0, ErrNotImplemented.Withf("%q: file upload not supported for %q", name, ContentTypeForm)
+		return ErrNotImplemented.Withf("%q: file upload not supported for %q", name, types.ContentTypeForm)
+	}
+	if value.Body == nil {
+		return ErrBadParameter.Withf("%q: file body is nil", name)
 	}
 
-	// Output file
-	path := value.Path
-	if part, err := enc.m.CreateFormFile(name, filepath.Base(path)); err != nil {
-		return 0, err
-	} else if n, err := io.Copy(part, value.Body); err != nil {
-		return 0, err
-	} else {
-		return n, nil
+	filename := filepath.Base(value.Path)
+	if filename == "." {
+		filename = ""
 	}
+
+	// Build the part header, starting from any headers already set on the File.
+	h := make(textproto.MIMEHeader)
+	for k, vs := range value.Header {
+		// Skip Content-Disposition — we always derive it from name/filename.
+		if textproto.CanonicalMIMEHeaderKey(k) == types.ContentDispositonHeader {
+			continue
+		}
+		if !types.IsValidHeaderKey(k) {
+			return ErrBadParameter.Withf("invalid header key %q", k)
+		}
+		h[textproto.CanonicalMIMEHeaderKey(k)] = vs
+	}
+
+	// Always set Content-Disposition.
+	h.Set(types.ContentDispositonHeader, fmt.Sprintf(`form-data; name=%q; filename=%q`, name, filename))
+
+	// Set Content-Type: prefer explicit ContentType field, then whatever was in Header.
+	if value.ContentType != "" {
+		h.Set(types.ContentTypeHeader, value.ContentType)
+	} else if h.Get(types.ContentTypeHeader) == "" {
+		h.Set(types.ContentTypeHeader, types.ContentTypeBinary)
+	}
+
+	part, err := enc.m.CreatePart(h)
+	if err != nil {
+		return err
+	}
+	_, err = io.Copy(part, value.Body)
+	return err
 }
 
 // Write a field as a string

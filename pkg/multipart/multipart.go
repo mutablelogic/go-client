@@ -45,9 +45,8 @@ type File struct {
 // GLOBALS
 
 const (
-	defaultTag      = "json"
-	omitemptyValue  = "omitempty"
-	ContentTypeForm = "application/x-www-form-urlencoded"
+	defaultTag     = "json"
+	omitemptyValue = "omitempty"
 )
 
 var (
@@ -173,7 +172,7 @@ func (enc *Encoder) ContentType() string {
 	case enc.m != nil:
 		return enc.m.FormDataContentType()
 	default:
-		return ContentTypeForm
+		return types.ContentTypeForm
 	}
 }
 
@@ -204,7 +203,7 @@ func (enc *Encoder) Close() error {
 func (enc *Encoder) writeFileField(name string, value File) (int64, error) {
 	// File not supported on form writer
 	if enc.m == nil {
-		return 0, ErrNotImplemented.Withf("%q: file upload not supported for %q", name, ContentTypeForm)
+		return 0, ErrNotImplemented.Withf("%q: file upload not supported for %q", name, types.ContentTypeForm)
 	}
 
 	filename := filepath.Base(value.Path)
@@ -213,7 +212,7 @@ func (enc *Encoder) writeFileField(name string, value File) (int64, error) {
 	h := make(textproto.MIMEHeader)
 	for k, vs := range value.Header {
 		// Skip Content-Disposition — we always derive it from name/filename.
-		if textproto.CanonicalMIMEHeaderKey(k) == "Content-Disposition" {
+		if textproto.CanonicalMIMEHeaderKey(k) == types.ContentDispositonHeader {
 			continue
 		}
 		if !types.IsValidHeaderKey(k) {
@@ -223,13 +222,13 @@ func (enc *Encoder) writeFileField(name string, value File) (int64, error) {
 	}
 
 	// Always set Content-Disposition.
-	h.Set("Content-Disposition", fmt.Sprintf(`form-data; name=%q; filename=%q`, name, filename))
+	h.Set(types.ContentDispositonHeader, fmt.Sprintf(`form-data; name=%q; filename=%q`, name, filename))
 
 	// Set Content-Type: prefer explicit ContentType field, then whatever was in Header.
 	if value.ContentType != "" {
-		h.Set("Content-Type", value.ContentType)
-	} else if h.Get("Content-Type") == "" {
-		h.Set("Content-Type", "application/octet-stream")
+		h.Set(types.ContentTypeHeader, value.ContentType)
+	} else if h.Get(types.ContentTypeHeader) == "" {
+		h.Set(types.ContentTypeHeader, types.ContentTypeBinary)
 	}
 
 	part, err := enc.m.CreatePart(h)

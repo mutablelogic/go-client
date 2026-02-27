@@ -255,7 +255,7 @@ func Test_Multipart_File_InvalidHeaderKey(t *testing.T) {
 	r := req{
 		Upload: File{
 			Path:   "test.txt",
-			Body:   strings.NewReader("data"),
+			Body:   io.NopCloser(strings.NewReader("data")),
 			Header: h,
 		},
 	}
@@ -282,7 +282,7 @@ func Test_Multipart_SingleFile_ContentType(t *testing.T) {
 	r := req{
 		Upload: File{
 			Path:        "photo.jpg",
-			Body:        strings.NewReader("fake image data"),
+			Body:        io.NopCloser(strings.NewReader("fake image data")),
 			ContentType: "image/jpeg",
 		},
 	}
@@ -317,7 +317,7 @@ func Test_Multipart_SingleFile_CustomHeader(t *testing.T) {
 	r := req{
 		Upload: File{
 			Path:        "doc.pdf",
-			Body:        strings.NewReader("pdf bytes"),
+			Body:        io.NopCloser(strings.NewReader("pdf bytes")),
 			ContentType: "application/pdf",
 			Header:      h,
 		},
@@ -352,12 +352,12 @@ func Test_Multipart_FileSlice(t *testing.T) {
 		Files: []File{
 			{
 				Path:        "a.txt",
-				Body:        strings.NewReader("content a"),
+				Body:        io.NopCloser(strings.NewReader("content a")),
 				ContentType: "text/plain",
 			},
 			{
 				Path:        "b.csv",
-				Body:        strings.NewReader("content b"),
+				Body:        io.NopCloser(strings.NewReader("content b")),
 				ContentType: "text/csv",
 				Header: func() textproto.MIMEHeader {
 					h := make(textproto.MIMEHeader)

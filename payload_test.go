@@ -75,7 +75,7 @@ func Test_payload_004_MultipartWithFile(t *testing.T) {
 		Name: "test",
 		File: multipart.File{
 			Path: "testfile.txt",
-			Body: strings.NewReader(fileContent),
+			Body: io.NopCloser(strings.NewReader(fileContent)),
 		},
 	}
 
@@ -133,7 +133,7 @@ func Test_streaming_payload_002_WithFile(t *testing.T) {
 		Name: "streamtest",
 		File: multipart.File{
 			Path: "streamfile.txt",
-			Body: strings.NewReader(fileContent),
+			Body: io.NopCloser(strings.NewReader(fileContent)),
 		},
 	}
 
@@ -163,7 +163,7 @@ func Test_streaming_payload_003_LargeFile(t *testing.T) {
 	}{
 		File: multipart.File{
 			Path: "largefile.bin",
-			Body: bytes.NewReader(largeContent),
+			Body: io.NopCloser(bytes.NewReader(largeContent)),
 		},
 	}
 
@@ -210,7 +210,7 @@ func Test_streaming_payload_005_PartialRead(t *testing.T) {
 	}{
 		File: multipart.File{
 			Path: "partial.bin",
-			Body: bytes.NewReader(largeContent),
+			Body: io.NopCloser(bytes.NewReader(largeContent)),
 		},
 	}
 

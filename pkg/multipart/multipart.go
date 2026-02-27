@@ -13,10 +13,8 @@ import (
 	"strings"
 
 	// Packages
+	httpresponse "github.com/mutablelogic/go-server/pkg/httpresponse"
 	types "github.com/mutablelogic/go-server/pkg/types"
-
-	// Namespace imports
-	. "github.com/djthorpe/go-errors"
 )
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -30,16 +28,9 @@ type Encoder struct {
 }
 
 // File is a file object, which is used to encode a file in a multipart request.
-// ContentType is optional; when set it is used as the part Content-Type instead
-// of the default application/octet-stream. Header holds all part-level MIME
-// headers (e.g. Content-Disposition, Content-Type, and any custom headers);
-// it is populated when decoding and merged during encoding.
-type File struct {
-	Path        string
-	Body        io.Reader
-	ContentType string               // optional MIME type
-	Header      textproto.MIMEHeader // all part-level MIME headers
-}
+// The definition lives in go-server/pkg/types; this alias keeps the go-client
+// API stable.
+type File = types.File
 
 ///////////////////////////////////////////////////////////////////////////////
 // GLOBALS
@@ -50,8 +41,8 @@ const (
 )
 
 var (
-	fileType      = reflect.TypeOf(File{})
-	fileSliceType = reflect.TypeOf([]File{})
+	fileType      = reflect.TypeOf(types.File{})
+	fileSliceType = reflect.TypeOf([]types.File{})
 )
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -85,7 +76,7 @@ func (enc *Encoder) Encode(v any) error {
 		rv = rv.Elem()
 	}
 	if rv.Kind() != reflect.Struct {
-		return ErrBadParameter.With("Encode: not a struct")
+		return httpresponse.ErrBadRequest.With("Encode: not a struct")
 	}
 
 	// Iterate over visible fields
@@ -186,7 +177,7 @@ func (enc *Encoder) Close() error {
 		_, err := enc.w.Write([]byte(enc.v.Encode()))
 		return err
 	}
-	return ErrNotImplemented
+	return httpresponse.ErrNotImplemented
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -199,10 +190,10 @@ func (enc *Encoder) Close() error {
 func (enc *Encoder) writeFileField(name string, value File) error {
 	// File not supported on form writer
 	if enc.m == nil {
-		return ErrNotImplemented.Withf("%q: file upload not supported for %q", name, types.ContentTypeForm)
+		return httpresponse.ErrNotImplemented.Withf("%q: file upload not supported for %q", name, types.ContentTypeForm)
 	}
 	if value.Body == nil {
-		return ErrBadParameter.Withf("%q: file body is nil", name)
+		return httpresponse.ErrBadRequest.Withf("%q: file body is nil", name)
 	}
 
 	filename := filepath.Base(value.Path)
@@ -213,18 +204,26 @@ func (enc *Encoder) writeFileField(name string, value File) error {
 	// Build the part header, starting from any headers already set on the File.
 	h := make(textproto.MIMEHeader)
 	for k, vs := range value.Header {
-		// Skip Content-Disposition — we always derive it from name/filename.
-		if textproto.CanonicalMIMEHeaderKey(k) == types.ContentDispositonHeader {
+		// Skip Content-Disposition and X-Path — we always derive these ourselves.
+		canon := textproto.CanonicalMIMEHeaderKey(k)
+		if canon == types.ContentDispositonHeader || canon == types.ContentPathHeader {
 			continue
 		}
 		if !types.IsValidHeaderKey(k) {
-			return ErrBadParameter.Withf("invalid header key %q", k)
+			return httpresponse.ErrBadRequest.Withf("invalid header key %q", k)
 		}
-		h[textproto.CanonicalMIMEHeaderKey(k)] = vs
+		h[canon] = vs
 	}
 
 	// Always set Content-Disposition.
 	h.Set(types.ContentDispositonHeader, fmt.Sprintf(`form-data; name=%q; filename=%q`, name, filename))
+
+	// When the path contains directory components, preserve the full relative
+	// path in X-Path so the server can reconstruct it (the stdlib parser strips
+	// directory info from the Content-Disposition filename per RFC 7578 §4.2).
+	if value.Path != "" && value.Path != filename {
+		h.Set(types.ContentPathHeader, value.Path)
+	}
 
 	// Set Content-Type: prefer explicit ContentType field, then whatever was in Header.
 	if value.ContentType != "" {
@@ -296,7 +295,7 @@ func (enc *Encoder) writeField(name string, value any) error {
 	case enc.v != nil:
 		enc.v.Add(name, fmt.Sprint(rv))
 	default:
-		return ErrNotImplemented
+		return httpresponse.ErrNotImplemented
 	}
 
 	// Return success

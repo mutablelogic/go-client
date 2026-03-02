@@ -15,9 +15,11 @@ import (
 	"time"
 
 	// Package imports
+	"github.com/mutablelogic/go-client/pkg/oauth"
 	otel "github.com/mutablelogic/go-client/pkg/otel"
 	httpresponse "github.com/mutablelogic/go-server/pkg/httpresponse"
 	trace "go.opentelemetry.io/otel/trace"
+	"golang.org/x/oauth2"
 )
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -46,7 +48,8 @@ type Client struct {
 	token    Token             // token for authentication on requests
 	headers  map[string]string // Headers for every request
 	ts       time.Time
-	tracer   trace.Tracer // Tracer used for requests
+	tracer   trace.Tracer            // Tracer used for requests
+	oauth    *oauth.OAuthCredentials // OAuth credentials for automatic token refresh on requests
 }
 
 type ClientOpt func(*Client) error
@@ -161,6 +164,20 @@ func (client *Client) DoWithContext(ctx context.Context, in Payload, out any, op
 	req, err := client.request(ctx, method, accept, mimetype, in)
 	if err != nil {
 		return err
+	}
+
+	// Refresh OAuth token if credentials are set and token is expired or about to expire.
+	// Inject the client's HTTP client so the refresh request uses the same transport.
+	if oauth := client.oauth; oauth != nil {
+		if err := oauth.Refresh(context.WithValue(ctx, oauth2.HTTPClient, client.Client)); err != nil {
+			return err
+		}
+
+		// Update the client's token with the refreshed token
+		client.token = Token{
+			Scheme: oauth.Token.TokenType,
+			Value:  oauth.Token.AccessToken,
+		}
 	}
 
 	// If client token is set, then add to request

@@ -14,9 +14,10 @@ import (
 	otlptrace "go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	otlptracegrpc "go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	otlptracehttp "go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
-	"go.opentelemetry.io/otel/propagation"
+	propagation "go.opentelemetry.io/otel/propagation"
 	sdkresource "go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	noop "go.opentelemetry.io/otel/trace/noop"
 )
 
 ////////////////////////////////////////////////////////////////////////////
@@ -125,10 +126,17 @@ func NewProvider(endpoint, header, name string, attrs ...Attr) (*sdktrace.Tracer
 // ShutdownProvider shuts down the global tracer provider, flushing and
 // exporting any remaining spans. After this call, NewProvider can be used
 // again. It is a no-op if no provider has been registered.
+//
+// The OpenTelemetry global provider is reset to a no-op provider so that any
+// instrumentation that calls otel.GetTracerProvider() after shutdown receives
+// a safe, inert implementation rather than a shut-down SDK provider.
 func ShutdownProvider(ctx context.Context) error {
 	providerMu.Lock()
 	p := globalProvider
 	globalProvider = nil
+	if p != nil {
+		gootel.SetTracerProvider(noop.NewTracerProvider())
+	}
 	providerMu.Unlock()
 	if p == nil {
 		return nil

@@ -168,8 +168,9 @@ func (client *Client) DoWithContext(ctx context.Context, in Payload, out any, op
 		return err
 	}
 
-	// If client token is set, then add to request
-	if client.token.Scheme != "" && client.token.Value != "" {
+	// If client token is set, then add to request.
+	// Only check Value; Scheme defaults to Bearer in Token.String() when empty.
+	if client.token.Value != "" {
 		opts = append([]RequestOpt{OptToken(client.token)}, opts...)
 	}
 
@@ -201,8 +202,9 @@ func (client *Client) Request(req *http.Request, out any, opts ...RequestOpt) er
 	}
 
 	// If client token is set, then add to request, at the beginning so it can be
-	// overridden by any other options
-	if client.token.Scheme != "" && client.token.Value != "" {
+	// overridden by any other options.
+	// Only check Value; Scheme defaults to Bearer in Token.String() when empty.
+	if client.token.Value != "" {
 		opts = append([]RequestOpt{OptToken(client.token)}, opts...)
 	}
 
@@ -223,8 +225,12 @@ func (client *Client) refreshOAuth(ctx context.Context) error {
 	if err := client.oauth.Refresh(context.WithValue(ctx, oauth2.HTTPClient, client.Client)); err != nil {
 		return err
 	}
+	scheme := client.oauth.Token.TokenType
+	if scheme == "" {
+		scheme = Bearer
+	}
 	client.token = Token{
-		Scheme: client.oauth.Token.TokenType,
+		Scheme: scheme,
 		Value:  client.oauth.Token.AccessToken,
 	}
 	return nil

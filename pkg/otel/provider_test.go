@@ -150,3 +150,28 @@ func TestNewProvider_GRPCWithPath(t *testing.T) {
 	assert.Error(err)
 	assert.Contains(err.Error(), "should not include a path")
 }
+
+func TestShutdownProvider_ResetsGlobal(t *testing.T) {
+	assert := assert.New(t)
+
+	// Register a provider
+	provider, err := otel.NewProvider("http://localhost:4318", "", "test-service")
+	assert.NoError(err)
+	assert.NotNil(provider)
+
+	// Shutdown clears the global — NewProvider must succeed again afterwards
+	assert.NoError(otel.ShutdownProvider(context.Background()))
+
+	provider2, err := otel.NewProvider("http://localhost:4318", "", "test-service")
+	assert.NoError(err, "NewProvider should succeed after ShutdownProvider")
+	assert.NotNil(provider2)
+	t.Cleanup(func() { otel.ShutdownProvider(context.Background()) })
+}
+
+func TestShutdownProvider_Idempotent(t *testing.T) {
+	assert := assert.New(t)
+
+	// Calling ShutdownProvider when nothing is registered must be a no-op
+	assert.NoError(otel.ShutdownProvider(context.Background()))
+	assert.NoError(otel.ShutdownProvider(context.Background()))
+}

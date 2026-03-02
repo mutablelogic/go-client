@@ -15,9 +15,10 @@ import (
 	"time"
 
 	// Package imports
+	"github.com/mutablelogic/go-client/pkg/oauth"
 	otel "github.com/mutablelogic/go-client/pkg/otel"
 	httpresponse "github.com/mutablelogic/go-server/pkg/httpresponse"
-	trace "go.opentelemetry.io/otel/trace"
+	"golang.org/x/oauth2"
 )
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -46,7 +47,7 @@ type Client struct {
 	token    Token             // token for authentication on requests
 	headers  map[string]string // Headers for every request
 	ts       time.Time
-	tracer   trace.Tracer // Tracer used for requests
+	oauth    *oauth.OAuthCredentials // OAuth credentials for automatic token refresh on requests
 }
 
 type ClientOpt func(*Client) error
@@ -163,13 +164,18 @@ func (client *Client) DoWithContext(ctx context.Context, in Payload, out any, op
 		return err
 	}
 
-	// If client token is set, then add to request
-	if client.token.Scheme != "" && client.token.Value != "" {
+	if err := client.refreshOAuth(ctx); err != nil {
+		return err
+	}
+
+	// If client token is set, then add to request.
+	// Only check Value; Scheme defaults to Bearer in Token.String() when empty.
+	if client.token.Value != "" {
 		opts = append([]RequestOpt{OptToken(client.token)}, opts...)
 	}
 
 	// Do the request
-	return do(client.Client, req, accept, client.strict, client.tracer, out, opts...)
+	return do(client.Client, req, accept, client.strict, out, opts...)
 }
 
 // Do a HTTP request and decode it into an object
@@ -191,27 +197,44 @@ func (client *Client) Request(req *http.Request, out any, opts ...RequestOpt) er
 		client.ts = now
 	}(now)
 
+	if err := client.refreshOAuth(req.Context()); err != nil {
+		return err
+	}
+
 	// If client token is set, then add to request, at the beginning so it can be
-	// overridden by any other options
-	if client.token.Scheme != "" && client.token.Value != "" {
+	// overridden by any other options.
+	// Only check Value; Scheme defaults to Bearer in Token.String() when empty.
+	if client.token.Value != "" {
 		opts = append([]RequestOpt{OptToken(client.token)}, opts...)
 	}
 
-	return do(client.Client, req, "", false, client.tracer, out, opts...)
-}
-
-// Debugf outputs debug information
-func (client *Client) Debugf(f string, args ...any) {
-	if client.Client.Transport != nil && client.Client.Transport != http.DefaultTransport {
-		if debug, ok := client.Transport.(*logtransport); ok {
-			fmt.Fprintf(debug.w, f, args...)
-			fmt.Fprint(debug.w, "\n")
-		}
-	}
+	return do(client.Client, req, "", false, out, opts...)
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 // PRIVATE METHODS
+
+// refreshOAuth refreshes the OAuth token if credentials are set and the token
+// is expired. It injects the client's own HTTP transport into the context so
+// the refresh request honours the same proxy/TLS/logging configuration.
+// It is a no-op when no OAuth credentials are configured or the token is still valid.
+func (client *Client) refreshOAuth(ctx context.Context) error {
+	if client.oauth == nil {
+		return nil
+	}
+	if err := client.oauth.Refresh(context.WithValue(ctx, oauth2.HTTPClient, client.Client)); err != nil {
+		return err
+	}
+	scheme := client.oauth.Token.TokenType
+	if scheme == "" {
+		scheme = Bearer
+	}
+	client.token = Token{
+		Scheme: scheme,
+		Value:  client.oauth.Token.AccessToken,
+	}
+	return nil
+}
 
 // request creates a request which can be used to return responses. The accept
 // parameter is the accepted mime-type of the response. If the accept parameter is empty,
@@ -260,7 +283,7 @@ func (client *Client) request(ctx context.Context, method, accept, mimetype stri
 }
 
 // Do will make a JSON request, populate an object with the response and return any errors
-func do(client *http.Client, req *http.Request, accept string, strict bool, tracer trace.Tracer, out any, opts ...RequestOpt) (err error) {
+func do(client *http.Client, req *http.Request, accept string, strict bool, out any, opts ...RequestOpt) (err error) {
 	const maxRedirects = 10
 
 	// Apply request options
@@ -286,10 +309,10 @@ func do(client *http.Client, req *http.Request, accept string, strict bool, trac
 	// We allow up to maxRedirects redirect hops (not counting the original request).
 	var response *http.Response
 	for redirects := 0; ; redirects++ {
-		reqWithSpan, finishSpan := otel.StartHTTPClientSpan(tracer, req)
-		resp, doErr := client.Do(reqWithSpan)
+		// Spans are created per-hop by the transport (otel.NewTransport), so
+		// there is no manual span management here.
+		resp, doErr := client.Do(req)
 		if doErr != nil {
-			finishSpan(nil, doErr)
 			return doErr
 		}
 
@@ -302,7 +325,6 @@ func do(client *http.Client, req *http.Request, accept string, strict bool, trac
 			// Only follow redirects for GET/HEAD methods
 			if !canRedirect {
 				resp.Body.Close()
-				finishSpan(resp, nil)
 				return httpresponse.Err(resp.StatusCode).Withf("cannot follow redirect for %s request", req.Method)
 			}
 
@@ -310,19 +332,16 @@ func do(client *http.Client, req *http.Request, accept string, strict bool, trac
 			// means we've already followed maxRedirects hops
 			if redirects >= maxRedirects {
 				resp.Body.Close()
-				finishSpan(resp, nil)
 				return httpresponse.Err(http.StatusLoopDetected).With("too many redirects")
 			}
 
 			nextURL, parseErr := req.URL.Parse(loc)
 			if parseErr != nil {
 				resp.Body.Close()
-				finishSpan(resp, nil)
 				return parseErr
 			}
 
 			resp.Body.Close()
-			finishSpan(resp, nil)
 
 			// Clone request for next redirect
 			nextReq := req.Clone(req.Context())
@@ -344,7 +363,6 @@ func do(client *http.Client, req *http.Request, accept string, strict bool, trac
 		}
 
 		response = resp
-		defer func() { finishSpan(response, err) }()
 		break
 	}
 	defer response.Body.Close()

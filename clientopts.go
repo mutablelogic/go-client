@@ -13,6 +13,7 @@ import (
 
 	// Namespace imports
 	. "github.com/djthorpe/go-errors"
+	"github.com/mutablelogic/go-client/pkg/otel"
 )
 
 // OptEndpoint sets the endpoint for all requests.
@@ -95,11 +96,13 @@ func OptReqToken(value Token) ClientOpt {
 	}
 }
 
-// OptTracer sets the open-telemetry tracer for any request made by this client.
-// Span names default to "METHOD /path" format.
+// OptTracer sets the OpenTelemetry tracer for this client. It wraps the
+// underlying HTTP transport so that every HTTP call — including OAuth token
+// refresh and redirect hops — produces a client span. Span names default
+// to "METHOD /path" format.
 func OptTracer(tracer trace.Tracer) ClientOpt {
 	return func(client *Client) error {
-		client.tracer = tracer
+		client.Client.Transport = otel.NewTransport(tracer, client.Client.Transport)
 		return nil
 	}
 }

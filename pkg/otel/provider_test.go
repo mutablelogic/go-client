@@ -51,74 +51,56 @@ func TestNewProvider_HostPortDefaultsToHTTPS(t *testing.T) {
 	// Note: This will fail to connect but should parse correctly
 	// We're testing that host:port format is accepted and defaults to https
 	provider, err := otel.NewProvider("localhost:4318", "", "test-service")
+	t.Cleanup(func() { otel.ShutdownProvider(context.Background()) })
 
 	// The provider creation should succeed even if we can't connect
 	assert.NotNil(provider)
 	assert.NoError(err)
-
-	if provider != nil {
-		provider.Shutdown(context.Background())
-	}
 }
 
 func TestNewProvider_HTTPEndpoint(t *testing.T) {
 	assert := assert.New(t)
 
 	provider, err := otel.NewProvider("http://localhost:4318", "", "test-service")
+	t.Cleanup(func() { otel.ShutdownProvider(context.Background()) })
 	assert.NotNil(provider)
 	assert.NoError(err)
-
-	if provider != nil {
-		provider.Shutdown(context.Background())
-	}
 }
 
 func TestNewProvider_HTTPSEndpoint(t *testing.T) {
 	assert := assert.New(t)
 
 	provider, err := otel.NewProvider("https://localhost:4318", "", "test-service")
+	t.Cleanup(func() { otel.ShutdownProvider(context.Background()) })
 	assert.NotNil(provider)
 	assert.NoError(err)
-
-	if provider != nil {
-		provider.Shutdown(context.Background())
-	}
 }
 
 func TestNewProvider_GRPCEndpoint(t *testing.T) {
 	assert := assert.New(t)
 
 	provider, err := otel.NewProvider("grpc://localhost:4317", "", "test-service")
+	t.Cleanup(func() { otel.ShutdownProvider(context.Background()) })
 	assert.NotNil(provider)
 	assert.NoError(err)
-
-	if provider != nil {
-		provider.Shutdown(context.Background())
-	}
 }
 
 func TestNewProvider_GRPCSEndpoint(t *testing.T) {
 	assert := assert.New(t)
 
 	provider, err := otel.NewProvider("grpcs://localhost:4317", "", "test-service")
+	t.Cleanup(func() { otel.ShutdownProvider(context.Background()) })
 	assert.NotNil(provider)
 	assert.NoError(err)
-
-	if provider != nil {
-		provider.Shutdown(context.Background())
-	}
 }
 
 func TestNewProvider_WithPath(t *testing.T) {
 	assert := assert.New(t)
 
 	provider, err := otel.NewProvider("https://localhost:4318/custom/path", "", "test-service")
+	t.Cleanup(func() { otel.ShutdownProvider(context.Background()) })
 	assert.NotNil(provider)
 	assert.NoError(err)
-
-	if provider != nil {
-		provider.Shutdown(context.Background())
-	}
 }
 
 func TestNewProvider_WithHeaders(t *testing.T) {
@@ -129,12 +111,9 @@ func TestNewProvider_WithHeaders(t *testing.T) {
 		"api-key=test123,other-header=value",
 		"test-service",
 	)
+	t.Cleanup(func() { otel.ShutdownProvider(context.Background()) })
 	assert.NotNil(provider)
 	assert.NoError(err)
-
-	if provider != nil {
-		provider.Shutdown(context.Background())
-	}
 }
 
 func TestNewProvider_WithAttributes(t *testing.T) {
@@ -147,12 +126,9 @@ func TestNewProvider_WithAttributes(t *testing.T) {
 		otel.Attr{Key: "environment", Value: "test"},
 		otel.Attr{Key: "version", Value: "1.0.0"},
 	)
+	t.Cleanup(func() { otel.ShutdownProvider(context.Background()) })
 	assert.NotNil(provider)
 	assert.NoError(err)
-
-	if provider != nil {
-		provider.Shutdown(context.Background())
-	}
 }
 
 func TestNewProvider_EmptyServiceName(t *testing.T) {
@@ -160,12 +136,9 @@ func TestNewProvider_EmptyServiceName(t *testing.T) {
 
 	// Empty service name should still work
 	provider, err := otel.NewProvider("https://localhost:4318", "", "")
+	t.Cleanup(func() { otel.ShutdownProvider(context.Background()) })
 	assert.NotNil(provider)
 	assert.NoError(err)
-
-	if provider != nil {
-		provider.Shutdown(context.Background())
-	}
 }
 
 func TestNewProvider_GRPCWithPath(t *testing.T) {
@@ -176,4 +149,29 @@ func TestNewProvider_GRPCWithPath(t *testing.T) {
 	assert.Nil(provider)
 	assert.Error(err)
 	assert.Contains(err.Error(), "should not include a path")
+}
+
+func TestShutdownProvider_ResetsGlobal(t *testing.T) {
+	assert := assert.New(t)
+
+	// Register a provider
+	provider, err := otel.NewProvider("http://localhost:4318", "", "test-service")
+	assert.NoError(err)
+	assert.NotNil(provider)
+
+	// Shutdown clears the global — NewProvider must succeed again afterwards
+	assert.NoError(otel.ShutdownProvider(context.Background()))
+
+	provider2, err := otel.NewProvider("http://localhost:4318", "", "test-service")
+	assert.NoError(err, "NewProvider should succeed after ShutdownProvider")
+	assert.NotNil(provider2)
+	t.Cleanup(func() { otel.ShutdownProvider(context.Background()) })
+}
+
+func TestShutdownProvider_Idempotent(t *testing.T) {
+	assert := assert.New(t)
+
+	// Calling ShutdownProvider when nothing is registered must be a no-op
+	assert.NoError(otel.ShutdownProvider(context.Background()))
+	assert.NoError(otel.ShutdownProvider(context.Background()))
 }

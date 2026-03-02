@@ -9,6 +9,7 @@ This repository contains a generic HTTP client which can be adapted to provide:
 * Debugging capabilities to see the request and response data
 * Streaming text and JSON events
 * OpenTelemetry tracing for distributed observability
+* OAuth 2.0 client flows including discovery, dynamic client registration, authorization code, device authorization, and client credentials
 
 API Documentation: <https://pkg.go.dev/github.com/mutablelogic/go-client>
 
@@ -18,7 +19,13 @@ There are also some example clients which use this library:
 * [Home Assistant API Client](https://github.com/mutablelogic/go-client/tree/main/pkg/homeassistant)
 * [IPify Client](https://github.com/mutablelogic/go-client/tree/main/pkg/ipify)
 
-Aiming to have compatibility with go version 1.24 and above.
+There are also utility packages for working with multipart file uploads and OpenTelemetry:
+
+* [OAuth 2.0 Package](https://github.com/mutablelogic/go-client/tree/main/pkg/oauth)
+* [OpenTelemetry Package](https://github.com/mutablelogic/go-client/tree/main/pkg/otel)
+* [Multipart Package](https://github.com/mutablelogic/go-client/tree/main/pkg/multipart)
+
+Compatibility with go version 1.25 and above.
 
 ## Basic Usage
 
@@ -219,6 +226,67 @@ func main() {
 
 You can also set the token on a per-request basis using the `OptToken` option in call to the `Do` method.
 
+## OAuth 2.0
+
+The `pkg/oauth` package provides a full OAuth 2.0 client supporting discovery (RFC 8414), dynamic
+client registration (RFC 7591), authorization code + PKCE, device authorization, and client
+credentials flows. Use `c.OAuth(ctx)` to run the full flow using the client's own HTTP transport —
+the `Authorize*` methods attach the resulting credentials to the client automatically, and the
+token is refreshed transparently before each request:
+
+```go
+import (
+    "context"
+
+    client "github.com/mutablelogic/go-client"
+    oauth "github.com/mutablelogic/go-client/pkg/oauth"
+)
+
+func main() {
+    ctx := context.Background()
+
+    // Create the API client first so its HTTP transport is reused for all OAuth calls.
+    c, err := client.New(client.OptEndpoint("https://api.example.com"))
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    // c.OAuth(ctx) returns a flow that injects c's HTTP transport automatically.
+    flow := c.OAuth(ctx)
+
+    // 1. Discover server metadata
+    metadata, err := flow.Discover("https://example.com")
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    // 2. Authorize (client credentials shown; see pkg/oauth for browser/device flows)
+    creds, err := flow.AuthorizeWithCredentials(
+        &oauth.OAuthCredentials{
+            Metadata:     metadata,
+            ClientID:     "my-client",
+            ClientSecret: "my-secret",
+        },
+    )
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    // Persist rotated refresh tokens
+    creds.OnRefresh = func(c *oauth.OAuthCredentials) error {
+        return saveToDisk(c) // your persistence logic
+    }
+
+    // 3. Attach credentials; the client refreshes the token automatically on expiry.
+    //    AuthorizeWithCredentials (and all other Authorize* methods) attach credentials
+    //    to the client automatically — no further setup needed.
+}
+```
+
+See [pkg/oauth/README.md](https://github.com/mutablelogic/go-client/tree/main/pkg/oauth) for
+the full API including browser-based, device, and manual code-paste flows, token introspection,
+and revocation.
+
 ## Form submission
 
 You can create a payload with form data:
@@ -388,12 +456,21 @@ func main() {
 
 ### HTTP Client Tracing
 
-When you set `OptTracer` on a client, all requests will automatically create spans with:
+`OptTracer` wraps the client's HTTP transport with `otel.NewTransport`, so **every** HTTP call
+produces a client span — including OAuth token refresh calls and each redirect hop. Span names
+default to `"METHOD /path"` format. Attributes captured per span:
 
-* HTTP method, URL, and host attributes
+* HTTP method, URL, and host
 * Request and response body sizes
 * HTTP status codes
 * Error recording for failed requests
+
+You can also use `otel.NewTransport` directly if you need to instrument an `*http.Client` that
+was not created via `client.New`:
+
+```go
+httpClient.Transport = otel.NewTransport(tracer, httpClient.Transport)
+```
 
 ### HTTP Server Middleware
 

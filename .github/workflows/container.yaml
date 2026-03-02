@@ -1,13 +1,13 @@
 name: Build docker container
 on:
   release:
-    types: [ created, edited ]
+    types: [created, edited]
   workflow_dispatch:
     inputs:
       tag:
-        description: 'tag'
+        description: "tag"
         required: true
-        default: 'latest'
+        default: "latest"
         type: string
 jobs:
   var:
@@ -35,8 +35,8 @@ jobs:
     needs: var
     strategy:
       matrix:
-        arch: [ amd64, arm64 ]
-    runs-on: ${{ matrix.arch == 'amd64' && 'ubuntu-latest' || matrix.arch }}
+        arch: [amd64, arm64]
+    runs-on: ${{ matrix.arch == 'amd64' && 'ubuntu-24.04' || matrix.arch == 'arm64' && 'ubuntu-24.04-arm' }}
     steps:
       - name: Install git
         run: |
@@ -56,7 +56,7 @@ jobs:
       - name: Build
         run: |
           git checkout v${{ needs.var.outputs.tag }}
-          make docker  
+          make docker
       - name: Push
         run: |
           docker image tag \
@@ -66,7 +66,7 @@ jobs:
   manifest:
     name: Manifest
     needs:
-      - var 
+      - var
       - build
     strategy:
       matrix:

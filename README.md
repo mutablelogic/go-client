@@ -9,6 +9,7 @@ This repository contains a generic HTTP client which can be adapted to provide:
 * Debugging capabilities to see the request and response data
 * Streaming text and JSON events
 * OpenTelemetry tracing for distributed observability
+* OAuth 2.0 client flows including discovery, dynamic client registration, authorization code, device authorization, and client credentials
 
 API Documentation: <https://pkg.go.dev/github.com/mutablelogic/go-client>
 
@@ -17,7 +18,12 @@ There are also some example clients which use this library:
 * [Bitwarden API Client](https://github.com/mutablelogic/go-client/tree/main/pkg/bitwarden)
 * [Home Assistant API Client](https://github.com/mutablelogic/go-client/tree/main/pkg/homeassistant)
 * [IPify Client](https://github.com/mutablelogic/go-client/tree/main/pkg/ipify)
+
+There are also utility packages for working with multipart file uploads and OpenTelemetry:
+
 * [OAuth 2.0 Package](https://github.com/mutablelogic/go-client/tree/main/pkg/oauth)
+* [OpenTelemetry Package](https://github.com/mutablelogic/go-client/tree/main/pkg/otel)
+* [Multipart Package](https://github.com/mutablelogic/go-client/tree/main/pkg/multipart)
 
 Compatibility with go version 1.25 and above.
 

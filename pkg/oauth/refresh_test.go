@@ -3,6 +3,7 @@ package oauth
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -156,6 +157,82 @@ func TestRefresh_CustomHTTPClient(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, called, "custom HTTP client should have been used")
 	assert.Equal(t, "custom-access", creds.AccessToken)
+}
+
+func TestRefresh_OnRefresh_CalledWhenExpired(t *testing.T) {
+	srv := fakeTokenServer(t, http.StatusOK, map[string]any{
+		"access_token":  "new-access",
+		"token_type":    "bearer",
+		"expires_in":    3600,
+		"refresh_token": "new-refresh",
+	})
+	defer srv.Close()
+
+	var callbackCreds *OAuthCredentials
+	creds := &OAuthCredentials{
+		Token: &oauth2.Token{
+			AccessToken:  "old-access",
+			RefreshToken: "old-refresh",
+			Expiry:       time.Now().Add(-time.Minute),
+		},
+		ClientID: "client-id",
+		TokenURL: srv.URL + "/token",
+		OnRefresh: func(c *OAuthCredentials) error {
+			callbackCreds = c
+			return nil
+		},
+	}
+
+	require.NoError(t, creds.Refresh(context.Background()))
+	assert.Equal(t, "new-access", creds.AccessToken)
+	require.NotNil(t, callbackCreds, "OnRefresh should have been called")
+	assert.Equal(t, "new-access", callbackCreds.AccessToken)
+}
+
+func TestRefresh_OnRefresh_NotCalledWhenStillValid(t *testing.T) {
+	var called bool
+	creds := &OAuthCredentials{
+		Token: &oauth2.Token{
+			AccessToken:  "access",
+			RefreshToken: "refresh",
+			Expiry:       time.Now().Add(10 * time.Minute),
+		},
+		ClientID: "client-id",
+		TokenURL: "https://example.com/token",
+		OnRefresh: func(c *OAuthCredentials) error {
+			called = true
+			return nil
+		},
+	}
+
+	require.NoError(t, creds.Refresh(context.Background()))
+	assert.False(t, called, "OnRefresh should not be called when token is still valid")
+}
+
+func TestRefresh_OnRefresh_ErrorPropagated(t *testing.T) {
+	srv := fakeTokenServer(t, http.StatusOK, map[string]any{
+		"access_token":  "new-access",
+		"token_type":    "bearer",
+		"expires_in":    3600,
+		"refresh_token": "new-refresh",
+	})
+	defer srv.Close()
+
+	creds := &OAuthCredentials{
+		Token: &oauth2.Token{
+			AccessToken:  "old-access",
+			RefreshToken: "old-refresh",
+			Expiry:       time.Now().Add(-time.Minute),
+		},
+		ClientID: "client-id",
+		TokenURL: srv.URL + "/token",
+		OnRefresh: func(c *OAuthCredentials) error {
+			return fmt.Errorf("disk full")
+		},
+	}
+
+	err := creds.Refresh(context.Background())
+	assert.ErrorContains(t, err, "disk full")
 }
 
 // roundTripFunc allows using a plain function as an http.RoundTripper.

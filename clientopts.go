@@ -13,7 +13,6 @@ import (
 
 	// Namespace imports
 	. "github.com/djthorpe/go-errors"
-	"github.com/mutablelogic/go-client/pkg/oauth"
 )
 
 // OptEndpoint sets the endpoint for all requests.
@@ -137,20 +136,5 @@ func OptParent(v any) ClientOpt {
 			client.Parent = v
 		}
 		return nil
-	}
-}
-
-// OptOAuth sets the OAuth credentials for this client, which will be used to
-// automatically refresh the token when it expires. If the token is still valid
-// no network call is made. When the token is expired, a refresh token, client ID,
-// and token URL are all required for the refresh to succeed.
-func OptOAuth(creds *oauth.OAuthCredentials) ClientOpt {
-	return func(client *Client) error {
-		if creds == nil {
-			return ErrBadParameter.With("OptOAuth")
-		} else {
-			client.oauth = creds
-			return nil
-		}
 	}
 }

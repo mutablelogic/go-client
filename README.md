@@ -450,12 +450,21 @@ func main() {
 
 ### HTTP Client Tracing
 
-When you set `OptTracer` on a client, all requests will automatically create spans with:
+`OptTracer` wraps the client's HTTP transport with `otel.NewTransport`, so **every** HTTP call
+produces a client span — including OAuth token refresh calls and each redirect hop. Span names
+default to `"METHOD /path"` format. Attributes captured per span:
 
-* HTTP method, URL, and host attributes
+* HTTP method, URL, and host
 * Request and response body sizes
 * HTTP status codes
 * Error recording for failed requests
+
+You can also use `otel.NewTransport` directly if you need to instrument an `*http.Client` that
+was not created via `client.New`:
+
+```go
+httpClient.Transport = otel.NewTransport(tracer, httpClient.Transport)
+```
 
 ### HTTP Server Middleware
 

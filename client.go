@@ -18,7 +18,6 @@ import (
 	"github.com/mutablelogic/go-client/pkg/oauth"
 	otel "github.com/mutablelogic/go-client/pkg/otel"
 	httpresponse "github.com/mutablelogic/go-server/pkg/httpresponse"
-	trace "go.opentelemetry.io/otel/trace"
 	"golang.org/x/oauth2"
 )
 
@@ -48,7 +47,6 @@ type Client struct {
 	token    Token             // token for authentication on requests
 	headers  map[string]string // Headers for every request
 	ts       time.Time
-	tracer   trace.Tracer            // Tracer used for requests
 	oauth    *oauth.OAuthCredentials // OAuth credentials for automatic token refresh on requests
 }
 
@@ -176,7 +174,7 @@ func (client *Client) DoWithContext(ctx context.Context, in Payload, out any, op
 	}
 
 	// Do the request
-	return do(client.Client, req, accept, client.strict, client.tracer, out, opts...)
+	return do(client.Client, req, accept, client.strict, out, opts...)
 }
 
 // Do a HTTP request and decode it into an object
@@ -208,7 +206,7 @@ func (client *Client) Request(req *http.Request, out any, opts ...RequestOpt) er
 		opts = append([]RequestOpt{OptToken(client.token)}, opts...)
 	}
 
-	return do(client.Client, req, "", false, client.tracer, out, opts...)
+	return do(client.Client, req, "", false, out, opts...)
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -279,7 +277,7 @@ func (client *Client) request(ctx context.Context, method, accept, mimetype stri
 }
 
 // Do will make a JSON request, populate an object with the response and return any errors
-func do(client *http.Client, req *http.Request, accept string, strict bool, tracer trace.Tracer, out any, opts ...RequestOpt) (err error) {
+func do(client *http.Client, req *http.Request, accept string, strict bool, out any, opts ...RequestOpt) (err error) {
 	const maxRedirects = 10
 
 	// Apply request options
@@ -305,10 +303,10 @@ func do(client *http.Client, req *http.Request, accept string, strict bool, trac
 	// We allow up to maxRedirects redirect hops (not counting the original request).
 	var response *http.Response
 	for redirects := 0; ; redirects++ {
-		reqWithSpan, finishSpan := otel.StartHTTPClientSpan(tracer, req)
-		resp, doErr := client.Do(reqWithSpan)
+		// Spans are created per-hop by the transport (otel.NewTransport), so
+		// there is no manual span management here.
+		resp, doErr := client.Do(req)
 		if doErr != nil {
-			finishSpan(nil, doErr)
 			return doErr
 		}
 
@@ -321,7 +319,6 @@ func do(client *http.Client, req *http.Request, accept string, strict bool, trac
 			// Only follow redirects for GET/HEAD methods
 			if !canRedirect {
 				resp.Body.Close()
-				finishSpan(resp, nil)
 				return httpresponse.Err(resp.StatusCode).Withf("cannot follow redirect for %s request", req.Method)
 			}
 
@@ -329,19 +326,16 @@ func do(client *http.Client, req *http.Request, accept string, strict bool, trac
 			// means we've already followed maxRedirects hops
 			if redirects >= maxRedirects {
 				resp.Body.Close()
-				finishSpan(resp, nil)
 				return httpresponse.Err(http.StatusLoopDetected).With("too many redirects")
 			}
 
 			nextURL, parseErr := req.URL.Parse(loc)
 			if parseErr != nil {
 				resp.Body.Close()
-				finishSpan(resp, nil)
 				return parseErr
 			}
 
 			resp.Body.Close()
-			finishSpan(resp, nil)
 
 			// Clone request for next redirect
 			nextReq := req.Clone(req.Context())
@@ -363,7 +357,6 @@ func do(client *http.Client, req *http.Request, accept string, strict bool, trac
 		}
 
 		response = resp
-		defer func() { finishSpan(response, err) }()
 		break
 	}
 	defer response.Body.Close()

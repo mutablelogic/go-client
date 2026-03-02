@@ -22,7 +22,11 @@ import (
 ////////////////////////////////////////////////////////////////////////////
 // GLOBALS
 
-var propagatorOnce sync.Once
+var (
+	providerMu     sync.Mutex
+	globalProvider *sdktrace.TracerProvider
+	propagatorOnce sync.Once
+)
 
 ////////////////////////////////////////////////////////////////////////////
 // TYPES
@@ -98,12 +102,38 @@ func NewProvider(endpoint, header, name string, attrs ...Attr) (*sdktrace.Tracer
 		gootel.SetTextMapPropagator(propagation.TraceContext{})
 	})
 
-	// Return tracer provider
-	return sdktrace.NewTracerProvider(
+	provider := sdktrace.NewTracerProvider(
 		sdktrace.WithSampler(sdktrace.AlwaysSample()),
 		sdktrace.WithBatcher(exporter),
 		sdktrace.WithResource(res),
-	), nil
+	)
+
+	// Register as the global provider so instrumentation libraries
+	// (e.g. otelaws) pick it up via gootel.GetTracerProvider().
+	// Return an error if a provider is already registered to avoid span
+	// discontinuity. Call ShutdownProvider first to replace it intentionally.
+	providerMu.Lock()
+	defer providerMu.Unlock()
+	if globalProvider != nil {
+		return nil, fmt.Errorf("global OTel provider already set; call ShutdownProvider first")
+	}
+	gootel.SetTracerProvider(provider)
+	globalProvider = provider
+	return provider, nil
+}
+
+// ShutdownProvider shuts down the global tracer provider, flushing and
+// exporting any remaining spans. After this call, NewProvider can be used
+// again. It is a no-op if no provider has been registered.
+func ShutdownProvider(ctx context.Context) error {
+	providerMu.Lock()
+	p := globalProvider
+	globalProvider = nil
+	providerMu.Unlock()
+	if p == nil {
+		return nil
+	}
+	return p.Shutdown(ctx)
 }
 
 func toHTTP(endpoint *url.URL, headers map[string]string) (sdktrace.SpanExporter, error) {

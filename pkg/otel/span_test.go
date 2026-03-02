@@ -9,10 +9,10 @@ import (
 	"testing"
 
 	// Packages
-	"github.com/mutablelogic/go-client/pkg/otel"
-	"github.com/stretchr/testify/assert"
+	otel "github.com/mutablelogic/go-client/pkg/otel"
+	assert "github.com/stretchr/testify/assert"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	"go.opentelemetry.io/otel/sdk/trace/tracetest"
+	tracetest "go.opentelemetry.io/otel/sdk/trace/tracetest"
 )
 
 func newTestTracer() (*tracetest.InMemoryExporter, *sdktrace.TracerProvider) {

@@ -27,8 +27,14 @@ func TestRefresh_NilToken(t *testing.T) {
 }
 
 func TestRefresh_NoRefreshToken(t *testing.T) {
+	// No refresh token and no client secret: cannot re-authorize by any means.
 	creds := &OAuthCredentials{
-		Token: &oauth2.Token{AccessToken: "access"},
+		Token: &oauth2.Token{
+			AccessToken: "access",
+			Expiry:      time.Now().Add(-time.Minute),
+		},
+		ClientID: "client-id",
+		TokenURL: "https://example.com/token",
 	}
 	err := creds.Refresh(context.Background())
 	assert.EqualError(t, err, "token does not contain a refresh token")
@@ -36,7 +42,7 @@ func TestRefresh_NoRefreshToken(t *testing.T) {
 
 func TestRefresh_MissingTokenURL(t *testing.T) {
 	creds := &OAuthCredentials{
-		Token:    &oauth2.Token{AccessToken: "access", RefreshToken: "refresh"},
+		Token:    &oauth2.Token{AccessToken: "access", RefreshToken: "refresh", Expiry: time.Now().Add(-time.Minute)},
 		ClientID: "client-id",
 	}
 	err := creds.Refresh(context.Background())
@@ -45,7 +51,7 @@ func TestRefresh_MissingTokenURL(t *testing.T) {
 
 func TestRefresh_MissingClientID(t *testing.T) {
 	creds := &OAuthCredentials{
-		Token:    &oauth2.Token{AccessToken: "access", RefreshToken: "refresh"},
+		Token:    &oauth2.Token{AccessToken: "access", RefreshToken: "refresh", Expiry: time.Now().Add(-time.Minute)},
 		TokenURL: "https://example.com/token",
 	}
 	err := creds.Refresh(context.Background())
@@ -123,6 +129,32 @@ func TestRefresh_ServerError(t *testing.T) {
 
 	err := creds.Refresh(context.Background())
 	assert.ErrorContains(t, err, "token refresh failed")
+}
+
+func TestRefresh_ClientCredentials_Regrant(t *testing.T) {
+	// When a token has no refresh token but has a client secret, Refresh should
+	// re-run the Client Credentials grant to get a new token.
+	srv := fakeTokenServer(t, http.StatusOK, map[string]any{
+		"access_token": "new-cc-token",
+		"token_type":   "bearer",
+		"expires_in":   3600,
+	})
+	defer srv.Close()
+
+	creds := &OAuthCredentials{
+		Token: &oauth2.Token{
+			AccessToken: "old-cc-token",
+			Expiry:      time.Now().Add(-time.Minute),
+			// no RefreshToken — normal for client credentials
+		},
+		ClientID:     "client-id",
+		ClientSecret: "client-secret",
+		TokenURL:     srv.URL + "/token",
+	}
+
+	err := creds.Refresh(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, "new-cc-token", creds.AccessToken)
 }
 
 func TestRefresh_CustomHTTPClient(t *testing.T) {

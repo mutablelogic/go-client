@@ -199,14 +199,21 @@ func (creds *OAuthCredentials) Valid() bool {
 }
 
 // withToken returns a copy of creds with the given token set and all other
-// fields (ClientID, ClientSecret, TokenURL, Metadata) preserved.
+// fields (ClientID, ClientSecret, TokenURL, Metadata, OnRefresh) preserved.
+// TokenURL is kept as-is when already set; it falls back to
+// Metadata.TokenEndpoint only when TokenURL is empty. Nil Metadata is safe.
 // Called by all Authorize* functions to build the return value.
 func (creds *OAuthCredentials) withToken(tok *oauth2.Token) *OAuthCredentials {
+	tokenURL := creds.TokenURL
+	if tokenURL == "" && creds.Metadata != nil {
+		tokenURL = creds.Metadata.TokenEndpoint
+	}
 	return &OAuthCredentials{
 		Token:        tok,
 		ClientID:     creds.ClientID,
 		ClientSecret: creds.ClientSecret,
-		TokenURL:     creds.Metadata.TokenEndpoint,
+		TokenURL:     tokenURL,
 		Metadata:     creds.Metadata,
+		OnRefresh:    creds.OnRefresh,
 	}
 }

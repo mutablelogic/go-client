@@ -1,6 +1,6 @@
 module github.com/mutablelogic/go-client
 
-go 1.25.0
+go 1.24
 
 require (
 	github.com/alecthomas/kong v1.14.0

@@ -166,18 +166,8 @@ func (client *Client) DoWithContext(ctx context.Context, in Payload, out any, op
 		return err
 	}
 
-	// Refresh OAuth token if credentials are set and token is expired or about to expire.
-	// Inject the client's HTTP client so the refresh request uses the same transport.
-	if oauth := client.oauth; oauth != nil {
-		if err := oauth.Refresh(context.WithValue(ctx, oauth2.HTTPClient, client.Client)); err != nil {
-			return err
-		}
-
-		// Update the client's token with the refreshed token
-		client.token = Token{
-			Scheme: oauth.Token.TokenType,
-			Value:  oauth.Token.AccessToken,
-		}
+	if err := client.refreshOAuth(ctx); err != nil {
+		return err
 	}
 
 	// If client token is set, then add to request
@@ -208,6 +198,10 @@ func (client *Client) Request(req *http.Request, out any, opts ...RequestOpt) er
 		client.ts = now
 	}(now)
 
+	if err := client.refreshOAuth(req.Context()); err != nil {
+		return err
+	}
+
 	// If client token is set, then add to request, at the beginning so it can be
 	// overridden by any other options
 	if client.token.Scheme != "" && client.token.Value != "" {
@@ -217,18 +211,26 @@ func (client *Client) Request(req *http.Request, out any, opts ...RequestOpt) er
 	return do(client.Client, req, "", false, client.tracer, out, opts...)
 }
 
-// Debugf outputs debug information
-func (client *Client) Debugf(f string, args ...any) {
-	if client.Client.Transport != nil && client.Client.Transport != http.DefaultTransport {
-		if debug, ok := client.Transport.(*logtransport); ok {
-			fmt.Fprintf(debug.w, f, args...)
-			fmt.Fprint(debug.w, "\n")
-		}
-	}
-}
-
 ///////////////////////////////////////////////////////////////////////////////
 // PRIVATE METHODS
+
+// refreshOAuth refreshes the OAuth token if credentials are set and the token
+// is expired. It injects the client's own HTTP transport into the context so
+// the refresh request honours the same proxy/TLS/logging configuration.
+// It is a no-op when no OAuth credentials are configured or the token is still valid.
+func (client *Client) refreshOAuth(ctx context.Context) error {
+	if client.oauth == nil {
+		return nil
+	}
+	if err := client.oauth.Refresh(context.WithValue(ctx, oauth2.HTTPClient, client.Client)); err != nil {
+		return err
+	}
+	client.token = Token{
+		Scheme: client.oauth.Token.TokenType,
+		Value:  client.oauth.Token.AccessToken,
+	}
+	return nil
+}
 
 // request creates a request which can be used to return responses. The accept
 // parameter is the accepted mime-type of the response. If the accept parameter is empty,

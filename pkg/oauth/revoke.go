@@ -67,12 +67,18 @@ func revokeToken(ctx context.Context, client *http.Client, endpoint, clientID, c
 		"token":           {token},
 		"token_type_hint": {hint},
 	}
+	// RFC 7009 §2.1: confidential clients use HTTP Basic auth; public clients
+	// (no secret) send client_id in the request body instead.
+	if clientID != "" && clientSecret == "" {
+		vals.Set("client_id", clientID)
+	}
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(vals.Encode()))
 	if err != nil {
 		return fmt.Errorf("revoke: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	if clientID != "" {
+	if clientID != "" && clientSecret != "" {
 		req.SetBasicAuth(clientID, clientSecret)
 	}
 

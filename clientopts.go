@@ -141,8 +141,9 @@ func OptParent(v any) ClientOpt {
 }
 
 // OptOAuth sets the OAuth credentials for this client, which will be used to
-// automatically refresh the token when it expires. The credentials must include
-// the client ID and token URL for refresh to work.
+// automatically refresh the token when it expires. If the token is still valid
+// no network call is made. When the token is expired, a refresh token, client ID,
+// and token URL are all required for the refresh to succeed.
 func OptOAuth(creds *oauth.OAuthCredentials) ClientOpt {
 	return func(client *Client) error {
 		if creds == nil {

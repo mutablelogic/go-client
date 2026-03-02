@@ -126,8 +126,14 @@ func (creds *OAuthCredentials) Introspect(ctx context.Context) (*IntrospectionRe
 		return nil, fmt.Errorf("credentials do not contain a token")
 	}
 
-	// Create the introspection request with the access token as a form parameter, and
+	// Build the form body. RFC 7662 §2.1: public clients (no secret) send
+	// client_id in the request body; confidential clients use HTTP Basic auth.
+	// The access token is always sent as the "token" parameter.
 	vals := url.Values{"token": {creds.AccessToken}}
+	if creds.ClientID != "" && creds.ClientSecret == "" {
+		vals.Set("client_id", creds.ClientID)
+	}
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, creds.Metadata.IntrospectionEndpoint, strings.NewReader(vals.Encode()))
 	if err != nil {
 		return nil, fmt.Errorf("introspect: %w", err)
@@ -135,8 +141,10 @@ func (creds *OAuthCredentials) Introspect(ctx context.Context) (*IntrospectionRe
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Accept", "application/json")
 
-	// Authenticate the request using HTTP Basic auth with the client credentials, if available.
-	if creds.ClientID != "" {
+	// Confidential clients authenticate via HTTP Basic auth (RFC 7662 §2.1).
+	// Public clients already sent client_id in the body above; no header needed.
+	// Unauthenticated requests (no ClientID) are sent as-is; the server decides.
+	if creds.ClientID != "" && creds.ClientSecret != "" {
 		req.SetBasicAuth(creds.ClientID, creds.ClientSecret)
 	}
 

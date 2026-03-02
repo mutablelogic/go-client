@@ -109,7 +109,10 @@ func AuthorizeWithBrowser(ctx context.Context, creds *OAuthCredentials, listener
 		q := r.URL.Query()
 		if got := q.Get("state"); got != state {
 			http.Error(w, "invalid state", http.StatusBadRequest)
-			resultCh <- callbackResult{err: fmt.Errorf("state mismatch: got %q", got)}
+			select {
+			case resultCh <- callbackResult{err: fmt.Errorf("state mismatch: got %q", got)}:
+			default:
+			}
 			return
 		}
 		if errVal := q.Get("error"); errVal != "" {
@@ -118,18 +121,27 @@ func AuthorizeWithBrowser(ctx context.Context, creds *OAuthCredentials, listener
 				msg += ": " + desc
 			}
 			http.Error(w, msg, http.StatusBadRequest)
-			resultCh <- callbackResult{err: fmt.Errorf("authorization error: %s", msg)}
+			select {
+			case resultCh <- callbackResult{err: fmt.Errorf("authorization error: %s", msg)}:
+			default:
+			}
 			return
 		}
 		code := q.Get("code")
 		if code == "" {
 			http.Error(w, "missing code", http.StatusBadRequest)
-			resultCh <- callbackResult{err: fmt.Errorf("no authorization code in callback")}
+			select {
+			case resultCh <- callbackResult{err: fmt.Errorf("no authorization code in callback")}:
+			default:
+			}
 			return
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		fmt.Fprintln(w, `<!DOCTYPE html><html><body><p>Authorization successful. You may close this window.</p></body></html>`)
-		resultCh <- callbackResult{code: code}
+		select {
+		case resultCh <- callbackResult{code: code}:
+		default:
+		}
 	})
 
 	// Serve in the background. Serve always returns ErrServerClosed after

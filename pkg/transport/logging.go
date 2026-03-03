@@ -74,15 +74,17 @@ func (t *Logging) RoundTrip(req *http.Request) (*http.Response, error) {
 	// Clone the request before mutating it (RoundTripper must not modify the original)
 	req = req.Clone(req.Context())
 
-	// Pre-read the request body so it can be logged before we send the request,
-	// keeping the output in natural request → response order.
+	// Pre-read the request body only when verbose logging is enabled so that
+	// non-verbose mode never buffers or truncates streaming/large bodies.
 	var rw readwrapper
-	if req.Body != nil {
-		if raw, err := io.ReadAll(req.Body); err == nil {
-			_ = req.Body.Close()
-			rw.data.Write(raw)
-			req.Body = io.NopCloser(bytes.NewReader(raw))
+	if t.v && req.Body != nil {
+		raw, err := io.ReadAll(req.Body)
+		_ = req.Body.Close()
+		if err != nil {
+			return nil, fmt.Errorf("logging: read request body: %w", err)
 		}
+		rw.data.Write(raw)
+		req.Body = io.NopCloser(bytes.NewReader(raw))
 	}
 
 	fmt.Fprintln(t.w, "request:", req.Method, otel.RedactedURL(req.URL))
@@ -117,15 +119,16 @@ func (t *Logging) RoundTrip(req *http.Request) (*http.Response, error) {
 		contentType, _, _ := mime.ParseMediaType(resp.Header.Get("Content-Type"))
 
 		switch {
-		case contentType == types.ContentTypeTextStream:
-			// Stream: tee through a line-buffered writer so output appears in real-time
+		case contentType == types.ContentTypeTextStream || contentType == contentTypeJSONStream:
+			// Streaming: tee through a line-buffered writer so each line appears in real-time
+			// without consuming the stream eagerly.
 			lw := &lineWriter{w: t.w}
 			resp.Body = &streamBody{
 				Reader: io.TeeReader(resp.Body, lw),
 				closer: resp.Body,
 				lw:     lw,
 			}
-		case contentType == types.ContentTypeJSON || contentType == contentTypeJSONStream:
+		case contentType == types.ContentTypeJSON:
 			body, _ := io.ReadAll(resp.Body)
 			resp.Body = io.NopCloser(bytes.NewReader(body))
 			dst := &bytes.Buffer{}

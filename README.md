@@ -192,12 +192,11 @@ modify each individual request when using the `Do` method:
 * `OptReqTransport(fn func(http.RoundTripper) http.RoundTripper)` inserts a transport middleware
     for this single request only. Multiple calls stack in order; the first becomes the outermost.
     The original client transport is restored after the request completes.
-* `OptTextStreamCallback(func(TextStreamCallback) error)` allows you to set a callback
-    function to process a streaming text response of type `text/event-stream`. See below for
-    more details.
-* `OptJsonStreamCallback(func(any) error)` allows you to set a callback for JSON streaming
-    responses. The callback should have the signature `func(any) error`. See below for
-    more details.
+* `OptTextStreamCallback(fn TextStreamCallback)` allows you to set a callback
+    function to process a streaming text response of type `text/event-stream`, where
+    `TextStreamCallback` is `func(TextStreamEvent) error`. See below for more details.
+* `OptJsonStreamCallback(fn JsonStreamCallback)` allows you to set a callback for JSON streaming
+    responses, where `JsonStreamCallback` is `func(any) error`. See below for more details.
 
 ## Authentication
 

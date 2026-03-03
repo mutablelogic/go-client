@@ -116,31 +116,29 @@ func TestRecorder_RoundTrip_ErrorNotRecorded(t *testing.T) {
 func TestRecorder_RoundTrip_OverwritesPreviousValues(t *testing.T) {
 	assert := assert.New(t)
 	status := 200
+	seq := "first"
 	inner := roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		resp := stubResp(status, "text/plain", "ok")
-		resp.Header.Set("X-Seq", "first")
+		resp := stubResp(status, "text/plain", "body")
+		resp.Header.Set("X-Seq", seq)
 		return resp, nil
 	})
 	r := transport.NewRecorder(inner)
 
+	// First request
 	req := httptest.NewRequest(http.MethodGet, "http://example.com/", nil)
 	resp, _ := r.RoundTrip(req)
 	resp.Body.Close()
 	assert.Equal(200, r.StatusCode())
+	assert.Equal("first", r.Header().Get("X-Seq"))
 
-	// Second request with different status
+	// Second request through the same Recorder — values must be overwritten
 	status = 404
-	inner2 := roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		resp := stubResp(404, "text/plain", "not found")
-		resp.Header.Set("X-Seq", "second")
-		return resp, nil
-	})
-	r2 := transport.NewRecorder(inner2)
+	seq = "second"
 	req2 := httptest.NewRequest(http.MethodGet, "http://example.com/missing", nil)
-	resp2, _ := r2.RoundTrip(req2)
+	resp2, _ := r.RoundTrip(req2)
 	resp2.Body.Close()
-	assert.Equal(404, r2.StatusCode())
-	assert.Equal("second", r2.Header().Get("X-Seq"))
+	assert.Equal(404, r.StatusCode())
+	assert.Equal("second", r.Header().Get("X-Seq"))
 }
 
 ///////////////////////////////////////////////////////////////////////////////

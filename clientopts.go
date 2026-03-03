@@ -65,10 +65,13 @@ func OptTrace(w io.Writer, verbose bool) ClientOpt {
 }
 
 // OptTransport inserts a transport middleware for all requests made by this client.
-// Multiple calls append in order; the first call becomes the outermost layer.
+// Multiple calls stack in order; the first call becomes the outermost layer.
 func OptTransport(fn func(http.RoundTripper) http.RoundTripper) ClientOpt {
 	return func(client *Client) error {
-		client.Client.Transport = fn(client.Client.Transport)
+		if fn == nil {
+			return httpresponse.ErrBadRequest.With("OptTransport: nil middleware")
+		}
+		client.transports = append(client.transports, fn)
 		return nil
 	}
 }

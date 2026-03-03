@@ -40,14 +40,15 @@ type Client struct {
 	// Parent object for client options
 	Parent any
 
-	endpoint *url.URL
-	ua       string
-	rate     float32 // number of requests allowed per second
-	strict   bool
-	token    Token             // token for authentication on requests
-	headers  map[string]string // Headers for every request
-	ts       time.Time
-	oauth    *oauth.OAuthCredentials // OAuth credentials for automatic token refresh on requests
+	endpoint   *url.URL
+	ua         string
+	rate       float32 // number of requests allowed per second
+	strict     bool
+	token      Token             // token for authentication on requests
+	headers    map[string]string // Headers for every request
+	ts         time.Time
+	transports []func(http.RoundTripper) http.RoundTripper // accumulated by OptTransport, applied in New()
+	oauth      *oauth.OAuthCredentials                     // OAuth credentials for automatic token refresh on requests
 }
 
 type ClientOpt func(*Client) error
@@ -98,6 +99,12 @@ func New(opts ...ClientOpt) (*Client, error) {
 	if this.endpoint == nil {
 		return nil, httpresponse.ErrBadRequest.With("missing endpoint")
 	}
+
+	// Apply transport middleware in reverse so the first OptTransport call is the outermost layer.
+	for i := len(this.transports) - 1; i >= 0; i-- {
+		this.Client.Transport = this.transports[i](this.Client.Transport)
+	}
+	this.transports = nil
 
 	// Return success
 	return this, nil
@@ -197,18 +204,19 @@ func (client *Client) Request(req *http.Request, out any, opts ...RequestOpt) er
 // waitRateLimit sleeps until the rate limit allows the next request, then
 // records the current time. The sleep is cancelled early if ctx is done.
 func (client *Client) waitRateLimit(ctx context.Context) error {
-	now := time.Now()
 	if !client.ts.IsZero() && client.rate > 0.0 {
 		next := client.ts.Add(time.Duration(float32(time.Second) / client.rate))
-		if next.After(now) {
+		if delay := time.Until(next); delay > 0 {
+			t := time.NewTimer(delay)
 			select {
-			case <-time.After(next.Sub(now)):
 			case <-ctx.Done():
+				t.Stop()
 				return ctx.Err()
+			case <-t.C:
 			}
 		}
 	}
-	client.ts = now
+	client.ts = time.Now()
 	return nil
 }
 

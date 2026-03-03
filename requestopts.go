@@ -116,9 +116,12 @@ func OptJsonStreamCallback(fn JsonStreamCallback) RequestOpt {
 }
 
 // OptReqTransport inserts a transport middleware for this request only.
-// Multiple calls append in order; the first call becomes the outermost layer.
+// Multiple calls stack in order; the first call becomes the outermost layer.
 func OptReqTransport(fn func(http.RoundTripper) http.RoundTripper) RequestOpt {
 	return func(r *requestOpts) error {
+		if fn == nil {
+			return httpresponse.ErrBadRequest.With("OptReqTransport: nil middleware")
+		}
 		r.transports = append(r.transports, fn)
 		return nil
 	}

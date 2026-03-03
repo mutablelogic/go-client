@@ -115,10 +115,17 @@ func OptTracer(tracer trace.Tracer) ClientOpt {
 	}
 }
 
-// OptSkipVerify skips TLS certificate domain verification
+// OptSkipVerify skips TLS certificate domain verification.
+// It clones the client's own transport rather than mutating http.DefaultTransport.
 func OptSkipVerify() ClientOpt {
 	return func(client *Client) error {
-		http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+		t, ok := client.Client.Transport.(*http.Transport)
+		if !ok {
+			return httpresponse.ErrBadRequest.With("OptSkipVerify: transport is not *http.Transport")
+		}
+		clone := t.Clone()
+		clone.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+		client.Client.Transport = clone
 		return nil
 	}
 }

@@ -29,7 +29,6 @@ type Logging struct {
 }
 
 type readwrapper struct {
-	r    io.ReadCloser
 	data bytes.Buffer
 }
 
@@ -72,34 +71,40 @@ func (t *Logging) Payload(v interface{}) {
 
 // RoundTrip implements http.RoundTripper.
 func (t *Logging) RoundTrip(req *http.Request) (*http.Response, error) {
+	// Clone the request before mutating it (RoundTripper must not modify the original)
+	req = req.Clone(req.Context())
+
+	// Pre-read the request body so it can be logged before we send the request,
+	// keeping the output in natural request → response order.
+	var rw readwrapper
+	if req.Body != nil {
+		if raw, err := io.ReadAll(req.Body); err == nil {
+			_ = req.Body.Close()
+			rw.data.Write(raw)
+			req.Body = io.NopCloser(bytes.NewReader(raw))
+		}
+	}
+
 	fmt.Fprintln(t.w, "request:", req.Method, otel.RedactedURL(req.URL))
 	if t.v {
 		for key := range req.Header {
 			fmt.Fprintf(t.w, "  => %v: %q\n", key, req.Header.Get(key))
 		}
+		if data, err := rw.as(req.Header.Get("Content-Type")); err == nil && len(data) > 0 {
+			fmt.Fprintf(t.w, "  => %v\n", string(data))
+		}
 	}
+
 	then := time.Now()
 	defer func() {
 		fmt.Fprintln(t.w, "  Took", time.Since(then).Milliseconds(), "ms")
 	}()
-
-	// Clone the request before mutating it (RoundTripper must not modify the original)
-	req = req.Clone(req.Context())
-	req.Body = &readwrapper{r: req.Body}
 
 	// Perform the roundtrip
 	resp, err := t.RoundTripper.RoundTrip(req)
 	if err != nil {
 		fmt.Fprintln(t.w, "error:", err)
 		return resp, err
-	}
-
-	// If verbose, output the request body
-	if t.v {
-		data, err := req.Body.(*readwrapper).as(req.Header.Get("Content-Type"))
-		if err == nil {
-			fmt.Fprintf(t.w, "  => %v\n", string(data))
-		}
 	}
 
 	fmt.Fprintln(t.w, "response:", resp.Status)
@@ -183,24 +188,6 @@ func (s *streamBody) Close() error {
 	err := s.closer.Close()
 	s.lw.Flush()
 	return err
-}
-
-func (w *readwrapper) Read(b []byte) (int, error) {
-	if w.r == nil {
-		return 0, io.EOF
-	}
-	n, err := w.r.Read(b)
-	if err == nil {
-		_, err = w.data.Write(b[:n])
-	}
-	return n, err
-}
-
-func (w *readwrapper) Close() error {
-	if w.r != nil {
-		return w.r.Close()
-	}
-	return nil
 }
 
 func (w *readwrapper) as(mimetype string) ([]byte, error) {

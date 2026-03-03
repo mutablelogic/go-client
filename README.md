@@ -187,7 +187,7 @@ modify each individual request when using the `Do` method:
 * `OptPath(value ...string)` appends path elements onto a request endpoint
 * `OptToken(value Token)` adds an authorization header (overrides the client OptReqToken option)
 * `OptQuery(value url.Values)` sets the query parameters to a request
-* `OptHeader(key, value string)` sets a custom header to the request
+* `OptReqHeader(name, value string)` sets a custom header to the request
 * `OptNoTimeout()` disables the timeout on the request, which is useful for long running requests
 * `OptReqTransport(fn func(http.RoundTripper) http.RoundTripper)` inserts a transport middleware
     for this single request only. Multiple calls stack in order; the first becomes the outermost.
@@ -237,7 +237,7 @@ You can also set the token on a per-request basis using the `OptToken` option in
 
 The `pkg/oauth` package provides a full OAuth 2.0 client supporting discovery (RFC 8414), dynamic
 client registration (RFC 7591), authorization code + PKCE, device authorization, and client
-credentials flows. Use `c.OAuth(ctx)` to run the full flow using the client's own HTTP transport —
+credentials flows. Use `c.OAuth()` to run the full flow using the client's own HTTP transport —
 the `Authorize*` methods attach the resulting credentials to the client automatically, and the
 token is refreshed transparently before each request:
 
@@ -258,17 +258,17 @@ func main() {
         log.Fatal(err)
     }
 
-    // c.OAuth(ctx) returns a flow that injects c's HTTP transport automatically.
-    flow := c.OAuth(ctx)
+    // c.OAuth() returns a flow that injects c's HTTP transport automatically.
+    flow := c.OAuth()
 
     // 1. Discover server metadata
-    metadata, err := flow.Discover("https://example.com")
+    metadata, err := flow.Discover(ctx, "https://example.com")
     if err != nil {
         log.Fatal(err)
     }
 
     // 2. Authorize (client credentials shown; see pkg/oauth for browser/device flows)
-    creds, err := flow.AuthorizeWithCredentials(
+    creds, err := flow.AuthorizeWithCredentials(ctx,
         &oauth.OAuthCredentials{
             Metadata:     metadata,
             ClientID:     "my-client",
@@ -367,7 +367,10 @@ to indicate how the client should handle the response:
 
 * `nil` to indicate successful unmarshalling.
 * `httpresponse.ErrNotImplemented` (from github.com/mutablelogic/go-server/pkg/httpresponse) to fall back to the default unmarshaling behaviour.
-  In this case, the body will be unmarshaled as JSON, XML, or plain text depending on the Content-Type header.
+  In this case, the body will be unmarshaled based on the `Content-Type` header:
+  * `application/json` → any JSON-decodable type
+  * `application/xml` or `text/xml` → any XML-decodable type
+  * `text/plain` → `*string` (value set to the body text) or `*[]byte` (raw bytes)
 * Any other error to indicate a failure in unmarshaling.
 
 ## Text Streaming Responses
@@ -396,12 +399,31 @@ func Callback(event client.TextStreamEvent) error {
 }
 ```
 
-The `TextStreamEvent` object has the following
+The `TextStreamEvent` object has the following fields:
+
+* `Id string` — the event ID (`id:` field)
+* `Event string` — the event type (`event:` field; defaults to `"message"`)
+* `Data string` — the event data (`data:` fields joined with `\n`)
+* `Retry time.Duration` — the server-requested reconnect delay (`retry:` field)
 
 If you return an error of type `io.EOF` from the callback, then the stream will be closed.
 Similarly, if you return any other error the stream will be closed and the error returned.
 
 Usually, you would pair this option with `OptNoTimeout` to prevent the request from timing out.
+
+### SSE Reconnect
+
+For reconnect support, use `NewTextStream()` and `Decode()` directly rather than `OptTextStreamCallback`.
+After `Decode` returns, the decoder holds the last event ID and server-requested retry delay:
+
+```go
+stream := client.NewTextStream()
+if err := stream.Decode(r, callback); err != nil {
+    // reconnect: set Last-Event-ID header and wait
+    req.Header.Set("Last-Event-ID", stream.LastEventID())
+    time.Sleep(stream.RetryDuration())
+}
+```
 
 When the `Accept` type of the payload is `text/event-stream` or `application/x-ndjson`, the client
 automatically adds `Cache-Control: no-cache` and `X-Accel-Buffering: no` request headers to

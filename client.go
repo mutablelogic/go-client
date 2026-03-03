@@ -10,7 +10,6 @@ import (
 	"mime"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -64,7 +63,7 @@ type JsonStreamCallback func(v any) error
 const (
 	DefaultTimeout            = time.Second * 30
 	DefaultUserAgent          = "github.com/mutablelogic/go-client"
-	PathSeparator             = string(os.PathSeparator)
+	PathSeparator             = "/"
 	ContentTypeAny            = types.ContentTypeAny
 	ContentTypeJson           = types.ContentTypeJSON
 	ContentTypeJsonStream     = "application/x-ndjson"
@@ -139,19 +138,9 @@ func (client *Client) DoWithContext(ctx context.Context, in Payload, out any, op
 		defer closer.Close()
 	}
 
-	// Check rate limit - sleep until next request can be made
-	now := time.Now()
-	if !client.ts.IsZero() && client.rate > 0.0 {
-		next := client.ts.Add(time.Duration(float32(time.Second) / client.rate))
-		if next.After(now) { // TODO allow ctx to cancel the sleep
-			time.Sleep(next.Sub(now))
-		}
+	if err := client.waitRateLimit(ctx); err != nil {
+		return err
 	}
-
-	// Set timestamp at return, for rate limiting
-	defer func(now time.Time) {
-		client.ts = now
-	}(now)
 
 	// Make a request
 	var method string = http.MethodGet
@@ -185,19 +174,9 @@ func (client *Client) Request(req *http.Request, out any, opts ...RequestOpt) er
 	client.Mutex.Lock()
 	defer client.Mutex.Unlock()
 
-	// Check rate limit - sleep until next request can be made
-	now := time.Now()
-	if !client.ts.IsZero() && client.rate > 0.0 {
-		next := client.ts.Add(time.Duration(float32(time.Second) / client.rate))
-		if next.After(now) { // TODO allow ctx to cancel the sleep
-			time.Sleep(next.Sub(now))
-		}
+	if err := client.waitRateLimit(req.Context()); err != nil {
+		return err
 	}
-
-	// Set timestamp at return
-	defer func(now time.Time) {
-		client.ts = now
-	}(now)
 
 	if err := client.refreshOAuth(req.Context()); err != nil {
 		return err
@@ -215,6 +194,24 @@ func (client *Client) Request(req *http.Request, out any, opts ...RequestOpt) er
 
 ///////////////////////////////////////////////////////////////////////////////
 // PRIVATE METHODS
+
+// waitRateLimit sleeps until the rate limit allows the next request, then
+// records the current time. The sleep is cancelled early if ctx is done.
+func (client *Client) waitRateLimit(ctx context.Context) error {
+	now := time.Now()
+	if !client.ts.IsZero() && client.rate > 0.0 {
+		next := client.ts.Add(time.Duration(float32(time.Second) / client.rate))
+		if next.After(now) {
+			select {
+			case <-time.After(next.Sub(now)):
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+	}
+	client.ts = now
+	return nil
+}
 
 // refreshOAuth refreshes the OAuth token if credentials are set and the token
 // is expired. It injects the client's own HTTP transport into the context so
@@ -305,23 +302,19 @@ func do(client *http.Client, req *http.Request, accept string, strict bool, out 
 		}
 	}
 
-	// NoTimeout
+	// Work on a shallow copy so we never mutate the shared *http.Client.
+	// Per-request timeout and transport changes are therefore safe without
+	// needing a mutex or deferred restoration.
+	localCl := *client
 	if reqopts.noTimeout {
-		defer func(v time.Duration) {
-			client.Timeout = v
-		}(client.Timeout)
-		client.Timeout = 0
+		localCl.Timeout = 0
 	}
-
-	// Per-request transports: wrap in order so index 0 is outermost
 	if len(reqopts.transports) > 0 {
-		origTransport := client.Transport
-		defer func() { client.Transport = origTransport }()
-		t := origTransport
+		t := localCl.Transport
 		for i := len(reqopts.transports) - 1; i >= 0; i-- {
 			t = reqopts.transports[i](t)
 		}
-		client.Transport = t
+		localCl.Transport = t
 	}
 
 	// Follow redirects manually so we can keep method and headers for HEAD/GET.
@@ -331,7 +324,7 @@ func do(client *http.Client, req *http.Request, accept string, strict bool, out 
 	for redirects := 0; ; redirects++ {
 		// Spans are created per-hop by the transport (otel.NewTransport), so
 		// there is no manual span management here.
-		resp, doErr := client.Do(req)
+		resp, doErr := localCl.Do(req)
 		if doErr != nil {
 			return doErr
 		}
@@ -461,6 +454,23 @@ func do(client *http.Client, req *http.Request, accept string, strict bool, out 
 	case ContentTypeTextXml, ContentTypeApplicationXml:
 		if err := xml.NewDecoder(response.Body).Decode(out); err != nil {
 			return err
+		}
+	case ContentTypeTextPlain:
+		data, err := io.ReadAll(response.Body)
+		if err != nil {
+			return err
+		}
+		switch v := out.(type) {
+		case *string:
+			*v = string(data)
+		case *[]byte:
+			*v = data
+		case io.Writer:
+			if _, err := v.Write(data); err != nil {
+				return err
+			}
+		default:
+			return httpresponse.ErrInternalError.Withf("do: cannot decode text/plain into %T", out)
 		}
 	default:
 		if v, ok := out.(io.Writer); ok {

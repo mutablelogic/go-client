@@ -2,7 +2,6 @@ package client
 
 import (
 	"bufio"
-	"bytes"
 	"encoding/json"
 	"errors"
 	"io"
@@ -11,7 +10,6 @@ import (
 	"time"
 
 	// Package imports
-	httpresponse "github.com/mutablelogic/go-server/pkg/httpresponse"
 	types "github.com/mutablelogic/go-server/pkg/types"
 )
 
@@ -20,8 +18,13 @@ import (
 
 // Implementation of a text stream, as per
 // https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events
+//
+// After Decode returns, LastEventID and RetryDuration can be used to reconnect:
+//
+//	req.Header.Set("Last-Event-ID", stream.LastEventID())
 type TextStream struct {
-	buf *bytes.Buffer
+	lastEventID   string
+	retryDuration time.Duration
 }
 
 // Implementation of a text stream, as per
@@ -57,9 +60,22 @@ const (
 
 // Create a new text stream decoder
 func NewTextStream() *TextStream {
-	return &TextStream{
-		buf: new(bytes.Buffer),
-	}
+	return &TextStream{}
+}
+
+/////////////////////////////////////////////////////////////////////////////
+// PUBLIC METHODS — RECONNECT STATE
+
+// LastEventID returns the last event ID received during Decode.
+// Send this as the "Last-Event-ID" request header when reconnecting.
+func (t *TextStream) LastEventID() string {
+	return t.lastEventID
+}
+
+// RetryDuration returns the server-requested reconnect delay from the most
+// recent "retry:" field, or zero if none was received.
+func (t *TextStream) RetryDuration() time.Duration {
+	return t.retryDuration
 }
 
 /////////////////////////////////////////////////////////////////////////////
@@ -80,9 +96,6 @@ func (t *TextStream) Decode(r io.Reader, callback TextStreamCallback) error {
 	var event *TextStreamEvent
 	scanner := bufio.NewScanner(r)
 
-	// Reset the buffer
-	t.buf.Reset()
-
 	// If the callback is nil, then return without doing anything
 	if callback == nil {
 		return nil
@@ -92,9 +105,6 @@ func (t *TextStream) Decode(r io.Reader, callback TextStreamCallback) error {
 	for scanner.Scan() {
 		data := strings.TrimSpace(scanner.Text())
 		if data == "" {
-			// Reset the buffer
-			t.buf.Reset()
-
 			// Eject the text stream event
 			if !event.IsZero() {
 				if err := callback(*event); err != nil {
@@ -112,10 +122,18 @@ func (t *TextStream) Decode(r io.Reader, callback TextStreamCallback) error {
 			continue
 		}
 
-		// Split the data
+		// Split at the first colon. A line with no colon has the whole line as
+		// the field name with an empty value (SSE spec). Lines starting with ':'
+		// are comments and must be silently ignored.
 		fields := strings.SplitN(data, ":", 2)
-		if len(fields) != 2 {
-			return httpresponse.ErrBadRequest.Withf("%q", data)
+		key := strings.ToLower(strings.TrimSpace(fields[0]))
+		value := ""
+		if len(fields) == 2 {
+			value = strings.TrimSpace(fields[1])
+		}
+		if key == "" {
+			// Comment line — skip
+			continue
 		}
 
 		// Create a new event if necessary
@@ -124,20 +142,24 @@ func (t *TextStream) Decode(r io.Reader, callback TextStreamCallback) error {
 		}
 
 		// Populate the event
-		key := strings.TrimSpace(strings.ToLower(fields[0]))
-		value := strings.TrimSpace(fields[1])
 		switch key {
 		case "id":
 			event.Id = value
+			t.lastEventID = value
 		case "event":
 			event.Event = value
 		case "data":
-			// Concatenate data
-			event.Data = event.Data + value
+			// Per SSE spec, multiple data fields are joined with a newline
+			if event.Data == "" {
+				event.Data = value
+			} else {
+				event.Data = event.Data + "\n" + value
+			}
 		case "retry":
 			// Retry time in milliseconds, ignore if not a number
 			if retry, err := strconv.ParseInt(value, 10, 64); err == nil {
 				event.Retry = time.Duration(retry) * time.Millisecond
+				t.retryDuration = event.Retry
 			}
 		default:
 			// Ignore other fields

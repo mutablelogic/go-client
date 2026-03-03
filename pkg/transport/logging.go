@@ -42,7 +42,7 @@ const (
 ///////////////////////////////////////////////////////////////////////////////
 // LIFECYCLE
 
-// New creates a logging middleware that wraps parent. Every request and
+// NewLogging creates a logging middleware that wraps parent. Every request and
 // response is written to w. When verbose is true the request and response
 // bodies are also written. If parent is nil, http.DefaultTransport is used.
 func NewLogging(w io.Writer, parent http.RoundTripper, verbose bool) *Logging {
@@ -129,8 +129,11 @@ func (t *Logging) RoundTrip(req *http.Request) (*http.Response, error) {
 				lw:     lw,
 			}
 		case contentType == types.ContentTypeJSON:
-			body, _ := io.ReadAll(resp.Body)
+			body, readErr := io.ReadAll(resp.Body)
 			resp.Body = io.NopCloser(bytes.NewReader(body))
+			if readErr != nil {
+				return resp, fmt.Errorf("logging: read response body: %w", readErr)
+			}
 			dst := &bytes.Buffer{}
 			if err := json.Indent(dst, body, "    ", "  "); err != nil {
 				fmt.Fprintf(t.w, "  <= %q\n", string(body))
@@ -138,8 +141,11 @@ func (t *Logging) RoundTrip(req *http.Request) (*http.Response, error) {
 				fmt.Fprintf(t.w, "  <= %v\n", dst.String())
 			}
 		case strings.HasPrefix(contentType, "text/"):
-			body, _ := io.ReadAll(resp.Body)
+			body, readErr := io.ReadAll(resp.Body)
 			resp.Body = io.NopCloser(bytes.NewReader(body))
+			if readErr != nil {
+				return resp, fmt.Errorf("logging: read response body: %w", readErr)
+			}
 			fmt.Fprintf(t.w, "  <= %q\n", string(body))
 		default:
 			fmt.Fprintf(t.w, "  <= (not displaying response of type %q)\n", contentType)

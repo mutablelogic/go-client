@@ -191,7 +191,7 @@ modify each individual request when using the `Do` method:
 * `OptNoTimeout()` disables the timeout on the request, which is useful for long running requests
 * `OptReqTransport(fn func(http.RoundTripper) http.RoundTripper)` inserts a transport middleware
     for this single request only. Multiple calls stack in order; the first becomes the outermost.
-    The original client transport is restored after the request completes.
+    The middleware is applied on a per-request copy of the client and does not affect other requests.
 * `OptTextStreamCallback(fn TextStreamCallback)` allows you to set a callback
     function to process a streaming text response of type `text/event-stream`, where
     `TextStreamCallback` is `func(TextStreamEvent) error`. See below for more details.
@@ -369,7 +369,7 @@ to indicate how the client should handle the response:
   In this case, the body will be unmarshaled based on the `Content-Type` header:
   * `application/json` → any JSON-decodable type
   * `application/xml` or `text/xml` → any XML-decodable type
-  * `text/plain` → `*string` (value set to the body text) or `*[]byte` (raw bytes)
+  * `text/plain` → `*string` (value set to the body text), `*[]byte` (raw bytes), or `io.Writer` (body copied into it)
 * Any other error to indicate a failure in unmarshaling.
 
 ## Text Streaming Responses

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"path/filepath"
+	"path"
 	"strings"
 
 	// Package imports
@@ -50,7 +50,7 @@ func OptPath(value ...any) RequestOpt {
 		// Make a copy
 		url := *r.URL
 		// Clean up and append path
-		url.Path = PathSeparator + filepath.Join(strings.Trim(url.Path, PathSeparator), strings.TrimPrefix(join(value, PathSeparator), PathSeparator))
+		url.Path = PathSeparator + path.Join(strings.Trim(url.Path, PathSeparator), strings.TrimPrefix(join(value, PathSeparator), PathSeparator))
 		// Set new path
 		r.URL = &url
 		return nil

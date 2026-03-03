@@ -323,6 +323,12 @@ func do(client *http.Client, req *http.Request, accept string, strict bool, out 
 		}
 		localCl.Transport = t
 	}
+	// Disable the standard client's redirect-following so that our manual
+	// redirect loop below actually sees 3xx responses and can enforce the
+	// method/header-preservation and cross-origin stripping rules.
+	localCl.CheckRedirect = func(_ *http.Request, _ []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
 
 	// Follow redirects manually so we can keep method and headers for HEAD/GET.
 	// redirects=0 is the original request, redirects=1..N are redirect follows.

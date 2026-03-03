@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"mime"
 	"net/http"
 	"net/url"
 	"strings"
@@ -492,7 +491,7 @@ func respContentType(resp *http.Response) (string, error) {
 	if contenttype == "" {
 		return ContentTypeBinary, nil
 	}
-	if mimetype, _, err := mime.ParseMediaType(contenttype); err != nil {
+	if mimetype, err := types.ParseContentType(contenttype); err != nil {
 		return contenttype, httpresponse.Err(http.StatusUnsupportedMediaType).With(contenttype)
 	} else {
 		return mimetype, nil

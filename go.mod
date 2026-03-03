@@ -7,7 +7,6 @@ require (
 	github.com/andreburgaud/crypt2go v1.8.0
 	github.com/djthorpe/go-errors v1.0.3
 	github.com/djthorpe/go-tablewriter v0.0.11
-	github.com/gogo/protobuf v1.3.2
 	github.com/mutablelogic/go-server v1.6.13
 	github.com/stretchr/testify v1.11.1
 	github.com/xdg-go/pbkdf2 v1.0.0

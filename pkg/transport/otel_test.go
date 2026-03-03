@@ -1,4 +1,4 @@
-package otel_test
+package transport_test
 
 import (
 	"net/http"
@@ -6,9 +6,19 @@ import (
 	"testing"
 
 	// Packages
-	"github.com/mutablelogic/go-client/pkg/otel"
+	transport "github.com/mutablelogic/go-client/pkg/transport"
 	"github.com/stretchr/testify/assert"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	tracetest "go.opentelemetry.io/otel/sdk/trace/tracetest"
 )
+
+func newOtelTestTracer() (*tracetest.InMemoryExporter, *sdktrace.TracerProvider) {
+	exporter := tracetest.NewInMemoryExporter()
+	provider := sdktrace.NewTracerProvider(
+		sdktrace.WithSyncer(exporter),
+	)
+	return exporter, provider
+}
 
 func TestNewTransport_NilTracer(t *testing.T) {
 	assert := assert.New(t)
@@ -18,7 +28,7 @@ func TestNewTransport_NilTracer(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
-	rt := otel.NewTransport(nil, nil)
+	rt := transport.NewTransport(nil, nil)
 	client := &http.Client{Transport: rt}
 	resp, err := client.Get(server.URL)
 	assert.NoError(err)
@@ -34,11 +44,11 @@ func TestNewTransport_RecordsSpan(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
-	exporter, provider := newTestTracer()
+	exporter, provider := newOtelTestTracer()
 	t.Cleanup(func() { _ = provider.Shutdown(t.Context()) })
 	tracer := provider.Tracer("test")
 
-	rt := otel.NewTransport(tracer, nil)
+	rt := transport.NewTransport(tracer, nil)
 	client := &http.Client{Transport: rt}
 	resp, err := client.Get(server.URL + "/health")
 	assert.NoError(err)
@@ -54,7 +64,7 @@ func TestNewTransport_WrapsNext(t *testing.T) {
 	assert := assert.New(t)
 
 	callCount := 0
-	inner := roundTripFunc(func(req *http.Request) (*http.Response, error) {
+	inner := otelRoundTripFunc(func(req *http.Request) (*http.Response, error) {
 		callCount++
 		return &http.Response{
 			StatusCode: http.StatusTeapot,
@@ -62,11 +72,11 @@ func TestNewTransport_WrapsNext(t *testing.T) {
 		}, nil
 	})
 
-	exporter, provider := newTestTracer()
+	exporter, provider := newOtelTestTracer()
 	t.Cleanup(func() { _ = provider.Shutdown(t.Context()) })
 	tracer := provider.Tracer("test")
 
-	rt := otel.NewTransport(tracer, inner)
+	rt := transport.NewTransport(tracer, inner)
 	req, _ := http.NewRequest(http.MethodGet, "http://example.com/test", nil)
 	resp, err := rt.RoundTrip(req)
 	assert.NoError(err)
@@ -77,7 +87,7 @@ func TestNewTransport_WrapsNext(t *testing.T) {
 	assert.Len(spans, 1)
 }
 
-// roundTripFunc satisfies http.RoundTripper.
-type roundTripFunc func(*http.Request) (*http.Response, error)
+// otelRoundTripFunc satisfies http.RoundTripper.
+type otelRoundTripFunc func(*http.Request) (*http.Response, error)
 
-func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) { return f(req) }
+func (f otelRoundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) { return f(req) }

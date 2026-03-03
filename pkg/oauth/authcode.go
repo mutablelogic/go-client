@@ -23,7 +23,8 @@ type PromptFunc func(authURL string) (code string, err error)
 // The creds parameter must have Metadata and ClientID set (e.g. obtained from Register
 // or constructed manually). The prompt callback is called with the authorization URL;
 // it should present the URL to the user and return the authorization code they paste back.
-// If no scopes are provided, "openid" is requested by default.
+// If no scopes are provided, the scope parameter is omitted and the server
+// applies its own defaults (RFC 6749 §3.3).
 // The returned credentials carry the token and preserve Metadata for subsequent calls.
 //
 // To use a custom HTTP client for the token exchange, inject it into the
@@ -41,7 +42,7 @@ func AuthorizeWithCode(ctx context.Context, creds *OAuthCredentials, prompt Prom
 	case prompt == nil:
 		return nil, fmt.Errorf("prompt function is required")
 	case len(scopes) == 0:
-		// No scopes requested — omit the scope parameter and let the server apply its default.
+		// No scopes requested — omit the scope parameter so the server applies its own defaults (RFC 6749 §3.3).
 	}
 
 	// Validate that the metadata contains the fields required for the Authorization Code flow.

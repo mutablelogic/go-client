@@ -19,3 +19,11 @@ func Test_token_002(t *testing.T) {
 	token := client.Token{Scheme: "Other", Value: "test"}
 	assert.Equal("Other test", token.String())
 }
+
+func Test_token_003(t *testing.T) {
+	assert := assert.New(t)
+	// Empty Value must return "" regardless of Scheme — avoids emitting "Bearer "
+	assert.Equal("", client.Token{}.String())
+	assert.Equal("", client.Token{Scheme: "Bearer"}.String())
+	assert.Equal("", client.Token{Scheme: "Other"}.String())
+}

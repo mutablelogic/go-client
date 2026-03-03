@@ -9,11 +9,9 @@ import (
 	"time"
 
 	// Package imports
-	"go.opentelemetry.io/otel/trace"
-
-	// Namespace imports
-	. "github.com/djthorpe/go-errors"
-	"github.com/mutablelogic/go-client/pkg/otel"
+	transport "github.com/mutablelogic/go-client/pkg/transport"
+	httpresponse "github.com/mutablelogic/go-server/pkg/httpresponse"
+	trace "go.opentelemetry.io/otel/trace"
 )
 
 // OptEndpoint sets the endpoint for all requests.
@@ -22,9 +20,9 @@ func OptEndpoint(value string) ClientOpt {
 		if url, err := url.Parse(value); err != nil {
 			return err
 		} else if url.Scheme == "" || url.Host == "" {
-			return ErrBadParameter.Withf("endpoint: %q", value)
+			return httpresponse.ErrBadRequest.Withf("endpoint: %q", value)
 		} else if url.Scheme != "http" && url.Scheme != "https" {
-			return ErrBadParameter.Withf("endpoint: %q", value)
+			return httpresponse.ErrBadRequest.Withf("endpoint: %q", value)
 		} else {
 			client.endpoint = url
 		}
@@ -55,12 +53,25 @@ func OptUserAgent(value string) ClientOpt {
 	}
 }
 
+// Deprecated: Use OptTransport with transport.NewLogging instead.
 // OptTrace allows you to be the "man in the middle" on any
 // requests so you can see traffic move back and forth.
 // Setting verbose to true also displays the JSON response
 func OptTrace(w io.Writer, verbose bool) ClientOpt {
 	return func(client *Client) error {
-		client.Client.Transport = newLogTransport(w, client.Client.Transport, verbose)
+		client.Client.Transport = transport.NewLogging(w, client.Client.Transport, verbose)
+		return nil
+	}
+}
+
+// OptTransport inserts a transport middleware for all requests made by this client.
+// Multiple calls stack in order; the first call becomes the outermost layer.
+func OptTransport(fn func(http.RoundTripper) http.RoundTripper) ClientOpt {
+	return func(client *Client) error {
+		if fn == nil {
+			return httpresponse.ErrBadRequest.With("OptTransport: nil middleware")
+		}
+		client.transports = append(client.transports, fn)
 		return nil
 	}
 }
@@ -79,7 +90,7 @@ func OptStrict() ClientOpt {
 func OptRateLimit(value float32) ClientOpt {
 	return func(client *Client) error {
 		if value < 0.0 {
-			return ErrBadParameter.With("OptRateLimit")
+			return httpresponse.ErrBadRequest.With("OptRateLimit")
 		} else {
 			client.rate = value
 			return nil
@@ -102,15 +113,22 @@ func OptReqToken(value Token) ClientOpt {
 // to "METHOD /path" format.
 func OptTracer(tracer trace.Tracer) ClientOpt {
 	return func(client *Client) error {
-		client.Client.Transport = otel.NewTransport(tracer, client.Client.Transport)
+		client.Client.Transport = transport.NewTransport(tracer, client.Client.Transport)
 		return nil
 	}
 }
 
-// OptSkipVerify skips TLS certificate domain verification
+// OptSkipVerify skips TLS certificate domain verification.
+// It clones the client's own transport rather than mutating http.DefaultTransport.
 func OptSkipVerify() ClientOpt {
 	return func(client *Client) error {
-		http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+		t, ok := client.Client.Transport.(*http.Transport)
+		if !ok {
+			return httpresponse.ErrBadRequest.With("OptSkipVerify: transport is not *http.Transport")
+		}
+		clone := t.Clone()
+		clone.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+		client.Client.Transport = clone
 		return nil
 	}
 }
@@ -122,7 +140,7 @@ func OptHeader(key, value string) ClientOpt {
 			client.headers = make(map[string]string, 2)
 		}
 		if key == "" {
-			return ErrBadParameter.With("OptHeader")
+			return httpresponse.ErrBadRequest.With("OptHeader")
 		}
 		client.headers[key] = value
 		return nil
@@ -134,7 +152,7 @@ func OptHeader(key, value string) ClientOpt {
 func OptParent(v any) ClientOpt {
 	return func(client *Client) error {
 		if v == nil {
-			return ErrBadParameter.With("OptParent")
+			return httpresponse.ErrBadRequest.With("OptParent")
 		} else {
 			client.Parent = v
 		}

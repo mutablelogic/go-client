@@ -18,8 +18,11 @@ const (
 ///////////////////////////////////////////////////////////////////////////////
 // STRINGIFY
 
-// Stringify the token value
+// Stringify the token value. Returns an empty string when Value is empty.
 func (token Token) String() string {
+	if token.Value == "" {
+		return ""
+	}
 	// Set default
 	if token.Scheme == "" {
 		token.Scheme = Bearer

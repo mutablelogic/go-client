@@ -68,7 +68,7 @@ func AuthorizeWithBrowser(ctx context.Context, creds *OAuthCredentials, listener
 	case open == nil:
 		return nil, fmt.Errorf("open function is required")
 	case len(scopes) == 0:
-		scopes = []string{"openid"}
+		// No scopes requested — omit the scope parameter and let the server apply its default.
 	}
 
 	if err := creds.Metadata.SupportsFlow(OAuthFlowAuthorizationCode); err != nil {

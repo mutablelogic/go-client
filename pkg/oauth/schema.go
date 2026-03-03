@@ -49,6 +49,12 @@ type OAuthCredentials struct {
 	// so callers do not need to pass it separately.
 	Metadata *OAuthMetadata `json:"metadata,omitempty"`
 
+	// RedirectURI is the redirect URI sent in the authorization request and token
+	// exchange. Defaults to empty (server default). Set to
+	// "urn:ietf:wg:oauth:2.0:oob" for native/CLI apps that display the code
+	// in the browser rather than redirecting to a callback server.
+	RedirectURI string `json:"redirect_uri,omitempty"`
+
 	// OnRefresh is an optional callback invoked after a new token is obtained
 	// from the server (i.e. when the old token was expired or about to expire).
 	// It is not called when the existing token is still valid.

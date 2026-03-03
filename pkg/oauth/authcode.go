@@ -41,7 +41,7 @@ func AuthorizeWithCode(ctx context.Context, creds *OAuthCredentials, prompt Prom
 	case prompt == nil:
 		return nil, fmt.Errorf("prompt function is required")
 	case len(scopes) == 0:
-		scopes = []string{"openid"}
+		// No scopes requested — omit the scope parameter and let the server apply its default.
 	}
 
 	// Validate that the metadata contains the fields required for the Authorization Code flow.
@@ -56,6 +56,7 @@ func AuthorizeWithCode(ctx context.Context, creds *OAuthCredentials, prompt Prom
 	cfg := &oauth2.Config{
 		ClientID:     creds.ClientID,
 		ClientSecret: creds.ClientSecret,
+		RedirectURL:  creds.RedirectURI,
 		Scopes:       scopes,
 		Endpoint:     creds.Metadata.OAuthEndpoint(),
 	}

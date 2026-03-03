@@ -9,11 +9,10 @@ import (
 	"time"
 
 	// Package imports
-	"go.opentelemetry.io/otel/trace"
-
-	// Namespace imports
-	. "github.com/djthorpe/go-errors"
-	"github.com/mutablelogic/go-client/pkg/otel"
+	otel "github.com/mutablelogic/go-client/pkg/otel"
+	transport "github.com/mutablelogic/go-client/pkg/transport"
+	httpresponse "github.com/mutablelogic/go-server/pkg/httpresponse"
+	trace "go.opentelemetry.io/otel/trace"
 )
 
 // OptEndpoint sets the endpoint for all requests.
@@ -22,9 +21,9 @@ func OptEndpoint(value string) ClientOpt {
 		if url, err := url.Parse(value); err != nil {
 			return err
 		} else if url.Scheme == "" || url.Host == "" {
-			return ErrBadParameter.Withf("endpoint: %q", value)
+			return httpresponse.ErrBadRequest.Withf("endpoint: %q", value)
 		} else if url.Scheme != "http" && url.Scheme != "https" {
-			return ErrBadParameter.Withf("endpoint: %q", value)
+			return httpresponse.ErrBadRequest.Withf("endpoint: %q", value)
 		} else {
 			client.endpoint = url
 		}
@@ -60,7 +59,16 @@ func OptUserAgent(value string) ClientOpt {
 // Setting verbose to true also displays the JSON response
 func OptTrace(w io.Writer, verbose bool) ClientOpt {
 	return func(client *Client) error {
-		client.Client.Transport = newLogTransport(w, client.Client.Transport, verbose)
+		client.Client.Transport = transport.NewLogging(w, client.Client.Transport, verbose)
+		return nil
+	}
+}
+
+// OptTransport inserts a transport middleware for all requests made by this client.
+// Multiple calls append in order; the first call becomes the outermost layer.
+func OptTransport(fn func(http.RoundTripper) http.RoundTripper) ClientOpt {
+	return func(client *Client) error {
+		client.Client.Transport = fn(client.Client.Transport)
 		return nil
 	}
 }
@@ -79,7 +87,7 @@ func OptStrict() ClientOpt {
 func OptRateLimit(value float32) ClientOpt {
 	return func(client *Client) error {
 		if value < 0.0 {
-			return ErrBadParameter.With("OptRateLimit")
+			return httpresponse.ErrBadRequest.With("OptRateLimit")
 		} else {
 			client.rate = value
 			return nil
@@ -96,6 +104,7 @@ func OptReqToken(value Token) ClientOpt {
 	}
 }
 
+// Deprecated: Use OptTransport with pkg/otel directly.
 // OptTracer sets the OpenTelemetry tracer for this client. It wraps the
 // underlying HTTP transport so that every HTTP call — including OAuth token
 // refresh and redirect hops — produces a client span. Span names default
@@ -122,7 +131,7 @@ func OptHeader(key, value string) ClientOpt {
 			client.headers = make(map[string]string, 2)
 		}
 		if key == "" {
-			return ErrBadParameter.With("OptHeader")
+			return httpresponse.ErrBadRequest.With("OptHeader")
 		}
 		client.headers[key] = value
 		return nil
@@ -134,7 +143,7 @@ func OptHeader(key, value string) ClientOpt {
 func OptParent(v any) ClientOpt {
 	return func(client *Client) error {
 		if v == nil {
-			return ErrBadParameter.With("OptParent")
+			return httpresponse.ErrBadRequest.With("OptParent")
 		} else {
 			client.Parent = v
 		}

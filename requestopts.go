@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	// Namespace imports
-	. "github.com/djthorpe/go-errors"
+	// Package imports
+	httpresponse "github.com/mutablelogic/go-server/pkg/httpresponse"
 )
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -16,9 +16,10 @@ import (
 
 type requestOpts struct {
 	*http.Request
-	noTimeout          bool               // OptNoTimeout
-	textStreamCallback TextStreamCallback // OptTextStreamCallback
-	jsonStreamCallback JsonStreamCallback // OptJsonStreamCallback
+	noTimeout          bool                                        // OptNoTimeout
+	textStreamCallback TextStreamCallback                          // OptTextStreamCallback
+	jsonStreamCallback JsonStreamCallback                          // OptJsonStreamCallback
+	transports         []func(http.RoundTripper) http.RoundTripper // OptReqTransport
 }
 
 type RequestOpt func(*requestOpts) error
@@ -32,9 +33,9 @@ func OptReqEndpoint(value string) RequestOpt {
 		if url, err := url.Parse(value); err != nil {
 			return err
 		} else if url.Scheme == "" || url.Host == "" {
-			return ErrBadParameter.Withf("endpoint: %q", value)
+			return httpresponse.ErrBadRequest.Withf("endpoint: %q", value)
 		} else if url.Scheme != "http" && url.Scheme != "https" {
-			return ErrBadParameter.Withf("endpoint: %q", value)
+			return httpresponse.ErrBadRequest.Withf("endpoint: %q", value)
 		} else {
 			r.URL = url
 			r.Host = url.Hostname()
@@ -110,6 +111,15 @@ func OptTextStreamCallback(fn TextStreamCallback) RequestOpt {
 func OptJsonStreamCallback(fn JsonStreamCallback) RequestOpt {
 	return func(r *requestOpts) error {
 		r.jsonStreamCallback = fn
+		return nil
+	}
+}
+
+// OptReqTransport inserts a transport middleware for this request only.
+// Multiple calls append in order; the first call becomes the outermost layer.
+func OptReqTransport(fn func(http.RoundTripper) http.RoundTripper) RequestOpt {
+	return func(r *requestOpts) error {
+		r.transports = append(r.transports, fn)
 		return nil
 	}
 }

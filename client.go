@@ -11,14 +11,16 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
 	// Package imports
-	"github.com/mutablelogic/go-client/pkg/oauth"
+	oauth "github.com/mutablelogic/go-client/pkg/oauth"
 	otel "github.com/mutablelogic/go-client/pkg/otel"
 	httpresponse "github.com/mutablelogic/go-server/pkg/httpresponse"
-	"golang.org/x/oauth2"
+	types "github.com/mutablelogic/go-server/pkg/types"
+	oauth2 "golang.org/x/oauth2"
 )
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -63,14 +65,14 @@ const (
 	DefaultTimeout            = time.Second * 30
 	DefaultUserAgent          = "github.com/mutablelogic/go-client"
 	PathSeparator             = string(os.PathSeparator)
-	ContentTypeAny            = "*/*"
-	ContentTypeJson           = "application/json"
+	ContentTypeAny            = types.ContentTypeAny
+	ContentTypeJson           = types.ContentTypeJSON
 	ContentTypeJsonStream     = "application/x-ndjson"
-	ContentTypeTextXml        = "text/xml"
-	ContentTypeApplicationXml = "application/xml"
-	ContentTypeTextPlain      = "text/plain"
+	ContentTypeTextXml        = types.ContentTypeTextXml
+	ContentTypeApplicationXml = types.ContentTypeXML
+	ContentTypeTextPlain      = types.ContentTypeTextPlain
 	ContentTypeTextHTML       = "text/html"
-	ContentTypeBinary         = "application/octet-stream"
+	ContentTypeBinary         = types.ContentTypeBinary
 )
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -263,6 +265,13 @@ func (client *Client) request(ctx context.Context, method, accept, mimetype stri
 	} else {
 		r.Header.Set("Accept", ContentTypeAny)
 	}
+	// For SSE or NDJSON streams, disable caching and Nginx proxy buffering so
+	// events are delivered immediately rather than held in intermediate buffers.
+	// Accept may be a comma-separated list so use Contains rather than ==.
+	if strings.Contains(accept, ContentTypeTextStream) || strings.Contains(accept, ContentTypeJsonStream) {
+		r.Header.Set("Cache-Control", "no-cache")
+		r.Header.Set("X-Accel-Buffering", "no")
+	}
 	if client.ua != "" {
 		r.Header.Set("User-Agent", client.ua)
 	}
@@ -302,6 +311,17 @@ func do(client *http.Client, req *http.Request, accept string, strict bool, out 
 			client.Timeout = v
 		}(client.Timeout)
 		client.Timeout = 0
+	}
+
+	// Per-request transports: wrap in order so index 0 is outermost
+	if len(reqopts.transports) > 0 {
+		origTransport := client.Transport
+		defer func() { client.Transport = origTransport }()
+		t := origTransport
+		for i := len(reqopts.transports) - 1; i >= 0; i-- {
+			t = reqopts.transports[i](t)
+		}
+		client.Transport = t
 	}
 
 	// Follow redirects manually so we can keep method and headers for HEAD/GET.

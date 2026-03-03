@@ -10,8 +10,9 @@ import (
 	"strings"
 	"time"
 
-	// Namespace imports
-	. "github.com/djthorpe/go-errors"
+	// Package imports
+	httpresponse "github.com/mutablelogic/go-server/pkg/httpresponse"
+	types "github.com/mutablelogic/go-server/pkg/types"
 )
 
 /////////////////////////////////////////////////////////////////////////////
@@ -48,7 +49,7 @@ type TextStreamCallback func(TextStreamEvent) error
 
 const (
 	// Mime type for text stream
-	ContentTypeTextStream = "text/event-stream"
+	ContentTypeTextStream = types.ContentTypeTextStream
 )
 
 /////////////////////////////////////////////////////////////////////////////
@@ -66,8 +67,7 @@ func NewTextStream() *TextStream {
 
 // Return the text stream event as a string
 func (t TextStreamEvent) String() string {
-	data, _ := json.MarshalIndent(t, "", "  ")
-	return string(data)
+	return types.Stringify(t)
 }
 
 /////////////////////////////////////////////////////////////////////////////
@@ -115,7 +115,7 @@ func (t *TextStream) Decode(r io.Reader, callback TextStreamCallback) error {
 		// Split the data
 		fields := strings.SplitN(data, ":", 2)
 		if len(fields) != 2 {
-			return ErrUnexpectedResponse.Withf("%q", data)
+			return httpresponse.ErrBadRequest.Withf("%q", data)
 		}
 
 		// Create a new event if necessary

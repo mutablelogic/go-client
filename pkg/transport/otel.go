@@ -1,16 +1,17 @@
-package otel
+package transport
 
 import (
 	"net/http"
 
 	// Packages
+	otel "github.com/mutablelogic/go-client/pkg/otel"
 	"go.opentelemetry.io/otel/trace"
 )
 
 ///////////////////////////////////////////////////////////////////////////////
 // TYPES
 
-type transport struct {
+type otelTransport struct {
 	tracer trace.Tracer
 	next   http.RoundTripper
 }
@@ -25,19 +26,19 @@ type transport struct {
 // Use this with client.Client.Transport to ensure all HTTP calls — including
 // those made by golang.org/x/oauth2 during token refresh — are traced:
 //
-//	httpClient.Transport = otel.NewTransport(tracer, httpClient.Transport)
+//	httpClient.Transport = transport.NewTransport(tracer, httpClient.Transport)
 func NewTransport(tracer trace.Tracer, next http.RoundTripper) http.RoundTripper {
 	if next == nil {
 		next = http.DefaultTransport
 	}
-	return &transport{tracer: tracer, next: next}
+	return &otelTransport{tracer: tracer, next: next}
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 // http.RoundTripper
 
-func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
-	reqWithSpan, finishSpan := StartHTTPClientSpan(t.tracer, req)
+func (t *otelTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	reqWithSpan, finishSpan := otel.StartHTTPClientSpan(t.tracer, req)
 	resp, err := t.next.RoundTrip(reqWithSpan)
 	finishSpan(resp, err)
 	return resp, err

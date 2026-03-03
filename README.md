@@ -19,10 +19,11 @@ There are also some example clients which use this library:
 * [Home Assistant API Client](https://github.com/mutablelogic/go-client/tree/main/pkg/homeassistant)
 * [IPify Client](https://github.com/mutablelogic/go-client/tree/main/pkg/ipify)
 
-There are also utility packages for working with multipart file uploads and OpenTelemetry:
+There are also utility packages for working with multipart file uploads, transport middleware, and OpenTelemetry:
 
 * [OAuth 2.0 Package](https://github.com/mutablelogic/go-client/tree/main/pkg/oauth)
 * [OpenTelemetry Package](https://github.com/mutablelogic/go-client/tree/main/pkg/otel)
+* [Transport Middleware Package](https://github.com/mutablelogic/go-client/tree/main/pkg/transport)
 * [Multipart Package](https://github.com/mutablelogic/go-client/tree/main/pkg/multipart)
 
 Compatibility with go version 1.25 and above.
@@ -68,8 +69,8 @@ Various options can be passed to the client `New` method to control its behaviou
 * `OptTimeout(value time.Duration)` sets the timeout on any request, which defaults to 30 seconds.
     Timeouts can be ignored on a request-by-request basis using the `OptNoTimeout` option (see below).
 * `OptUserAgent(value string)` sets the user agent string on each API request.
-* `OptTrace(w io.Writer, verbose bool)` allows you to debug the request and response data.
-    When `verbose` is set to true, it also displays the payloads.
+* `OptTrace(w io.Writer, verbose bool)` — **Deprecated.** Use `OptTransport` with `transport.NewLogging` instead.
+    See the Transport Middleware section below for details.
 * `OptStrict()` turns on strict content type checking on anything returned from the API.
 * `OptRateLimit(value float32)` sets the limit on number of requests per second and the API
     will sleep to regulate the rate limit when exceeded.
@@ -77,8 +78,11 @@ Various options can be passed to the client `New` method to control its behaviou
     overridden by the client for individual requests using `OptToken` (see below).
 * `OptSkipVerify()` skips TLS certificate domain verification.
 * `OptHeader(key, value string)` appends a custom header to each request.
+* `OptTransport(fn func(http.RoundTripper) http.RoundTripper)` inserts a transport middleware
+    that wraps every request made by this client. Multiple calls stack in order so the first
+    call becomes the outermost layer. Use this to plug in any `pkg/transport` middleware.
 * `OptTracer(tracer trace.Tracer)` sets an OpenTelemetry tracer for distributed tracing.
-    Span names default to "METHOD /path" format. See the OpenTelemetry section below for more details.
+    Span names default to `"METHOD /path"` format. See the OpenTelemetry section below for more details.
 
 ## Redirect Handling
 
@@ -185,6 +189,9 @@ modify each individual request when using the `Do` method:
 * `OptQuery(value url.Values)` sets the query parameters to a request
 * `OptHeader(key, value string)` sets a custom header to the request
 * `OptNoTimeout()` disables the timeout on the request, which is useful for long running requests
+* `OptReqTransport(fn func(http.RoundTripper) http.RoundTripper)` inserts a transport middleware
+    for this single request only. Multiple calls stack in order; the first becomes the outermost.
+    The original client transport is restored after the request completes.
 * `OptTextStreamCallback(func(TextStreamCallback) error)` allows you to set a callback
     function to process a streaming text response of type `text/event-stream`. See below for
     more details.
@@ -396,6 +403,10 @@ Similarly, if you return any other error the stream will be closed and the error
 
 Usually, you would pair this option with `OptNoTimeout` to prevent the request from timing out.
 
+When the `Accept` type of the payload is `text/event-stream` or `application/x-ndjson`, the client
+automatically adds `Cache-Control: no-cache` and `X-Accel-Buffering: no` request headers to
+prevent intermediate proxies (including Nginx) from buffering the stream.
+
 ## JSON Streaming Responses
 
 The client decodes JSON streaming responses by passing a callback function to the `OptJsonStreamCallback()` option.
@@ -404,6 +415,64 @@ is the same type as the object in the request.
 
 You can return an error from the callback to stop the stream and return the error, or return `io.EOF` to stop the stream
 immediately and return success.
+
+## Transport Middleware
+
+The `pkg/transport` package provides composable `http.RoundTripper` middleware. All middleware
+follows the same constructor pattern `New*(... , parent http.RoundTripper)` and falls back to
+`http.DefaultTransport` when `parent` is nil. Middleware can be composed using `OptTransport`
+(client-wide) or `OptReqTransport` (per-request).
+
+### Logging Transport
+
+`transport.NewLogging` logs every request and response to an `io.Writer`. When `verbose` is true
+the request and response bodies are also printed; `text/event-stream` bodies are printed
+line-by-line as events arrive rather than buffered:
+
+```go
+import (
+    client "github.com/mutablelogic/go-client"
+    "github.com/mutablelogic/go-client/pkg/transport"
+    "os"
+)
+
+c, err := client.New(
+    client.OptEndpoint("https://api.example.com"),
+    client.OptTransport(func(next http.RoundTripper) http.RoundTripper {
+        return transport.NewLogging(os.Stderr, next, true)
+    }),
+)
+```
+
+The convenience client option `OptTrace(w io.Writer, verbose bool)` (deprecated) is equivalent and internally
+calls `transport.NewLogging`.
+
+### Recorder Transport
+
+`transport.NewRecorder` captures the HTTP status code and response headers of the most recent
+response. It is safe for concurrent use:
+
+```go
+var rec *transport.Recorder
+
+c, err := client.New(
+    client.OptEndpoint("https://api.example.com"),
+    client.OptTransport(func(next http.RoundTripper) http.RoundTripper {
+        rec = transport.NewRecorder(next)
+        return rec
+    }),
+)
+
+// After a request:
+fmt.Println(rec.StatusCode())     // e.g. 200
+fmt.Println(rec.Header())         // cloned http.Header map
+rec.Reset()                       // clear recorded values
+```
+
+### OTel Transport
+
+`transport.NewTransport` wraps an `http.RoundTripper` so that every hop produces an
+OpenTelemetry client span. See the OpenTelemetry section below for details.
 
 ## OpenTelemetry
 
@@ -419,8 +488,11 @@ package main
 import (
     "context"
     "log"
+    "net/http"
 
+    client "github.com/mutablelogic/go-client"
     "github.com/mutablelogic/go-client/pkg/otel"
+    "github.com/mutablelogic/go-client/pkg/transport"
 )
 
 func main() {
@@ -440,10 +512,12 @@ func main() {
     // Get a tracer from the provider
     tracer := provider.Tracer("my-service")
 
-    // Use the tracer with go-client
+    // Use the tracer with go-client via OptTransport
     c, err := client.New(
         client.OptEndpoint("https://api.example.com"),
-        client.OptTracer(tracer),
+        client.OptTransport(func(next http.RoundTripper) http.RoundTripper {
+            return transport.NewTransport(tracer, next)
+        }),
     )
     if err != nil {
         log.Fatal(err)
@@ -456,20 +530,35 @@ func main() {
 
 ### HTTP Client Tracing
 
-`OptTracer` wraps the client's HTTP transport with `otel.NewTransport`, so **every** HTTP call
-produces a client span — including OAuth token refresh calls and each redirect hop. Span names
-default to `"METHOD /path"` format. Attributes captured per span:
+`OptTracer` and `transport.NewTransport` both wrap the client's HTTP transport so
+that **every** HTTP call produces a client span — including OAuth token refresh calls and each
+redirect hop. Span names default to `"METHOD /path"` format. Attributes captured per span:
 
 * HTTP method, URL, and host
 * Request and response body sizes
 * HTTP status codes
 * Error recording for failed requests
 
-You can also use `otel.NewTransport` directly if you need to instrument an `*http.Client` that
-was not created via `client.New`:
+Prefer composing via `OptTransport` so the transport layer stays explicit:
 
 ```go
-httpClient.Transport = otel.NewTransport(tracer, httpClient.Transport)
+import (
+    client "github.com/mutablelogic/go-client"
+    "github.com/mutablelogic/go-client/pkg/transport"
+)
+
+c, err := client.New(
+    client.OptEndpoint("https://api.example.com"),
+    client.OptTransport(func(next http.RoundTripper) http.RoundTripper {
+        return transport.NewTransport(tracer, next)
+    }),
+)
+```
+
+You can also call `transport.NewTransport` directly on any `*http.Client`:
+
+```go
+httpClient.Transport = transport.NewTransport(tracer, httpClient.Transport)
 ```
 
 ### HTTP Server Middleware

@@ -9,7 +9,6 @@ import (
 	"time"
 
 	// Package imports
-	otel "github.com/mutablelogic/go-client/pkg/otel"
 	transport "github.com/mutablelogic/go-client/pkg/transport"
 	httpresponse "github.com/mutablelogic/go-server/pkg/httpresponse"
 	trace "go.opentelemetry.io/otel/trace"
@@ -54,6 +53,7 @@ func OptUserAgent(value string) ClientOpt {
 	}
 }
 
+// Deprecated: Use OptTransport with transport.NewLogging instead.
 // OptTrace allows you to be the "man in the middle" on any
 // requests so you can see traffic move back and forth.
 // Setting verbose to true also displays the JSON response
@@ -104,14 +104,13 @@ func OptReqToken(value Token) ClientOpt {
 	}
 }
 
-// Deprecated: Use OptTransport with pkg/otel directly.
 // OptTracer sets the OpenTelemetry tracer for this client. It wraps the
 // underlying HTTP transport so that every HTTP call — including OAuth token
 // refresh and redirect hops — produces a client span. Span names default
 // to "METHOD /path" format.
 func OptTracer(tracer trace.Tracer) ClientOpt {
 	return func(client *Client) error {
-		client.Client.Transport = otel.NewTransport(tracer, client.Client.Transport)
+		client.Client.Transport = transport.NewTransport(tracer, client.Client.Transport)
 		return nil
 	}
 }

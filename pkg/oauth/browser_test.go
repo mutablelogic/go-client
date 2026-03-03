@@ -20,12 +20,17 @@ import (
 // the browser would be opened).
 func noopOpen(_ string) error { return nil }
 
-// captureOpen returns an OpenFunc that records the URL it was called with.
-func captureOpen(captured *string) OpenFunc {
+// captureOpen returns an OpenFunc that records the URL it was called with,
+// and a buffered channel that delivers that URL exactly once. Goroutines
+// should receive from the channel rather than spin-poll the pointer to avoid
+// data races: the write to *captured happens-before the channel send.
+func captureOpen(captured *string) (OpenFunc, <-chan string) {
+	ch := make(chan string, 1)
 	return func(u string) error {
 		*captured = u
+		ch <- u
 		return nil
-	}
+	}, ch
 }
 
 // simulateRedirect performs the loopback callback request that a browser
@@ -180,12 +185,11 @@ func TestAuthorizeWithBrowser_CallbackError(t *testing.T) {
 	ln, _ := net.Listen("tcp", "localhost:0")
 
 	var capturedAuth string
-	open := captureOpen(&capturedAuth)
+	open, authCh := captureOpen(&capturedAuth)
 
 	go func() {
-		// Wait briefly for the server to start and the auth URL to be captured.
-		time.Sleep(20 * time.Millisecond)
-		parsed, _ := url.Parse(capturedAuth)
+		auth := <-authCh // block until URL is ready; no spin-poll race
+		parsed, _ := url.Parse(auth)
 		state := parsed.Query().Get("state")
 		redirectURI := parsed.Query().Get("redirect_uri")
 		http.Get(redirectURI + "?error=access_denied&error_description=User+denied&state=" + state) //nolint:errcheck
@@ -218,14 +222,12 @@ func TestAuthorizeWithBrowser_Success(t *testing.T) {
 	require.NoError(t, err)
 
 	var capturedAuth string
-	open := captureOpen(&capturedAuth)
+	open, authCh := captureOpen(&capturedAuth)
 
 	// Simulate the browser redirect in the background.
 	go func() {
-		for capturedAuth == "" {
-			time.Sleep(5 * time.Millisecond)
-		}
-		simulateRedirect(capturedAuth, "test-code")
+		auth := <-authCh // block until URL is ready; no spin-poll race
+		simulateRedirect(auth, "test-code")
 	}()
 
 	md := &OAuthMetadata{
@@ -254,14 +256,12 @@ func TestAuthorizeWithBrowser_DefaultScopes(t *testing.T) {
 	ln, _ := net.Listen("tcp", "localhost:0")
 
 	var capturedAuth string
-	open := captureOpen(&capturedAuth)
+	open, authCh := captureOpen(&capturedAuth)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
-		for capturedAuth == "" {
-			time.Sleep(5 * time.Millisecond)
-		}
-		cancel() // just need the URL, don't complete the flow
+		<-authCh // block until URL is ready; no spin-poll race
+		cancel()
 	}()
 
 	AuthorizeWithBrowser(ctx, &OAuthCredentials{ //nolint:errcheck

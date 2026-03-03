@@ -271,5 +271,5 @@ func TestAuthorizeWithBrowser_DefaultScopes(t *testing.T) {
 		},
 		ClientID: "client-id",
 	}, ln, open)
-	assert.Contains(t, capturedAuth, "scope=openid")
+	assert.NotContains(t, capturedAuth, "scope=")
 }

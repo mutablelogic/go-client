@@ -47,7 +47,9 @@ const callbackPath = "/callback"
 //  5. Exchanges the code for tokens and shuts the server down
 //
 // The creds parameter must have Metadata and ClientID set (e.g. obtained from Register
-// or constructed manually). The caller is responsible for creating the listener, e.g.:
+// or constructed manually). If no scopes are provided, the scope parameter is omitted
+// and the server applies its own defaults (RFC 6749 §3.3).
+// The caller is responsible for creating the listener, e.g.:
 //
 //	ln, _ := net.Listen("tcp", "localhost:0") // random port
 //
@@ -68,7 +70,7 @@ func AuthorizeWithBrowser(ctx context.Context, creds *OAuthCredentials, listener
 	case open == nil:
 		return nil, fmt.Errorf("open function is required")
 	case len(scopes) == 0:
-		// No scopes requested — omit the scope parameter and let the server apply its default.
+		// No scopes requested — omit the scope parameter so the server applies its own defaults (RFC 6749 §3.3).
 	}
 
 	if err := creds.Metadata.SupportsFlow(OAuthFlowAuthorizationCode); err != nil {

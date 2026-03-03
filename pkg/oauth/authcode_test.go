@@ -100,7 +100,8 @@ func TestAuthorizeWithCode_NilPrompt(t *testing.T) {
 }
 
 func TestAuthorizeWithCode_DefaultScopes(t *testing.T) {
-	// When no scopes are passed the auth URL should contain scope=openid.
+	// When no scopes are passed the scope parameter should be omitted entirely
+	// so the server applies its own defaults (RFC 6749 §3.3).
 	var capturedURL string
 	promptCapture := func(authURL string) (string, error) {
 		capturedURL = authURL
@@ -113,7 +114,7 @@ func TestAuthorizeWithCode_DefaultScopes(t *testing.T) {
 		},
 		ClientID: "client-id",
 	}, promptCapture)
-	assert.Contains(t, capturedURL, "scope=openid")
+	assert.NotContains(t, capturedURL, "scope=")
 }
 
 func TestAuthorizeWithCode_EmptyCode(t *testing.T) {

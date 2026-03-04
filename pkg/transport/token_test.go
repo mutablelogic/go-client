@@ -90,6 +90,27 @@ func TestToken_OriginalRequestNotMutated(t *testing.T) {
 	resp.Body.Close()
 	assert.Equal("", original.Header.Get("Authorization"))
 }
+func TestToken_DoesNotOverwriteExistingAuthorizationHeader(t *testing.T) {
+	// A per-request Authorization header (e.g. set via OptToken) must take
+	// precedence over the global token injected by TokenTransport.
+	assert := assert.New(t)
+	var got string
+	inner := roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		got = req.Header.Get("Authorization")
+		return stubResp(200, "text/plain", "ok"), nil
+	})
+	// Global token returns "Bearer global".
+	tok := transport.NewToken(inner, func() string { return "Bearer global" })
+	req := httptest.NewRequest(http.MethodGet, "http://example.com/", nil)
+	// Per-request token is already set on the request before transport runs.
+	req.Header.Set("Authorization", "ApiKey per-request")
+	resp, err := tok.RoundTrip(req)
+	assert.NoError(err)
+	resp.Body.Close()
+	// The per-request value must be preserved; global token must not overwrite it.
+	assert.Equal("ApiKey per-request", got)
+}
+
 func TestToken_NilRoundTripperFallsBackToDefault(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(200)

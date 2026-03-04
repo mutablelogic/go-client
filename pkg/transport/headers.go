@@ -24,11 +24,20 @@ type HeadersTransport struct {
 // User-Agent (when non-empty) and merges headers into every request.
 // A header with an empty value is deleted rather than set.
 // If parent is nil, http.DefaultTransport is used.
+// The headers map is copied defensively so later mutations by the caller
+// have no effect on the transport.
 func NewHeaders(parent http.RoundTripper, ua string, headers map[string]string) *HeadersTransport {
 	if parent == nil {
 		parent = http.DefaultTransport
 	}
-	return &HeadersTransport{RoundTripper: parent, ua: ua, headers: headers}
+	var copied map[string]string
+	if len(headers) > 0 {
+		copied = make(map[string]string, len(headers))
+		for k, v := range headers {
+			copied[k] = v
+		}
+	}
+	return &HeadersTransport{RoundTripper: parent, ua: ua, headers: copied}
 }
 
 ///////////////////////////////////////////////////////////////////////////////

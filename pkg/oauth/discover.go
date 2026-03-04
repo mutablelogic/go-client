@@ -86,9 +86,13 @@ func Discover(ctx context.Context, endpoint string) (*OAuthMetadata, error) {
 			// to skip the RFC 9728 check for it.
 			if m, err := discoverAuthServer(httpClient, authServer); err == nil {
 				return m, nil
+			} else if !errors.Is(err, errNoDiscoveryDoc) {
+				// Real failure (network error, 5xx, invalid JSON, etc.) — propagate
+				// it rather than silently falling back to synthesized endpoints.
+				return nil, fmt.Errorf("%s: OAuth discovery failed: %w", authServer, err)
 			}
-			// Discovery failed — server likely predates RFC 8414 (e.g. GitHub).
-			// Synthesize metadata from the authorization server URL.
+			// Discovery returned errNoDiscoveryDoc — server predates RFC 8414
+			// (e.g. GitHub). Synthesize minimal metadata from the issuer URL.
 			return SynthesizeMetadata(authServer), nil
 		}
 	}

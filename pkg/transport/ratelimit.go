@@ -36,19 +36,26 @@ func NewRateLimit(parent http.RoundTripper, rate float32) *RateLimitTransport {
 ///////////////////////////////////////////////////////////////////////////////
 // PUBLIC METHODS
 
-// RoundTrip implements http.RoundTripper. When a rate limit is configured it
-// sleeps until the inter-request interval has elapsed, then records the send
-// time and forwards the request. The sleep is cancelled early if ctx is done.
+// RoundTrip implements http.RoundTripper. When a rate limit is configured each
+// call reserves its send-slot under the lock (advancing t.ts immediately) and
+// then sleeps outside the lock until that slot arrives. Reserving the slot
+// before releasing the lock ensures that concurrent callers are assigned
+// distinct, strictly ordered slots rather than all sleeping for the same
+// duration and proceeding together.
 func (t *RateLimitTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if t.rate > 0 {
 		t.mu.Lock()
-		var delay time.Duration
-		if !t.ts.IsZero() {
-			next := t.ts.Add(time.Duration(float32(time.Second) / t.rate))
-			delay = time.Until(next)
+		interval := time.Duration(float32(time.Second) / t.rate)
+		var slot time.Time
+		if t.ts.IsZero() {
+			slot = time.Now() // first request: no wait
+		} else {
+			slot = t.ts.Add(interval) // queue behind last reservation
 		}
-		if delay > 0 {
-			t.mu.Unlock()
+		t.ts = slot // reserve this slot before releasing the lock
+		t.mu.Unlock()
+
+		if delay := time.Until(slot); delay > 0 {
 			timer := time.NewTimer(delay)
 			select {
 			case <-req.Context().Done():
@@ -56,10 +63,7 @@ func (t *RateLimitTransport) RoundTrip(req *http.Request) (*http.Response, error
 				return nil, req.Context().Err()
 			case <-timer.C:
 			}
-			t.mu.Lock()
 		}
-		t.ts = time.Now()
-		t.mu.Unlock()
 	}
 	rt := t.RoundTripper
 	if rt == nil {

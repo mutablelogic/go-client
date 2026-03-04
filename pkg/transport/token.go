@@ -37,10 +37,12 @@ func NewToken(parent http.RoundTripper, token func() string) *TokenTransport {
 // PUBLIC METHODS http.RoundTripper
 
 // RoundTrip implements http.RoundTripper. If the token callback returns a
-// non-empty string the request is cloned and its Authorization header is set
-// before being forwarded to the parent transport.
+// non-empty string AND the request does not already carry an Authorization
+// header, the request is cloned and its Authorization header is set before
+// being forwarded to the parent transport. A pre-existing header (e.g. set
+// via OptToken for a single request) takes precedence over the global token.
 func (t *TokenTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	if tok := t.token(); tok != "" {
+	if tok := t.token(); tok != "" && req.Header.Get("Authorization") == "" {
 		r := req.Clone(req.Context())
 		r.Header.Set("Authorization", tok)
 		req = r

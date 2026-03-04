@@ -37,7 +37,21 @@ type readwrapper struct {
 
 const (
 	contentTypeJSONStream = "application/x-ndjson"
+	// redactedValue is the placeholder written in place of sensitive header values.
+	redactedValue = "[REDACTED]"
 )
+
+// sensitiveHeaders is the set of canonical header names whose values are
+// replaced with redactedValue in logs. Covers bearer tokens, session cookies,
+// and auth-challenge headers that reveal supported schemes.
+var sensitiveHeaders = map[string]bool{
+	"Authorization":       true,
+	"Proxy-Authorization": true,
+	"Cookie":              true,
+	"Set-Cookie":          true,
+	"Www-Authenticate":    true,
+	"Proxy-Authenticate":  true,
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 // LIFECYCLE
@@ -90,7 +104,7 @@ func (t *Logging) RoundTrip(req *http.Request) (*http.Response, error) {
 	fmt.Fprintln(t.w, "request:", req.Method, otel.RedactedURL(req.URL))
 	if t.v {
 		for key := range req.Header {
-			fmt.Fprintf(t.w, "  => %v: %q\n", key, req.Header.Get(key))
+			fmt.Fprintf(t.w, "  => %v: %q\n", key, logHeaderValue(key, req.Header.Get(key)))
 		}
 		if data, err := rw.as(req.Header.Get("Content-Type")); err == nil && len(data) > 0 {
 			fmt.Fprintf(t.w, "  => %v\n", string(data))
@@ -111,7 +125,7 @@ func (t *Logging) RoundTrip(req *http.Request) (*http.Response, error) {
 
 	fmt.Fprintln(t.w, "response:", resp.Status)
 	for k, v := range resp.Header {
-		fmt.Fprintf(t.w, "  <= %v: %q\n", k, v)
+		fmt.Fprintf(t.w, "  <= %v: %q\n", k, logHeaderValues(k, v))
 	}
 
 	// If verbose, read and display the response body
@@ -197,6 +211,25 @@ func (s *streamBody) Close() error {
 	err := s.closer.Close()
 	s.lw.Flush()
 	return err
+}
+
+// logHeaderValue returns the header value for logging, replacing the value
+// with redactedValue for headers in sensitiveHeaders.
+func logHeaderValue(key, value string) string {
+	if sensitiveHeaders[http.CanonicalHeaderKey(key)] {
+		return redactedValue
+	}
+	return value
+}
+
+// logHeaderValues is like logHeaderValue but operates on the raw []string slice
+// stored in http.Header, returning a single-element redacted slice when the
+// header is sensitive so callers can pass it directly to Fprintf with %q.
+func logHeaderValues(key string, values []string) []string {
+	if sensitiveHeaders[http.CanonicalHeaderKey(key)] {
+		return []string{redactedValue}
+	}
+	return values
 }
 
 func (w *readwrapper) as(mimetype string) ([]byte, error) {

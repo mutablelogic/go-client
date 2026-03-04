@@ -252,6 +252,75 @@ func TestRoundTrip_OriginalRequestNotMutated(t *testing.T) {
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+// Header redaction
+
+func TestLogging_VerboseRedactsSensitiveRequestHeaders(t *testing.T) {
+	var out bytes.Buffer
+	inner := roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		return stubResp(200, "text/plain", ""), nil
+	})
+	l := transport.NewLogging(&out, inner, true /*verbose*/)
+
+	req := httptest.NewRequest(http.MethodGet, "http://example.com/", nil)
+	req.Header.Set("Authorization", "Bearer supersecret")
+	req.Header.Set("Cookie", "session=abc123")
+	req.Header.Set("X-Custom", "visible")
+
+	resp, err := l.RoundTrip(req)
+	assert.NoError(t, err)
+	resp.Body.Close()
+
+	log := out.String()
+	assert.NotContains(t, log, "supersecret", "Authorization value must not appear in log")
+	assert.NotContains(t, log, "abc123", "Cookie value must not appear in log")
+	assert.Contains(t, log, "[REDACTED]", "redacted placeholder must appear")
+	assert.Contains(t, log, "visible", "non-sensitive headers must still be logged")
+}
+
+func TestLogging_AlwaysRedactsSensitiveResponseHeaders(t *testing.T) {
+	var out bytes.Buffer
+	inner := roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		resp := stubResp(200, "text/plain", "")
+		resp.Header.Set("Set-Cookie", "token=secret; HttpOnly")
+		resp.Header.Set("Www-Authenticate", `Bearer realm="api"`)
+		resp.Header.Set("X-Request-Id", "req-123")
+		return resp, nil
+	})
+	// non-verbose: response headers are always logged regardless of verbosity
+	l := transport.NewLogging(&out, inner, false)
+
+	req := httptest.NewRequest(http.MethodGet, "http://example.com/", nil)
+	resp, err := l.RoundTrip(req)
+	assert.NoError(t, err)
+	resp.Body.Close()
+
+	log := out.String()
+	assert.NotContains(t, log, "secret", "Set-Cookie value must not appear in log")
+	assert.NotContains(t, log, `Bearer realm="api"`, "Www-Authenticate value must not appear in log")
+	assert.Contains(t, log, "[REDACTED]", "redacted placeholder must appear")
+	assert.Contains(t, log, "req-123", "non-sensitive response headers must still be logged")
+}
+
+func TestLogging_NonVerboseDoesNotLogRequestHeaders(t *testing.T) {
+	// Even if Authorization were not redacted, it should never appear in non-verbose logs
+	var out bytes.Buffer
+	inner := roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		return stubResp(200, "text/plain", ""), nil
+	})
+	l := transport.NewLogging(&out, inner, false /*non-verbose*/)
+
+	req := httptest.NewRequest(http.MethodGet, "http://example.com/", nil)
+	req.Header.Set("Authorization", "Bearer topsecret")
+
+	resp, err := l.RoundTrip(req)
+	assert.NoError(t, err)
+	resp.Body.Close()
+
+	assert.NotContains(t, out.String(), "topsecret")
+	assert.NotContains(t, out.String(), "Authorization")
+}
+
+///////////////////////////////////////////////////////////////////////////////
 // Payload
 
 func TestPayload_WritesIndentedJSON(t *testing.T) {

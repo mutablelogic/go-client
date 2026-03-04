@@ -94,6 +94,27 @@ func TestHeaders_OriginalRequestNotMutated(t *testing.T) {
 	assert.Equal("", original.Header.Get("User-Agent"))
 	assert.Equal("", original.Header.Get("X-Foo"))
 }
+func TestHeaders_MapMutationAfterConstructionHasNoEffect(t *testing.T) {
+	// The transport must snapshot the map at construction time so that
+	// post-construction mutations by the caller are invisible to RoundTrip.
+	assert := assert.New(t)
+	var got string
+	inner := roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		got = req.Header.Get("X-Original")
+		return stubResp(200, "text/plain", "ok"), nil
+	})
+	headers := map[string]string{"X-Original": "first"}
+	h := transport.NewHeaders(inner, "", headers)
+	// Mutate the map after the transport was constructed.
+	headers["X-Original"] = "mutated"
+	headers["X-New"] = "injected"
+	req := httptest.NewRequest(http.MethodGet, "http://example.com/", nil)
+	resp, err := h.RoundTrip(req)
+	assert.NoError(err)
+	resp.Body.Close()
+	// Transport must use the snapshot value, not the mutated one.
+	assert.Equal("first", got)
+}
 func TestHeaders_NoopWhenNothingConfigured(t *testing.T) {
 	assert := assert.New(t)
 	calls := 0

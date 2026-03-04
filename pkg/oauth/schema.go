@@ -66,6 +66,17 @@ type OAuthCredentials struct {
 	OnRefresh func(*OAuthCredentials) error `json:"-"`
 }
 
+// ProtectedResourceMetadata represents OAuth 2.0 Protected Resource Metadata (RFC 9728).
+// It is returned by a resource server's well-known endpoint and lists the
+// authorization servers that protect the resource.
+type ProtectedResourceMetadata struct {
+	Resource               string   `json:"resource"`
+	AuthorizationServers   []string `json:"authorization_servers"`
+	ScopesSupported        []string `json:"scopes_supported,omitempty"`
+	BearerMethodsSupported []string `json:"bearer_methods_supported,omitempty"`
+	ResourceName           string   `json:"resource_name,omitempty"`
+}
+
 // OAuthMetadata represents OAuth 2.0 Authorization Server Metadata (RFC 8414).
 type OAuthMetadata struct {
 	Issuer                            string   `json:"issuer"`
@@ -93,6 +104,9 @@ const (
 
 	// OIDCWellKnownPath is the OpenID Connect Discovery endpoint (OpenID Connect Discovery 1.0).
 	OIDCWellKnownPath = "/.well-known/openid-configuration"
+
+	// OAuthProtectedResourcePath is the Protected Resource Metadata endpoint (RFC 9728).
+	OAuthProtectedResourcePath = "/.well-known/oauth-protected-resource"
 )
 
 /////////////////////////////////////////////////////////////////////////////
@@ -120,11 +134,27 @@ func (m *OAuthMetadata) SupportsGrantType(flow OAuthFlow) bool {
 }
 
 // OAuthEndpoint returns an oauth2.Endpoint built from the metadata.
+// The AuthStyle is derived from token_endpoint_auth_methods_supported (RFC 8414):
+//   - "client_secret_post" only → AuthStyleInParams (body)
+//   - "client_secret_basic" only → AuthStyleInHeader (HTTP Basic)
+//   - both or neither → AuthStyleAutoDetect
 func (m *OAuthMetadata) OAuthEndpoint() oauth2.Endpoint {
+	hasBasic := slices.Contains(m.TokenEndpointAuthMethodsSupported, "client_secret_basic")
+	hasPost := slices.Contains(m.TokenEndpointAuthMethodsSupported, "client_secret_post")
+	var authStyle oauth2.AuthStyle
+	switch {
+	case hasPost && !hasBasic:
+		authStyle = oauth2.AuthStyleInParams
+	case hasBasic && !hasPost:
+		authStyle = oauth2.AuthStyleInHeader
+	default:
+		authStyle = oauth2.AuthStyleAutoDetect
+	}
 	return oauth2.Endpoint{
 		AuthURL:       m.AuthorizationEndpoint,
 		DeviceAuthURL: m.DeviceAuthorizationEndpoint,
 		TokenURL:      m.TokenEndpoint,
+		AuthStyle:     authStyle,
 	}
 }
 

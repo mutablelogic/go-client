@@ -183,3 +183,98 @@ func TestDiscover_InvalidJSON(t *testing.T) {
 	_, err := Discover(discoverContext(srv), srv.URL)
 	assert.ErrorContains(t, err, "OAuth discovery failed")
 }
+
+// TestDiscover_RFC9728_WithRFC8414AuthServer tests that when an endpoint
+// returns RFC 9728 protected-resource metadata pointing at an auth server,
+// Discover fetches the auth server's RFC 8414 well-known document without
+// making a GET to the auth server's base URL.
+func TestDiscover_RFC9728_WithRFC8414AuthServer(t *testing.T) {
+	// Auth server: serves RFC 8414 metadata at /.well-known/oauth-authorization-server
+	// and records every path that is requested so we can assert the base URL is
+	// never fetched directly.
+	var authPaths []string
+	authSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		authPaths = append(authPaths, r.URL.Path)
+		serveMetadataAt(OAuthWellKnownPath).ServeHTTP(w, r)
+	}))
+	defer authSrv.Close()
+
+	// Track all paths hit on the resource server.
+	var resourcePaths []string
+	var resourceSrv *httptest.Server
+	resourceSrv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		resourcePaths = append(resourcePaths, r.URL.Path)
+		// RFC 9728 protected-resource metadata.
+		if r.URL.Path == OAuthProtectedResourcePath {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(ProtectedResourceMetadata{
+				Resource:             resourceSrv.URL,
+				AuthorizationServers: []string{authSrv.URL},
+			})
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer resourceSrv.Close()
+
+	// Inject both clients into the context using the resource server's client
+	// (test servers share the same transport behaviour for loopback).
+	ctx := discoverContext(resourceSrv)
+
+	got, err := Discover(ctx, resourceSrv.URL+OAuthProtectedResourcePath)
+	require.NoError(t, err)
+	assert.Equal(t, sampleMetadata.Issuer, got.Issuer)
+	assert.Equal(t, sampleMetadata.TokenEndpoint, got.TokenEndpoint)
+
+	// The resource server should only have been hit for the resource metadata doc.
+	assert.Equal(t, []string{OAuthProtectedResourcePath}, resourcePaths)
+
+	// The auth server's base URL ("/") must never be fetched — only the
+	// well-known discovery path should have been requested.
+	assert.NotContains(t, authPaths, "/", "auth server base URL must not be fetched")
+	assert.Contains(t, authPaths, OAuthWellKnownPath)
+}
+
+// TestDiscover_RFC9728_SynthesizesFallback tests the GitHub-like case where the
+// resource metadata names an auth server that has no RFC 8414 discovery document.
+// Discover should return synthesized metadata and must NOT make a bare GET to
+// the auth server's base URL (which is useless and generates spurious traffic).
+func TestDiscover_RFC9728_SynthesizesFallback(t *testing.T) {
+	// Auth server: returns 404 on every path (no discovery docs).
+	var authPaths []string
+	authSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		authPaths = append(authPaths, r.URL.Path)
+		http.NotFound(w, r)
+	}))
+	defer authSrv.Close()
+
+	var resourceSrv *httptest.Server
+	resourceSrv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == OAuthProtectedResourcePath {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(ProtectedResourceMetadata{
+				Resource:             resourceSrv.URL,
+				AuthorizationServers: []string{authSrv.URL},
+			})
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer resourceSrv.Close()
+
+	ctx := discoverContext(resourceSrv)
+	got, err := Discover(ctx, resourceSrv.URL+OAuthProtectedResourcePath)
+	require.NoError(t, err)
+
+	// Should be synthesized from the auth server URL.
+	assert.Equal(t, authSrv.URL, got.Issuer)
+	assert.Equal(t, authSrv.URL+"/authorize", got.AuthorizationEndpoint)
+	assert.Equal(t, authSrv.URL+"/token", got.TokenEndpoint)
+
+	// The auth server's bare URL ("/") must NOT have been fetched — only the
+	// well-known candidate paths.
+	for _, p := range authPaths {
+		assert.NotEqual(t, "/", p, "auth server bare URL should not be fetched")
+	}
+	assert.NotEmpty(t, authPaths, "expected well-known candidate probes")
+}

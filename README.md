@@ -78,6 +78,7 @@ Various options can be passed to the client `New` method to control its behaviou
     overridden by the client for individual requests using `OptToken` (see below).
 * `OptSkipVerify()` skips TLS certificate domain verification.
 * `OptHeader(key, value string)` appends a custom header to each request.
+* `OptParent(v any)` attaches arbitrary context to the client. The stored value is accessible via the `Parent` field and is used by wrapper types that embed a `*Client` to store their own state.
 * `OptTransport(fn func(http.RoundTripper) http.RoundTripper)` inserts a transport middleware
     that wraps every request made by this client. Multiple calls stack in order so the first
     call becomes the outermost layer. Use this to plug in any `pkg/transport` middleware.
@@ -100,15 +101,19 @@ The first argument to the `Do` method is the payload to send to the server, when
 You can create a payload using the following methods:
 
 * `client.NewRequest()` returns a new empty payload which defaults to GET.
-* `client.NewJSONRequest(payload any, accept string)` returns a new request with
-    a JSON payload which defaults to POST.
-* `client.NewMultipartRequest(payload any, accept string)` returns a new request with
+* `client.NewRequestEx(method, accept string)` returns a new empty payload with an explicit HTTP
+    method and accepted response content type.
+* `client.NewJSONRequest(payload any) (Payload, error)` returns a new POST request with a JSON payload
+    that accepts any response content type.
+* `client.NewJSONRequestEx(method string, payload any, accept string) (Payload, error)` is the
+    extended form that also sets the HTTP method and accepted response content type.
+* `client.NewMultipartRequest(payload any, accept string) (Payload, error)` returns a new request with
     a Multipart Form data payload which defaults to POST.
-* `client.NewStreamingMultipartRequest(payload any, accept string)` returns a new request with
-    a Multipart Form data payload that streams data rather than buffering in memory. Useful for
+* `client.NewStreamingMultipartRequest(payload any, accept string) (Payload, error)` returns a new request
+    with a Multipart Form data payload that streams data rather than buffering in memory. Useful for
     large file uploads. The returned payload implements `io.Closer` and is automatically closed
     by the HTTP client after the request completes.
-* `client.NewFormRequest(payload any, accept string)` returns a new request with a
+* `client.NewFormRequest(payload any, accept string) (Payload, error)` returns a new request with a
     Form data payload which defaults to POST.
 
 For example,
@@ -138,7 +143,10 @@ func main() {
         Reply string `json:"reply"`
     }
     request.Prompt = "Hello, world!"
-    payload := client.NewJSONRequest(request, client.ContentTypeJson)
+    payload, err := client.NewJSONRequest(request)
+    if err != nil {
+        log.Fatal(err)
+    }
     if err := c.Do(payload, &response, client.OptPath("test")); err != nil {
         log.Fatal(err)
     }
@@ -184,7 +192,7 @@ cancelled using the context in addition to the timeout. Various options can be p
 modify each individual request when using the `Do` method:
 
 * `OptReqEndpoint(value string)` sets the endpoint for the request
-* `OptPath(value ...string)` appends path elements onto a request endpoint
+* `OptPath(value ...any)` appends path elements onto a request endpoint
 * `OptToken(value Token)` adds an authorization header (overrides the client OptReqToken option)
 * `OptQuery(value url.Values)` sets the query parameters to a request
 * `OptReqHeader(name, value string)` sets a custom header to the request
@@ -297,11 +305,11 @@ and revocation.
 
 You can create a payload with form data:
 
-* `client.NewFormRequest(payload any, accept string)` returns a new request with a Form
+* `client.NewFormRequest(payload any, accept string) (Payload, error)` returns a new request with a Form
     data payload which defaults to POST.
-* `client.NewMultipartRequest(payload any, accept string)` returns a new request with
+* `client.NewMultipartRequest(payload any, accept string) (Payload, error)` returns a new request with
     a Multipart Form data payload which defaults to POST. This is useful for file uploads.
-* `client.NewStreamingMultipartRequest(payload any, accept string)` returns a new request
+* `client.NewStreamingMultipartRequest(payload any, accept string) (Payload, error)` returns a new request
     that streams the multipart data rather than buffering in memory. This is recommended for
     large file uploads to avoid high memory usage. The returned payload implements `io.Closer`
     and is automatically closed by the HTTP client after the request completes.

@@ -31,7 +31,7 @@ func OptEndpoint(value string) ClientOpt {
 }
 
 // OptTimeout sets the timeout on any request. By default, a timeout
-// of 10 seconds is used if OptTimeout is not set
+// of 30 seconds is used if OptTimeout is not set
 func OptTimeout(value time.Duration) ClientOpt {
 	return func(client *Client) error {
 		client.Client.Timeout = value
@@ -102,7 +102,7 @@ func OptRateLimit(value float32) ClientOpt {
 // overridden by the client for individual requests using OptToken.
 func OptReqToken(value Token) ClientOpt {
 	return func(client *Client) error {
-		client.token = value
+		client.setToken(value)
 		return nil
 	}
 }

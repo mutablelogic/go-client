@@ -11,11 +11,13 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	// Package imports
 	oauth "github.com/mutablelogic/go-client/pkg/oauth"
 	otel "github.com/mutablelogic/go-client/pkg/otel"
+	transport "github.com/mutablelogic/go-client/pkg/transport"
 	httpresponse "github.com/mutablelogic/go-server/pkg/httpresponse"
 	types "github.com/mutablelogic/go-server/pkg/types"
 	oauth2 "golang.org/x/oauth2"
@@ -34,21 +36,20 @@ type Unmarshaler interface {
 // TYPES
 
 type Client struct {
-	sync.Mutex
+	sync.RWMutex
 	*http.Client
 
 	// Parent object for client options
 	Parent any
 
-	endpoint   *url.URL
-	ua         string
-	rate       float32 // number of requests allowed per second
-	strict     bool
-	token      Token             // token for authentication on requests
-	headers    map[string]string // Headers for every request
-	ts         time.Time
-	transports []func(http.RoundTripper) http.RoundTripper // accumulated by OptTransport, applied in New()
-	oauth      *oauth.OAuthCredentials                     // OAuth credentials for automatic token refresh on requests
+	endpoint    *url.URL
+	ua          string  // setup-only: consumed by New() into HeadersTransport
+	rate        float32 // setup-only: consumed by New() into RateLimitTransport
+	strict      bool
+	atomicToken atomic.Value                                // stores Token — lock-free; written by setToken, read by AccessToken
+	headers     map[string]string                           // setup-only: consumed by New() into HeadersTransport
+	transports  []func(http.RoundTripper) http.RoundTripper // setup-only: consumed by New()
+	oauth       *oauth.OAuthCredentials                     // OAuth credentials for automatic token refresh on requests
 }
 
 type ClientOpt func(*Client) error
@@ -106,12 +107,47 @@ func New(opts ...ClientOpt) (*Client, error) {
 	}
 	this.transports = nil
 
+	// Install a headers transport for User-Agent and custom headers.
+	if this.ua != "" || len(this.headers) > 0 {
+		this.Client.Transport = transport.NewHeaders(this.Client.Transport, this.ua, this.headers)
+		this.ua, this.headers = "", nil
+	}
+
+	// Install a rate-limit transport when a rate limit has been configured.
+	if this.rate > 0 {
+		this.Client.Transport = transport.NewRateLimit(this.Client.Transport, this.rate)
+		this.rate = 0
+	}
+
+	// Always install the token transport as the outermost layer so that tokens
+	// set via OptReqToken or updated by an OAuth flow are injected on every
+	// outbound request — including requests made directly by SDK-owned transports
+	// that bypass Client.Do. Being outermost ensures logging middleware (which is
+	// typically innermost) sees requests with the Authorization header already set.
+	this.Client.Transport = transport.NewToken(this.Client.Transport, this.AccessToken)
+
 	// Return success
 	return this, nil
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 // STRINGIFY
+
+// AccessToken returns the current Authorization header value (e.g.
+// "Bearer <token>"), or an empty string when no token is set.
+// Lock-free: reads from an atomic.Value updated by setToken.
+func (client *Client) AccessToken() string {
+	if v, ok := client.atomicToken.Load().(Token); ok {
+		return v.String()
+	}
+	return ""
+}
+
+// setToken stores t atomically so AccessToken() is always consistent.
+// Uses atomic.Value so no mutex is required.
+func (client *Client) setToken(t Token) {
+	client.atomicToken.Store(t)
+}
 
 func (client *Client) String() string {
 	str := "<client"
@@ -136,19 +172,13 @@ func (client *Client) Do(in Payload, out any, opts ...RequestOpt) error {
 // Do a JSON request with a payload, populate an object with the response
 // and return any errors. The context can be used to cancel the request
 func (client *Client) DoWithContext(ctx context.Context, in Payload, out any, opts ...RequestOpt) error {
-	client.Mutex.Lock()
-	defer client.Mutex.Unlock()
-
 	// Close payload if it implements io.Closer (e.g., streaming payloads)
 	if closer, ok := in.(io.Closer); ok {
 		defer closer.Close()
 	}
 
-	if err := client.waitRateLimit(ctx); err != nil {
-		return err
-	}
-
-	// Make a request
+	// Build the request before taking any lock — client.endpoint and client.strict
+	// are immutable after New() returns so no synchronisation is needed here.
 	var method string = http.MethodGet
 	var accept, mimetype string
 	if in != nil {
@@ -161,38 +191,29 @@ func (client *Client) DoWithContext(ctx context.Context, in Payload, out any, op
 		return err
 	}
 
-	if err := client.refreshOAuth(ctx); err != nil {
+	// Narrow critical section: serialise the OAuth check+refresh so that only
+	// one goroutine refreshes the token at a time (prevents thundering-herd).
+	// The lock is released before the main HTTP round-trip so concurrent
+	// requests can proceed in parallel once the token is known to be valid.
+	client.RWMutex.Lock()
+	err = client.refreshOAuth(ctx)
+	client.RWMutex.Unlock()
+	if err != nil {
 		return err
 	}
 
-	// If client token is set, then add to request.
-	// Only check Value; Scheme defaults to Bearer in Token.String() when empty.
-	if client.token.Value != "" {
-		opts = append([]RequestOpt{OptToken(client.token)}, opts...)
-	}
-
-	// Do the request
+	// HTTP round-trip (including redirect follows) runs without any lock.
+	// http.Client and its transport stack are safe for concurrent use.
 	return do(client.Client, req, accept, client.strict, out, opts...)
 }
 
 // Do a HTTP request and decode it into an object
 func (client *Client) Request(req *http.Request, out any, opts ...RequestOpt) error {
-	client.Mutex.Lock()
-	defer client.Mutex.Unlock()
-
-	if err := client.waitRateLimit(req.Context()); err != nil {
+	client.RWMutex.Lock()
+	err := client.refreshOAuth(req.Context())
+	client.RWMutex.Unlock()
+	if err != nil {
 		return err
-	}
-
-	if err := client.refreshOAuth(req.Context()); err != nil {
-		return err
-	}
-
-	// If client token is set, then add to request, at the beginning so it can be
-	// overridden by any other options.
-	// Only check Value; Scheme defaults to Bearer in Token.String() when empty.
-	if client.token.Value != "" {
-		opts = append([]RequestOpt{OptToken(client.token)}, opts...)
 	}
 
 	return do(client.Client, req, "", false, out, opts...)
@@ -200,25 +221,6 @@ func (client *Client) Request(req *http.Request, out any, opts ...RequestOpt) er
 
 ///////////////////////////////////////////////////////////////////////////////
 // PRIVATE METHODS
-
-// waitRateLimit sleeps until the rate limit allows the next request, then
-// records the current time. The sleep is cancelled early if ctx is done.
-func (client *Client) waitRateLimit(ctx context.Context) error {
-	if !client.ts.IsZero() && client.rate > 0.0 {
-		next := client.ts.Add(time.Duration(float32(time.Second) / client.rate))
-		if delay := time.Until(next); delay > 0 {
-			t := time.NewTimer(delay)
-			select {
-			case <-ctx.Done():
-				t.Stop()
-				return ctx.Err()
-			case <-t.C:
-			}
-		}
-	}
-	client.ts = time.Now()
-	return nil
-}
 
 // refreshOAuth refreshes the OAuth token if credentials are set and the token
 // is expired. It injects the client's own HTTP transport into the context so
@@ -235,10 +237,10 @@ func (client *Client) refreshOAuth(ctx context.Context) error {
 	if scheme == "" {
 		scheme = Bearer
 	}
-	client.token = Token{
+	client.setToken(Token{
 		Scheme: scheme,
 		Value:  client.oauth.Token.AccessToken,
-	}
+	})
 	return nil
 }
 
@@ -275,20 +277,6 @@ func (client *Client) request(ctx context.Context, method, accept, mimetype stri
 	if strings.Contains(accept, ContentTypeTextStream) || strings.Contains(accept, ContentTypeJsonStream) {
 		r.Header.Set("Cache-Control", "no-cache")
 		r.Header.Set("X-Accel-Buffering", "no")
-	}
-	if client.ua != "" {
-		r.Header.Set("User-Agent", client.ua)
-	}
-
-	// If there are headers, add them
-	if len(client.headers) > 0 {
-		for k, v := range client.headers {
-			if v == "" {
-				r.Header.Del(k)
-			} else {
-				r.Header.Set(k, v)
-			}
-		}
 	}
 
 	// Return success
@@ -382,6 +370,9 @@ func do(client *http.Client, req *http.Request, accept string, strict bool, out 
 				nextReq.Header.Del("Authorization")
 				nextReq.Header.Del("Proxy-Authorization")
 				nextReq.Header.Del("Cookie")
+				// Signal TokenTransport (outermost layer) not to re-inject the
+				// Authorization header on this hop — we deliberately stripped it.
+				nextReq = nextReq.WithContext(transport.WithSkipTokenInjection(nextReq.Context()))
 			}
 
 			req = nextReq

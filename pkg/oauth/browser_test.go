@@ -231,8 +231,9 @@ func TestAuthorizeWithBrowser_Success(t *testing.T) {
 	}()
 
 	md := &OAuthMetadata{
-		AuthorizationEndpoint: tokenSrv.URL + "/auth",
-		TokenEndpoint:         tokenSrv.URL + "/token",
+		AuthorizationEndpoint:         tokenSrv.URL + "/auth",
+		TokenEndpoint:                 tokenSrv.URL + "/token",
+		CodeChallengeMethodsSupported: []string{"S256"},
 	}
 	ctx := context.WithValue(context.Background(), oauth2.HTTPClient, tokenSrv.Client())
 	creds, err := AuthorizeWithBrowser(ctx, &OAuthCredentials{

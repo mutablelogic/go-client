@@ -16,6 +16,7 @@ import (
 	// Package imports
 	oauth "github.com/mutablelogic/go-client/pkg/oauth"
 	otel "github.com/mutablelogic/go-client/pkg/otel"
+	transport "github.com/mutablelogic/go-client/pkg/transport"
 	httpresponse "github.com/mutablelogic/go-server/pkg/httpresponse"
 	types "github.com/mutablelogic/go-server/pkg/types"
 	oauth2 "golang.org/x/oauth2"
@@ -105,6 +106,13 @@ func New(opts ...ClientOpt) (*Client, error) {
 		this.Client.Transport = this.transports[i](this.Client.Transport)
 	}
 	this.transports = nil
+
+	// Always install the token transport as the outermost layer so that tokens
+	// set via OptReqToken or updated by an OAuth flow are injected on every
+	// outbound request — including requests made directly by SDK-owned transports
+	// that bypass Client.Do. Being outermost ensures logging middleware (which is
+	// typically innermost) sees requests with the Authorization header already set.
+	this.Client.Transport = transport.NewToken(this.Client.Transport, this.AccessToken)
 
 	// Return success
 	return this, nil

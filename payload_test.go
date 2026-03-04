@@ -2,6 +2,7 @@ package client_test
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"strings"
 	"testing"
@@ -227,4 +228,59 @@ func Test_streaming_payload_005_PartialRead(t *testing.T) {
 	if closer, ok := payload.(io.Closer); ok {
 		assert.NoError(closer.Close())
 	}
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// NewFormRequest
+
+func Test_payload_form_001_IsPost(t *testing.T) {
+	assert := assert.New(t)
+	data := struct {
+		Name  string `json:"name"`
+		Value int    `json:"value"`
+	}{"alice", 7}
+	payload, err := client.NewFormRequest(data, client.ContentTypeAny)
+	assert.NoError(err)
+	assert.NotNil(payload)
+	assert.Equal("POST", payload.Method())
+	assert.Contains(payload.Type(), "application/x-www-form-urlencoded")
+	assert.Equal(client.ContentTypeAny, payload.Accept())
+}
+
+func Test_payload_form_002_BodyContainsFields(t *testing.T) {
+	assert := assert.New(t)
+	data := struct {
+		Name  string `json:"name"`
+		Value int    `json:"value"`
+	}{"bob", 99}
+	payload, err := client.NewFormRequest(data, client.ContentTypeAny)
+	assert.NoError(err)
+	body, err := io.ReadAll(payload)
+	assert.NoError(err)
+	assert.Contains(string(body), "bob")
+	assert.Contains(string(body), "99")
+}
+
+func Test_payload_form_003_InvalidInputErrors(t *testing.T) {
+	_, err := client.NewFormRequest("not a struct", client.ContentTypeAny)
+	assert.Error(t, err)
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// payload.String()
+
+func Test_payload_string_001_IncludesMethod(t *testing.T) {
+	assert := assert.New(t)
+	payload := client.NewRequestEx("DELETE", client.ContentTypeJson)
+	str := payload.(fmt.Stringer).String()
+	assert.Contains(str, "DELETE")
+}
+
+func Test_payload_string_002_IncludesMimetype(t *testing.T) {
+	assert := assert.New(t)
+	payload, err := client.NewJSONRequest(struct{}{})
+	assert.NoError(err)
+	str := payload.(fmt.Stringer).String()
+	assert.Contains(str, "mimetype")
+	assert.Contains(str, "application/json")
 }

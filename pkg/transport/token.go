@@ -27,6 +27,9 @@ func NewToken(parent http.RoundTripper, token func() string) *TokenTransport {
 	if parent == nil {
 		parent = http.DefaultTransport
 	}
+	if token == nil {
+		token = func() string { return "" }
+	}
 	return &TokenTransport{RoundTripper: parent, token: token}
 }
 

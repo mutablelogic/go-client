@@ -66,22 +66,26 @@ func Discover(ctx context.Context, endpoint string) (*OAuthMetadata, error) {
 	// the context via context.WithValue(ctx, oauth2.HTTPClient, myClient).
 	httpClient := oauth2.NewClient(ctx, nil)
 
-	// RFC 9728: if the endpoint itself is a Protected Resource Metadata document,
-	// extract the first authorization_server and discover its metadata.
-	// If the authorization server predates RFC 8414 and has no discovery doc,
-	// synthesize metadata from the well-known URL conventions.
-	if resource, err := fetchResourceMetadata(httpClient, endpoint); err != nil {
-		return nil, fmt.Errorf("%s: OAuth discovery failed: %w", endpoint, err)
-	} else if resource != nil && len(resource.AuthorizationServers) > 0 {
-		authServer := resource.AuthorizationServers[0]
-		// We already know authServer is an authorization server (not a resource),
-		// so skip the RFC 9728 check and go straight to RFC 8414 candidate probing.
-		if m, err := discoverAuthServer(httpClient, authServer); err == nil {
-			return m, nil
+	// RFC 9728: if the caller explicitly provided a Protected Resource Metadata
+	// URL (path ends with OAuthProtectedResourcePath), fetch it and use the
+	// first authorization_server entry for discovery. This avoids an extra
+	// speculative GET when the endpoint is a plain MCP/API URL like
+	// https://example.com/sse — callers pass the resource_metadata value from
+	// the Www-Authenticate header directly, which is already the well-known URL.
+	if strings.HasSuffix(u.Path, OAuthProtectedResourcePath) {
+		if resource, err := fetchResourceMetadata(httpClient, endpoint); err != nil {
+			return nil, fmt.Errorf("%s: OAuth discovery failed: %w", endpoint, err)
+		} else if resource != nil && len(resource.AuthorizationServers) > 0 {
+			authServer := resource.AuthorizationServers[0]
+			// authServer is a known authorization server; use discoverAuthServer
+			// to skip the RFC 9728 check for it.
+			if m, err := discoverAuthServer(httpClient, authServer); err == nil {
+				return m, nil
+			}
+			// Discovery failed — server likely predates RFC 8414 (e.g. GitHub).
+			// Synthesize metadata from the authorization server URL.
+			return SynthesizeMetadata(authServer), nil
 		}
-		// Discovery failed — server likely predates RFC 8414 (e.g. GitHub).
-		// Synthesize metadata from the authorization server URL.
-		return SynthesizeMetadata(authServer), nil
 	}
 
 	// Iterate over candidates and return the first successful metadata response

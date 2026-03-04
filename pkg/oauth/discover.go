@@ -3,6 +3,7 @@ package oauth
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -20,6 +21,12 @@ import (
 var (
 	// supportedSchemes lists URL schemes accepted for OAuth discovery endpoints.
 	supportedSchemes = []string{"http", "https"}
+
+	// errNoDiscoveryDoc is returned by discoverAuthServer when all well-known
+	// candidate URLs returned skippable responses (404/401/403/405). It signals
+	// "this server has no RFC 8414 / OIDC discovery document" as opposed to a
+	// fatal network or protocol error.
+	errNoDiscoveryDoc = errors.New("no OAuth discovery document found")
 )
 
 /////////////////////////////////////////////////////////////////////////////
@@ -48,13 +55,11 @@ func Discover(ctx context.Context, endpoint string) (*OAuthMetadata, error) {
 		candidates = append(candidates, base+suffix) // root: /.well-known/...
 	}
 
-	// Add path-relative candidates walking up parent segments,
-	// starting from the parent of the resource path.
-	// For /realms/master/protocol/sse we try:
-	//   /realms/master/protocol/.well-known/...
-	//   /realms/master/.well-known/...
-	//   /realms/.well-known/...
-	basePath := path.Dir(strings.TrimRight(u.Path, "/"))
+	// Add path-relative candidates walking from the full resource path up to
+	// the root. Starting at the full path (not its parent) covers issuers like
+	// https://host/realms/master whose discovery doc lives at
+	// /realms/master/.well-known/...
+	basePath := strings.TrimRight(u.Path, "/")
 	for basePath != "" && basePath != "/" && basePath != "." {
 		for _, suffix := range suffixes {
 			candidates = append(candidates, base+basePath+suffix)
@@ -151,11 +156,14 @@ func discoverAuthServer(httpClient *http.Client, issuerURL string) (*OAuthMetada
 
 	base := fmt.Sprintf("%s://%s", u.Scheme, u.Host)
 	suffixes := []string{OAuthWellKnownPath, OIDCWellKnownPath}
-	basePath := path.Dir(strings.TrimRight(u.Path, "/"))
 	var candidates []string
 	for _, suffix := range suffixes {
 		candidates = append(candidates, base+suffix)
 	}
+	// Walk from the full issuer path up to the root, so that an issuer like
+	// https://host/realms/master is probed at /realms/master/.well-known/...
+	// before falling back to /realms/.well-known/... and /.well-known/...
+	basePath := strings.TrimRight(u.Path, "/")
 	for basePath != "" && basePath != "/" && basePath != "." {
 		for _, suffix := range suffixes {
 			candidates = append(candidates, base+basePath+suffix)
@@ -172,7 +180,7 @@ func discoverAuthServer(httpClient *http.Client, issuerURL string) (*OAuthMetada
 			return metadata, nil
 		}
 	}
-	return nil, fmt.Errorf("%s does not support OAuth discovery", issuerURL)
+	return nil, fmt.Errorf("%w: %s", errNoDiscoveryDoc, issuerURL)
 }
 
 // fetchResourceMetadata performs a GET to url and decodes the JSON body into

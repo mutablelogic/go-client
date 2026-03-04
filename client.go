@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	// Package imports
@@ -35,21 +36,22 @@ type Unmarshaler interface {
 // TYPES
 
 type Client struct {
-	sync.Mutex
+	sync.RWMutex
 	*http.Client
 
 	// Parent object for client options
 	Parent any
 
-	endpoint   *url.URL
-	ua         string
-	rate       float32 // number of requests allowed per second
-	strict     bool
-	token      Token             // token for authentication on requests
-	headers    map[string]string // Headers for every request
-	ts         time.Time
-	transports []func(http.RoundTripper) http.RoundTripper // accumulated by OptTransport, applied in New()
-	oauth      *oauth.OAuthCredentials                     // OAuth credentials for automatic token refresh on requests
+	endpoint    *url.URL
+	ua          string
+	rate        float32 // number of requests allowed per second
+	strict      bool
+	token       Token             // token for authentication on requests
+	atomicToken atomic.Value      // stores string — the formatted Authorization header value, lock-free
+	headers     map[string]string // Headers for every request
+	ts          time.Time
+	transports  []func(http.RoundTripper) http.RoundTripper // accumulated by OptTransport, applied in New()
+	oauth       *oauth.OAuthCredentials                     // OAuth credentials for automatic token refresh on requests
 }
 
 type ClientOpt func(*Client) error
@@ -123,11 +125,19 @@ func New(opts ...ClientOpt) (*Client, error) {
 
 // AccessToken returns the current Authorization header value (e.g.
 // "Bearer <token>"), or an empty string when no token is set.
-// Safe for concurrent use.
+// Lock-free: reads from an atomic.Value updated by setToken.
 func (client *Client) AccessToken() string {
-	client.Mutex.Lock()
-	defer client.Mutex.Unlock()
-	return client.token.String()
+	if v, ok := client.atomicToken.Load().(string); ok {
+		return v
+	}
+	return ""
+}
+
+// setToken updates the token field and its lock-free atomic mirror in one call.
+// Callers must already hold RWMutex.Lock() (or be in a single-goroutine setup path).
+func (client *Client) setToken(t Token) {
+	client.token = t
+	client.atomicToken.Store(t.String())
 }
 
 func (client *Client) String() string {
@@ -153,8 +163,8 @@ func (client *Client) Do(in Payload, out any, opts ...RequestOpt) error {
 // Do a JSON request with a payload, populate an object with the response
 // and return any errors. The context can be used to cancel the request
 func (client *Client) DoWithContext(ctx context.Context, in Payload, out any, opts ...RequestOpt) error {
-	client.Mutex.Lock()
-	defer client.Mutex.Unlock()
+	client.RWMutex.Lock()
+	defer client.RWMutex.Unlock()
 
 	// Close payload if it implements io.Closer (e.g., streaming payloads)
 	if closer, ok := in.(io.Closer); ok {
@@ -194,8 +204,8 @@ func (client *Client) DoWithContext(ctx context.Context, in Payload, out any, op
 
 // Do a HTTP request and decode it into an object
 func (client *Client) Request(req *http.Request, out any, opts ...RequestOpt) error {
-	client.Mutex.Lock()
-	defer client.Mutex.Unlock()
+	client.RWMutex.Lock()
+	defer client.RWMutex.Unlock()
 
 	if err := client.waitRateLimit(req.Context()); err != nil {
 		return err
@@ -252,10 +262,10 @@ func (client *Client) refreshOAuth(ctx context.Context) error {
 	if scheme == "" {
 		scheme = Bearer
 	}
-	client.token = Token{
+	client.setToken(Token{
 		Scheme: scheme,
 		Value:  client.oauth.Token.AccessToken,
-	}
+	})
 	return nil
 }
 

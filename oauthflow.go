@@ -93,9 +93,9 @@ func (f *OAuthFlow) AuthorizeWithCredentials(ctx context.Context, creds *oauth.O
 // token is still valid. OnRefresh is called if a new token is obtained.
 // Returns an error if no credentials are attached to the client.
 func (f *OAuthFlow) Refresh(ctx context.Context) error {
-	f.client.Mutex.Lock()
+	f.client.RWMutex.Lock()
 	creds := f.client.oauth
-	f.client.Mutex.Unlock()
+	f.client.RWMutex.Unlock()
 	if creds == nil {
 		return fmt.Errorf("oauth: no credentials attached to client")
 	}
@@ -106,19 +106,19 @@ func (f *OAuthFlow) Refresh(ctx context.Context) error {
 // (RFC 7009) and detaches them from the client.
 // Returns an error if no credentials are attached to the client.
 func (f *OAuthFlow) Revoke(ctx context.Context) error {
-	f.client.Mutex.Lock()
+	f.client.RWMutex.Lock()
 	creds := f.client.oauth
-	f.client.Mutex.Unlock()
+	f.client.RWMutex.Unlock()
 	if creds == nil {
 		return fmt.Errorf("oauth: no credentials attached to client")
 	}
 	if err := creds.Revoke(f.injectClient(ctx)); err != nil {
 		return err
 	}
-	f.client.Mutex.Lock()
-	defer f.client.Mutex.Unlock()
+	f.client.RWMutex.Lock()
+	defer f.client.RWMutex.Unlock()
 	f.client.oauth = nil
-	f.client.token = Token{}
+	f.client.setToken(Token{})
 	return nil
 }
 
@@ -126,9 +126,9 @@ func (f *OAuthFlow) Revoke(ctx context.Context) error {
 // current access token (RFC 7662).
 // Returns an error if no credentials are attached to the client.
 func (f *OAuthFlow) Introspect(ctx context.Context) (*oauth.IntrospectionResponse, error) {
-	f.client.Mutex.Lock()
+	f.client.RWMutex.Lock()
 	creds := f.client.oauth
-	f.client.Mutex.Unlock()
+	f.client.RWMutex.Unlock()
 	if creds == nil {
 		return nil, fmt.Errorf("oauth: no credentials attached to client")
 	}
@@ -144,18 +144,18 @@ func (f *OAuthFlow) set(creds *oauth.OAuthCredentials, err error) (*oauth.OAuthC
 	if err != nil {
 		return nil, err
 	}
-	f.client.Mutex.Lock()
-	defer f.client.Mutex.Unlock()
+	f.client.RWMutex.Lock()
+	defer f.client.RWMutex.Unlock()
 	f.client.oauth = creds
 	if creds.Token != nil {
 		scheme := creds.Token.TokenType
 		if scheme == "" || strings.EqualFold(scheme, Bearer) {
 			scheme = Bearer
 		}
-		f.client.token = Token{
+		f.client.setToken(Token{
 			Scheme: scheme,
 			Value:  creds.Token.AccessToken,
-		}
+		})
 	}
 	return creds, nil
 }

@@ -45,5 +45,9 @@ func (t *TokenTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		r.Header.Set("Authorization", tok)
 		req = r
 	}
-	return t.RoundTripper.RoundTrip(req)
+	rt := t.RoundTripper
+	if rt == nil {
+		rt = http.DefaultTransport
+	}
+	return rt.RoundTrip(req)
 }

@@ -189,8 +189,14 @@ func TestDiscover_InvalidJSON(t *testing.T) {
 // Discover fetches the auth server's RFC 8414 well-known document without
 // making a GET to the auth server's base URL.
 func TestDiscover_RFC9728_WithRFC8414AuthServer(t *testing.T) {
-	// Auth server: serves RFC 8414 metadata at /.well-known/oauth-authorization-server.
-	authSrv := httptest.NewServer(serveMetadataAt(OAuthWellKnownPath))
+	// Auth server: serves RFC 8414 metadata at /.well-known/oauth-authorization-server
+	// and records every path that is requested so we can assert the base URL is
+	// never fetched directly.
+	var authPaths []string
+	authSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		authPaths = append(authPaths, r.URL.Path)
+		serveMetadataAt(OAuthWellKnownPath).ServeHTTP(w, r)
+	}))
 	defer authSrv.Close()
 
 	// Track all paths hit on the resource server.
@@ -220,9 +226,13 @@ func TestDiscover_RFC9728_WithRFC8414AuthServer(t *testing.T) {
 	assert.Equal(t, sampleMetadata.Issuer, got.Issuer)
 	assert.Equal(t, sampleMetadata.TokenEndpoint, got.TokenEndpoint)
 
-	// The resource server should only have been hit for the resource metadata doc
-	// — never a bare GET to the auth server base URL.
+	// The resource server should only have been hit for the resource metadata doc.
 	assert.Equal(t, []string{OAuthProtectedResourcePath}, resourcePaths)
+
+	// The auth server's base URL ("/") must never be fetched — only the
+	// well-known discovery path should have been requested.
+	assert.NotContains(t, authPaths, "/", "auth server base URL must not be fetched")
+	assert.Contains(t, authPaths, OAuthWellKnownPath)
 }
 
 // TestDiscover_RFC9728_SynthesizesFallback tests the GitHub-like case where the

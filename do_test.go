@@ -186,3 +186,37 @@ func Test_Do_BinaryToWriter(t *testing.T) {
 	require.NoError(t, c.Do(client.MethodGet, &buf))
 	assert.Equal(t, []byte{0x01, 0x02, 0x03}, buf.Bytes())
 }
+
+// Test_Do_CrossOriginRedirectStripsCredentials verifies that when a redirect
+// leads to a different host, TokenTransport does not re-inject the global
+// Authorization header on the redirect hop, preventing credential leakage.
+func Test_Do_CrossOriginRedirectStripsCredentials(t *testing.T) {
+	// Target server: records the Authorization header it receives (if any).
+	var targetAuth string
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		targetAuth = r.Header.Get("Authorization")
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"ok":true}`))
+	}))
+	defer target.Close()
+
+	// Origin server: issues a 301 redirect to the target (cross-origin: different port).
+	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, target.URL+"/", http.StatusMovedPermanently)
+	}))
+	defer origin.Close()
+
+	// Client with a global bearer token.
+	c, err := client.New(
+		client.OptEndpoint(origin.URL),
+		client.OptReqToken(client.Token{Scheme: "Bearer", Value: "supersecret"}),
+	)
+	require.NoError(t, err)
+
+	var out map[string]any
+	require.NoError(t, c.Do(client.MethodGet, &out))
+
+	// The cross-origin redirect target must never see the credential.
+	assert.Equal(t, "", targetAuth,
+		"Authorization must not be forwarded to a cross-origin redirect target")
+}

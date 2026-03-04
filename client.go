@@ -144,7 +144,7 @@ func (client *Client) AccessToken() string {
 }
 
 // setToken stores t atomically so AccessToken() is always consistent.
-// Callers must already hold RWMutex.Lock() (or be in a single-goroutine setup path).
+// Uses atomic.Value so no mutex is required.
 func (client *Client) setToken(t Token) {
 	client.atomicToken.Store(t)
 }
@@ -172,15 +172,13 @@ func (client *Client) Do(in Payload, out any, opts ...RequestOpt) error {
 // Do a JSON request with a payload, populate an object with the response
 // and return any errors. The context can be used to cancel the request
 func (client *Client) DoWithContext(ctx context.Context, in Payload, out any, opts ...RequestOpt) error {
-	client.RWMutex.Lock()
-	defer client.RWMutex.Unlock()
-
 	// Close payload if it implements io.Closer (e.g., streaming payloads)
 	if closer, ok := in.(io.Closer); ok {
 		defer closer.Close()
 	}
 
-	// Make a request
+	// Build the request before taking any lock — client.endpoint and client.strict
+	// are immutable after New() returns so no synchronisation is needed here.
 	var method string = http.MethodGet
 	var accept, mimetype string
 	if in != nil {
@@ -193,20 +191,28 @@ func (client *Client) DoWithContext(ctx context.Context, in Payload, out any, op
 		return err
 	}
 
-	if err := client.refreshOAuth(ctx); err != nil {
+	// Narrow critical section: serialise the OAuth check+refresh so that only
+	// one goroutine refreshes the token at a time (prevents thundering-herd).
+	// The lock is released before the main HTTP round-trip so concurrent
+	// requests can proceed in parallel once the token is known to be valid.
+	client.RWMutex.Lock()
+	err = client.refreshOAuth(ctx)
+	client.RWMutex.Unlock()
+	if err != nil {
 		return err
 	}
 
-	// Do the request
+	// HTTP round-trip (including redirect follows) runs without any lock.
+	// http.Client and its transport stack are safe for concurrent use.
 	return do(client.Client, req, accept, client.strict, out, opts...)
 }
 
 // Do a HTTP request and decode it into an object
 func (client *Client) Request(req *http.Request, out any, opts ...RequestOpt) error {
 	client.RWMutex.Lock()
-	defer client.RWMutex.Unlock()
-
-	if err := client.refreshOAuth(req.Context()); err != nil {
+	err := client.refreshOAuth(req.Context())
+	client.RWMutex.Unlock()
+	if err != nil {
 		return err
 	}
 
@@ -364,6 +370,9 @@ func do(client *http.Client, req *http.Request, accept string, strict bool, out 
 				nextReq.Header.Del("Authorization")
 				nextReq.Header.Del("Proxy-Authorization")
 				nextReq.Header.Del("Cookie")
+				// Signal TokenTransport (outermost layer) not to re-inject the
+				// Authorization header on this hop — we deliberately stripped it.
+				nextReq = nextReq.WithContext(transport.WithSkipTokenInjection(nextReq.Context()))
 			}
 
 			req = nextReq

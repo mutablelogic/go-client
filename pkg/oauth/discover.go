@@ -189,8 +189,11 @@ func discoverAuthServer(httpClient *http.Client, issuerURL string) (*OAuthMetada
 
 // fetchResourceMetadata performs a GET to url and decodes the JSON body into
 // ProtectedResourceMetadata (RFC 9728). Returns (nil, nil) for status codes
-// that indicate the path doesn't exist. Returns (nil, nil) also when the
-// response doesn't look like a protected-resource document (no authorization_servers).
+// that indicate the path doesn't exist, or for a 2xx response containing valid
+// JSON that does not carry an authorization_servers field (not an RFC 9728 doc).
+// A 2xx response with invalid JSON is returned as an error: the caller explicitly
+// targeted the RFC 9728 well-known URL, so a malformed body is a real protocol
+// error rather than a "document not found" signal.
 func fetchResourceMetadata(client *http.Client, rawURL string) (*ProtectedResourceMetadata, error) {
 	resp, err := client.Get(rawURL)
 	if err != nil {
@@ -210,10 +213,12 @@ func fetchResourceMetadata(client *http.Client, rawURL string) (*ProtectedResour
 
 	var resource ProtectedResourceMetadata
 	if err := json.NewDecoder(resp.Body).Decode(&resource); err != nil {
-		return nil, nil // not JSON or wrong shape — not a protected-resource doc
+		// The server returned 2xx at the RFC 9728 well-known path but the body is
+		// not valid JSON — treat this as a real protocol error, not a missing doc.
+		return nil, fmt.Errorf("decoding resource metadata: %w", err)
 	}
 	if len(resource.AuthorizationServers) == 0 {
-		return nil, nil // JSON but not an RFC 9728 document
+		return nil, nil // valid JSON but not an RFC 9728 document
 	}
 	return &resource, nil
 }

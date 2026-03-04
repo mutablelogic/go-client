@@ -1,6 +1,7 @@
 package transport_test
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -124,4 +125,44 @@ func TestToken_NilRoundTripperFallsBackToDefault(t *testing.T) {
 	if err == nil {
 		resp.Body.Close()
 	}
+}
+
+// TestToken_WithSkipTokenInjection verifies that a request whose context
+// carries WithSkipTokenInjection never receives an Authorization header from
+// TokenTransport, even when the global token callback returns a non-empty value.
+// This prevents credential leakage on deliberately-stripped redirect hops.
+func TestToken_WithSkipTokenInjection_PreventInjection(t *testing.T) {
+	assert := assert.New(t)
+	var got string
+	inner := roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		got = req.Header.Get("Authorization")
+		return stubResp(200, "text/plain", "ok"), nil
+	})
+	tok := transport.NewToken(inner, func() string { return "Bearer secret" })
+
+	ctx := transport.WithSkipTokenInjection(context.Background())
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "http://other.example.com/", nil)
+	resp, err := tok.RoundTrip(req)
+	assert.NoError(err)
+	resp.Body.Close()
+	assert.Equal("", got, "Authorization must not be injected when skip signal is present")
+}
+
+// TestToken_WithSkipTokenInjection_NormalRequestStillInjected verifies that
+// requests without the skip signal continue to receive the token as usual.
+func TestToken_WithSkipTokenInjection_NormalRequestStillInjected(t *testing.T) {
+	assert := assert.New(t)
+	var got string
+	inner := roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		got = req.Header.Get("Authorization")
+		return stubResp(200, "text/plain", "ok"), nil
+	})
+	tok := transport.NewToken(inner, func() string { return "Bearer secret" })
+
+	// Plain context — no skip signal.
+	req := httptest.NewRequest(http.MethodGet, "http://example.com/", nil)
+	resp, err := tok.RoundTrip(req)
+	assert.NoError(err)
+	resp.Body.Close()
+	assert.Equal("Bearer secret", got, "Authorization must be injected normally without skip signal")
 }

@@ -62,13 +62,20 @@ func AuthorizeWithCode(ctx context.Context, creds *OAuthCredentials, prompt Prom
 		Endpoint:     creds.Metadata.OAuthEndpoint(),
 	}
 
-	// Generate PKCE verifier to protect against CSRF/authorization code injection.
-	verifier := oauth2.GenerateVerifier()
+	// Generate PKCE verifier if the server supports it (RFC 7636).
+	var verifier string
+	if creds.Metadata.SupportsPKCE() {
+		verifier = oauth2.GenerateVerifier()
+	}
 	state, err := randomState()
 	if err != nil {
 		return nil, fmt.Errorf("generate state: %w", err)
 	}
-	authURL := cfg.AuthCodeURL(state, oauth2.AccessTypeOffline, oauth2.S256ChallengeOption(verifier))
+	authOpts := []oauth2.AuthCodeOption{oauth2.AccessTypeOffline}
+	if verifier != "" {
+		authOpts = append(authOpts, oauth2.S256ChallengeOption(verifier))
+	}
+	authURL := cfg.AuthCodeURL(state, authOpts...)
 
 	// Invoke the prompt callback to display the URL and obtain the code.
 	code, err := prompt(authURL)
@@ -78,8 +85,12 @@ func AuthorizeWithCode(ctx context.Context, creds *OAuthCredentials, prompt Prom
 		return nil, fmt.Errorf("no authorization code provided")
 	}
 
-	// Exchange the code for a token
-	tok, err := cfg.Exchange(ctx, code, oauth2.VerifierOption(verifier))
+	// Exchange the code for a token, including the PKCE verifier when used.
+	exchangeOpts := []oauth2.AuthCodeOption{}
+	if verifier != "" {
+		exchangeOpts = append(exchangeOpts, oauth2.VerifierOption(verifier))
+	}
+	tok, err := cfg.Exchange(ctx, code, exchangeOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("token exchange failed: %w", err)
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"strings"
 
 	// Packages
 	oauth "github.com/mutablelogic/go-client/pkg/oauth"
@@ -137,7 +138,8 @@ func (f *OAuthFlow) Introspect(ctx context.Context) (*oauth.IntrospectionRespons
 ///////////////////////////////////////////////////////////////////////////////
 // PRIVATE METHODS
 
-// set attaches successfully obtained credentials to the client.
+// set attaches successfully obtained credentials to the client and
+// immediately populates the bearer token so transport-level injection works.
 func (f *OAuthFlow) set(creds *oauth.OAuthCredentials, err error) (*oauth.OAuthCredentials, error) {
 	if err != nil {
 		return nil, err
@@ -145,5 +147,15 @@ func (f *OAuthFlow) set(creds *oauth.OAuthCredentials, err error) (*oauth.OAuthC
 	f.client.Mutex.Lock()
 	defer f.client.Mutex.Unlock()
 	f.client.oauth = creds
+	if creds.Token != nil {
+		scheme := creds.Token.TokenType
+		if scheme == "" || strings.EqualFold(scheme, Bearer) {
+			scheme = Bearer
+		}
+		f.client.token = Token{
+			Scheme: scheme,
+			Value:  creds.Token.AccessToken,
+		}
+	}
 	return creds, nil
 }

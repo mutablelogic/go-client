@@ -113,6 +113,15 @@ func New(opts ...ClientOpt) (*Client, error) {
 ///////////////////////////////////////////////////////////////////////////////
 // STRINGIFY
 
+// AccessToken returns the current Authorization header value (e.g.
+// "Bearer <token>"), or an empty string when no token is set.
+// Safe for concurrent use.
+func (client *Client) AccessToken() string {
+	client.Mutex.Lock()
+	defer client.Mutex.Unlock()
+	return client.token.String()
+}
+
 func (client *Client) String() string {
 	str := "<client"
 	if client.endpoint != nil {

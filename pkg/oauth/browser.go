@@ -91,15 +91,24 @@ func AuthorizeWithBrowser(ctx context.Context, creds *OAuthCredentials, listener
 		Endpoint:     creds.Metadata.OAuthEndpoint(),
 	}
 
-	// Generate PKCE verifier and a random state for CSRF protection.
-	verifier := oauth2.GenerateVerifier()
+	// Generate PKCE verifier if the server supports it (RFC 7636).
+	// Servers that predate PKCE (e.g. GitHub) reject requests that include
+	// code_challenge, so we only enable it when advertised.
+	var verifier string
+	if creds.Metadata.SupportsPKCE() {
+		verifier = oauth2.GenerateVerifier()
+	}
 	state, err := randomState()
 	if err != nil {
 		return nil, fmt.Errorf("generate state: %w", err)
 	}
 
-	// Build the authorization URL with PKCE parameters.
-	authURL := cfg.AuthCodeURL(state, oauth2.AccessTypeOffline, oauth2.S256ChallengeOption(verifier))
+	// Build the authorization URL, adding PKCE challenge only when supported.
+	authOpts := []oauth2.AuthCodeOption{oauth2.AccessTypeOffline}
+	if verifier != "" {
+		authOpts = append(authOpts, oauth2.S256ChallengeOption(verifier))
+	}
+	authURL := cfg.AuthCodeURL(state, authOpts...)
 
 	// Channel that receives exactly one result from the callback handler.
 	resultCh := make(chan callbackResult, 1)
@@ -176,8 +185,12 @@ func AuthorizeWithBrowser(ctx context.Context, creds *OAuthCredentials, listener
 		return nil, result.err
 	}
 
-	// Exchange the code for a token.
-	tok, err := cfg.Exchange(ctx, result.code, oauth2.VerifierOption(verifier))
+	// Exchange the code for a token, including the PKCE verifier when used.
+	exchangeOpts := []oauth2.AuthCodeOption{}
+	if verifier != "" {
+		exchangeOpts = append(exchangeOpts, oauth2.VerifierOption(verifier))
+	}
+	tok, err := cfg.Exchange(ctx, result.code, exchangeOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("token exchange failed: %w", err)
 	}

@@ -66,6 +66,24 @@ func Discover(ctx context.Context, endpoint string) (*OAuthMetadata, error) {
 	// the context via context.WithValue(ctx, oauth2.HTTPClient, myClient).
 	httpClient := oauth2.NewClient(ctx, nil)
 
+	// RFC 9728: if the endpoint itself is a Protected Resource Metadata document,
+	// extract the first authorization_server and discover its metadata.
+	// If the authorization server predates RFC 8414 and has no discovery doc,
+	// synthesize metadata from the well-known URL conventions.
+	if resource, err := fetchResourceMetadata(httpClient, endpoint); err != nil {
+		return nil, fmt.Errorf("%s: OAuth discovery failed: %w", endpoint, err)
+	} else if resource != nil && len(resource.AuthorizationServers) > 0 {
+		authServer := resource.AuthorizationServers[0]
+		// We already know authServer is an authorization server (not a resource),
+		// so skip the RFC 9728 check and go straight to RFC 8414 candidate probing.
+		if m, err := discoverAuthServer(httpClient, authServer); err == nil {
+			return m, nil
+		}
+		// Discovery failed — server likely predates RFC 8414 (e.g. GitHub).
+		// Synthesize metadata from the authorization server URL.
+		return SynthesizeMetadata(authServer), nil
+	}
+
 	// Iterate over candidates and return the first successful metadata response
 	for _, candidateURL := range candidates {
 		metadata, err := fetchMetadata(httpClient, candidateURL)
@@ -81,6 +99,107 @@ func Discover(ctx context.Context, endpoint string) (*OAuthMetadata, error) {
 
 	// Return error: couldn't discover metadata from any candidate URL
 	return nil, fmt.Errorf("%s does not support OAuth discovery", endpoint)
+}
+
+// SynthesizeMetadata constructs a minimal OAuthMetadata for an authorization
+// server that does not publish an RFC 8414 discovery document. It derives the
+// endpoints by appending standard path suffixes to issuerURL, following the
+// fallback convention described in the MCP OAuth specification:
+//
+//	authorization_endpoint = issuerURL + "/authorize"
+//	token_endpoint         = issuerURL + "/token"
+//
+// This is suitable for legacy OAuth 2.0 servers such as GitHub
+// (https://github.com/login/oauth) that predate RFC 8414.
+func SynthesizeMetadata(issuerURL string) *OAuthMetadata {
+	base := strings.TrimRight(issuerURL, "/")
+
+	// GitHub's token endpoint uses /access_token rather than the RFC-standard /token.
+	// Detect this by issuer host so we synthesize the correct URL.
+	tokenEndpoint := base + "/token"
+	if u, err := url.Parse(base); err == nil && u.Host == "github.com" {
+		tokenEndpoint = base + "/access_token"
+	}
+
+	return &OAuthMetadata{
+		Issuer:                base,
+		AuthorizationEndpoint: base + "/authorize",
+		TokenEndpoint:         tokenEndpoint,
+		// Legacy servers (e.g. GitHub) only accept credentials as body params,
+		// not HTTP Basic auth. Setting this prevents the oauth2 library from
+		// attempting Basic auth first and consuming the authorization code.
+		TokenEndpointAuthMethodsSupported: []string{"client_secret_post"},
+	}
+}
+
+// discoverAuthServer probes the RFC 8414 / OIDC well-known paths for a URL
+// that is already known to be an authorization server (e.g. obtained from an
+// RFC 9728 resource metadata document). Unlike Discover, it skips the RFC 9728
+// protected-resource check — that request would be wasteful and misleading for
+// a URL that is definitely an authorization server, not a resource.
+func discoverAuthServer(httpClient *http.Client, issuerURL string) (*OAuthMetadata, error) {
+	u, err := url.Parse(issuerURL)
+	if err != nil || !slices.Contains(supportedSchemes, u.Scheme) {
+		return nil, fmt.Errorf("invalid authorization server URL: %s", issuerURL)
+	}
+	u.RawQuery = ""
+	u.Fragment = ""
+
+	base := fmt.Sprintf("%s://%s", u.Scheme, u.Host)
+	suffixes := []string{OAuthWellKnownPath, OIDCWellKnownPath}
+	basePath := path.Dir(strings.TrimRight(u.Path, "/"))
+	var candidates []string
+	for _, suffix := range suffixes {
+		candidates = append(candidates, base+suffix)
+	}
+	for basePath != "" && basePath != "/" && basePath != "." {
+		for _, suffix := range suffixes {
+			candidates = append(candidates, base+basePath+suffix)
+		}
+		basePath = path.Dir(basePath)
+	}
+
+	for _, candidateURL := range candidates {
+		metadata, err := fetchMetadata(httpClient, candidateURL)
+		if err != nil {
+			return nil, err
+		}
+		if metadata != nil {
+			return metadata, nil
+		}
+	}
+	return nil, fmt.Errorf("%s does not support OAuth discovery", issuerURL)
+}
+
+// fetchResourceMetadata performs a GET to url and decodes the JSON body into
+// ProtectedResourceMetadata (RFC 9728). Returns (nil, nil) for status codes
+// that indicate the path doesn't exist. Returns (nil, nil) also when the
+// response doesn't look like a protected-resource document (no authorization_servers).
+func fetchResourceMetadata(client *http.Client, rawURL string) (*ProtectedResourceMetadata, error) {
+	resp, err := client.Get(rawURL)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	switch resp.StatusCode {
+	case http.StatusNotFound, http.StatusUnauthorized,
+		http.StatusForbidden, http.StatusMethodNotAllowed:
+		return nil, nil
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return nil, fmt.Errorf("unexpected status %s", resp.Status)
+	}
+
+	var resource ProtectedResourceMetadata
+	if err := json.NewDecoder(resp.Body).Decode(&resource); err != nil {
+		return nil, nil // not JSON or wrong shape — not a protected-resource doc
+	}
+	if len(resource.AuthorizationServers) == 0 {
+		return nil, nil // JSON but not an RFC 9728 document
+	}
+	return &resource, nil
 }
 
 // fetchMetadata performs a GET to url and decodes the JSON body into OAuthMetadata.

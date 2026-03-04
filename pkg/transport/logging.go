@@ -141,8 +141,8 @@ func (t *Logging) RoundTrip(req *http.Request) (*http.Response, error) {
 				fmt.Fprintf(t.w, "  <= %v\n", dst.String())
 			}
 		case strings.HasPrefix(contentType, "text/"):
-			body, readErr := io.ReadAll(resp.Body)
-			resp.Body = io.NopCloser(bytes.NewReader(body))
+			body, readErr := io.ReadAll(io.LimitReader(resp.Body, 1024))
+			resp.Body = io.NopCloser(io.MultiReader(bytes.NewReader(body), resp.Body))
 			if readErr != nil {
 				return resp, fmt.Errorf("logging: read response body: %w", readErr)
 			}

@@ -184,6 +184,35 @@ func TestDiscover_InvalidJSON(t *testing.T) {
 	assert.ErrorContains(t, err, "OAuth discovery failed")
 }
 
+// TestDiscover_PartialOIDCDocIgnored verifies that a 200 response whose JSON
+// body lacks authorization_endpoint (e.g. GitHub's identity-only OIDC doc at
+// /login/oauth/.well-known/openid-configuration) is treated as "not an OAuth
+// AS discovery document" and does not prevent further candidates from being
+// tried or SynthesizeMetadata from being used as a fallback.
+func TestDiscover_PartialOIDCDocIgnored(t *testing.T) {
+	// Server: the path-relative OIDC candidate returns a partial doc with no
+	// authorization_endpoint; the RFC 8414 root candidate returns a proper doc.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, OIDCWellKnownPath):
+			// Partial identity-only doc — no authorization_endpoint.
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"issuer":"https://example.com","jwks_uri":"https://example.com/.well-known/jwks"}`))
+		case strings.HasSuffix(r.URL.Path, OAuthWellKnownPath):
+			serveMetadataAt(OAuthWellKnownPath).ServeHTTP(w, r)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	got, err := Discover(discoverContext(srv), srv.URL)
+	require.NoError(t, err)
+	// Should have found the full RFC 8414 metadata, not the partial OIDC doc.
+	assert.NotEmpty(t, got.AuthorizationEndpoint)
+	assert.NotEmpty(t, got.TokenEndpoint)
+}
+
 // TestDiscover_RFC9728_WithRFC8414AuthServer tests that when an endpoint
 // returns RFC 9728 protected-resource metadata pointing at an auth server,
 // Discover fetches the auth server's RFC 8414 well-known document without
@@ -277,4 +306,70 @@ func TestDiscover_RFC9728_SynthesizesFallback(t *testing.T) {
 		assert.NotEqual(t, "/", p, "auth server bare URL should not be fetched")
 	}
 	assert.NotEmpty(t, authPaths, "expected well-known candidate probes")
+}
+
+// TestDiscover_RFC9728_ResourcePathSuffix tests the GitHub Copilot pattern where
+// the resource_metadata URL carries a resource-specific path suffix after the
+// well-known segment, e.g. /.well-known/oauth-protected-resource/mcp/
+// (formerly the HasSuffix bug caused this URL pattern to bypass the RFC 9728
+// branch and fall through to the speculative-candidate loop instead).
+func TestDiscover_RFC9728_ResourcePathSuffix(t *testing.T) {
+	var authSrv *httptest.Server
+	authSrv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		serveMetadataAt(OAuthWellKnownPath).ServeHTTP(w, r)
+	}))
+	defer authSrv.Close()
+
+	var resourceSrv *httptest.Server
+	resourceSrv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Serve the resource metadata at the path-suffixed well-known URL.
+		if r.URL.Path == OAuthProtectedResourcePath+"/api/v1" {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(ProtectedResourceMetadata{
+				Resource:             resourceSrv.URL,
+				AuthorizationServers: []string{authSrv.URL},
+			})
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer resourceSrv.Close()
+
+	ctx := discoverContext(resourceSrv)
+	// Pass the resource-suffixed well-known URL directly (as a Www-Authenticate
+	// resource_metadata value would in a real GitHub Copilot response).
+	got, err := Discover(ctx, resourceSrv.URL+OAuthProtectedResourcePath+"/api/v1")
+	require.NoError(t, err)
+	assert.Equal(t, sampleMetadata.Issuer, got.Issuer)
+}
+
+// TestDiscover_RFC9728_Unauthorized_WithAuthServerHint tests the case where the
+// resource-metadata endpoint itself requires auth (e.g. GitHub Copilot). When
+// the 401 Www-Authenticate header advertises an authorization_server, Discover
+// must use that value rather than silently falling through to other candidates.
+func TestDiscover_RFC9728_Unauthorized_WithAuthServerHint(t *testing.T) {
+	var authSrv *httptest.Server
+	authSrv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		serveMetadataAt(OAuthWellKnownPath).ServeHTTP(w, r)
+	}))
+	defer authSrv.Close()
+
+	var resourceSrv *httptest.Server
+	resourceSrv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == OAuthProtectedResourcePath {
+			// Simulate GitHub Copilot: returns 401 with authorization_server hint.
+			w.Header().Set("Www-Authenticate",
+				`Bearer error="unauthorized", authorization_server="`+authSrv.URL+`"`)
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer resourceSrv.Close()
+
+	ctx := discoverContext(resourceSrv)
+	got, err := Discover(ctx, resourceSrv.URL+OAuthProtectedResourcePath)
+	require.NoError(t, err)
+	assert.Equal(t, sampleMetadata.Issuer, got.Issuer)
+	assert.Equal(t, sampleMetadata.TokenEndpoint, got.TokenEndpoint)
 }

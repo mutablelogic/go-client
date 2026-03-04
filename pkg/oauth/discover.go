@@ -71,13 +71,13 @@ func Discover(ctx context.Context, endpoint string) (*OAuthMetadata, error) {
 	// the context via context.WithValue(ctx, oauth2.HTTPClient, myClient).
 	httpClient := oauth2.NewClient(ctx, nil)
 
-	// RFC 9728: if the caller explicitly provided a Protected Resource Metadata
-	// URL (path ends with OAuthProtectedResourcePath), fetch it and use the
-	// first authorization_server entry for discovery. This avoids an extra
-	// speculative GET when the endpoint is a plain MCP/API URL like
-	// https://example.com/sse — callers pass the resource_metadata value from
-	// the Www-Authenticate header directly, which is already the well-known URL.
-	if strings.HasSuffix(u.Path, OAuthProtectedResourcePath) {
+	// RFC 9728: if the caller provided a Protected Resource Metadata URL, fetch
+	// it and use the first authorization_server entry for discovery.
+	// The path may be exactly OAuthProtectedResourcePath OR may carry a resource
+	// suffix (e.g. /.well-known/oauth-protected-resource/mcp/ per RFC 9728 §3).
+	isProtectedResource := u.Path == OAuthProtectedResourcePath ||
+		strings.HasPrefix(u.Path, OAuthProtectedResourcePath+"/")
+	if isProtectedResource {
 		if resource, err := fetchResourceMetadata(httpClient, endpoint); err != nil {
 			return nil, fmt.Errorf("%s: OAuth discovery failed: %w", endpoint, err)
 		} else if resource != nil && len(resource.AuthorizationServers) > 0 {
@@ -187,13 +187,18 @@ func discoverAuthServer(httpClient *http.Client, issuerURL string) (*OAuthMetada
 	return nil, fmt.Errorf("%w: %s", errNoDiscoveryDoc, issuerURL)
 }
 
-// fetchResourceMetadata performs a GET to url and decodes the JSON body into
+// fetchResourceMetadata performs a GET to rawURL and decodes the JSON body into
 // ProtectedResourceMetadata (RFC 9728). Returns (nil, nil) for status codes
 // that indicate the path doesn't exist, or for a 2xx response containing valid
 // JSON that does not carry an authorization_servers field (not an RFC 9728 doc).
 // A 2xx response with invalid JSON is returned as an error: the caller explicitly
 // targeted the RFC 9728 well-known URL, so a malformed body is a real protocol
 // error rather than a "document not found" signal.
+//
+// Special case: 401 — some servers (e.g. GitHub Copilot) gate the resource-metadata
+// endpoint behind auth. If the 401 Www-Authenticate header advertises an
+// authorization_server field, a synthetic ProtectedResourceMetadata is returned
+// so the caller can proceed to auth-server discovery without a manual workaround.
 func fetchResourceMetadata(client *http.Client, rawURL string) (*ProtectedResourceMetadata, error) {
 	resp, err := client.Get(rawURL)
 	if err != nil {
@@ -202,8 +207,15 @@ func fetchResourceMetadata(client *http.Client, rawURL string) (*ProtectedResour
 	defer resp.Body.Close()
 
 	switch resp.StatusCode {
-	case http.StatusNotFound, http.StatusUnauthorized,
-		http.StatusForbidden, http.StatusMethodNotAllowed:
+	case http.StatusUnauthorized:
+		// Non-compliant but seen in practice: resource-metadata endpoint requires
+		// auth. If the 401 Www-Authenticate advertises an authorization_server,
+		// synthesise a ProtectedResourceMetadata so the caller can continue.
+		if authServer := wwwAuthField(resp.Header, "authorization_server"); authServer != "" {
+			return &ProtectedResourceMetadata{AuthorizationServers: []string{authServer}}, nil
+		}
+		return nil, nil
+	case http.StatusNotFound, http.StatusForbidden, http.StatusMethodNotAllowed:
 		return nil, nil
 	}
 
@@ -221,6 +233,22 @@ func fetchResourceMetadata(client *http.Client, rawURL string) (*ProtectedResour
 		return nil, nil // valid JSON but not an RFC 9728 document
 	}
 	return &resource, nil
+}
+
+// wwwAuthField extracts the value of a single quoted field from a
+// Www-Authenticate header, e.g. wwwAuthField(hdr, "authorization_server").
+// Returns "" when the field is absent.
+func wwwAuthField(header http.Header, field string) string {
+	prefix := field + `="`
+	for _, v := range header.Values("Www-Authenticate") {
+		if i := strings.Index(v, prefix); i >= 0 {
+			rest := v[i+len(prefix):]
+			if j := strings.Index(rest, `"`); j >= 0 {
+				return rest[:j]
+			}
+		}
+	}
+	return ""
 }
 
 // fetchMetadata performs a GET to url and decodes the JSON body into OAuthMetadata.
@@ -249,6 +277,13 @@ func fetchMetadata(client *http.Client, url string) (*OAuthMetadata, error) {
 	var metadata OAuthMetadata
 	if err := json.NewDecoder(resp.Body).Decode(&metadata); err != nil {
 		return nil, fmt.Errorf("decoding metadata: %w", err)
+	}
+	// RFC 8414 §2: authorization_endpoint is REQUIRED for an AS metadata doc.
+	// Some servers (e.g. GitHub) return 200 at well-known paths with partial
+	// OIDC identity-token documents that have no authorization_endpoint — treat
+	// these as "not a valid OAuth AS discovery document" and keep searching.
+	if metadata.AuthorizationEndpoint == "" {
+		return nil, nil
 	}
 	return &metadata, nil
 }

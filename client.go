@@ -43,14 +43,12 @@ type Client struct {
 	Parent any
 
 	endpoint    *url.URL
-	ua          string
-	rate        float32 // number of requests allowed per second
+	ua          string  // setup-only: consumed by New() into HeadersTransport
+	rate        float32 // setup-only: consumed by New() into RateLimitTransport
 	strict      bool
-	token       Token             // token for authentication on requests
-	atomicToken atomic.Value      // stores string — the formatted Authorization header value, lock-free
-	headers     map[string]string // Headers for every request
-	ts          time.Time
-	transports  []func(http.RoundTripper) http.RoundTripper // accumulated by OptTransport, applied in New()
+	atomicToken atomic.Value                                // stores Token — lock-free; written by setToken, read by AccessToken
+	headers     map[string]string                           // setup-only: consumed by New() into HeadersTransport
+	transports  []func(http.RoundTripper) http.RoundTripper // setup-only: consumed by New()
 	oauth       *oauth.OAuthCredentials                     // OAuth credentials for automatic token refresh on requests
 }
 
@@ -109,6 +107,18 @@ func New(opts ...ClientOpt) (*Client, error) {
 	}
 	this.transports = nil
 
+	// Install a headers transport for User-Agent and custom headers.
+	if this.ua != "" || len(this.headers) > 0 {
+		this.Client.Transport = transport.NewHeaders(this.Client.Transport, this.ua, this.headers)
+		this.ua, this.headers = "", nil
+	}
+
+	// Install a rate-limit transport when a rate limit has been configured.
+	if this.rate > 0 {
+		this.Client.Transport = transport.NewRateLimit(this.Client.Transport, this.rate)
+		this.rate = 0
+	}
+
 	// Always install the token transport as the outermost layer so that tokens
 	// set via OptReqToken or updated by an OAuth flow are injected on every
 	// outbound request — including requests made directly by SDK-owned transports
@@ -127,17 +137,16 @@ func New(opts ...ClientOpt) (*Client, error) {
 // "Bearer <token>"), or an empty string when no token is set.
 // Lock-free: reads from an atomic.Value updated by setToken.
 func (client *Client) AccessToken() string {
-	if v, ok := client.atomicToken.Load().(string); ok {
-		return v
+	if v, ok := client.atomicToken.Load().(Token); ok {
+		return v.String()
 	}
 	return ""
 }
 
-// setToken updates the token field and its lock-free atomic mirror in one call.
+// setToken stores t atomically so AccessToken() is always consistent.
 // Callers must already hold RWMutex.Lock() (or be in a single-goroutine setup path).
 func (client *Client) setToken(t Token) {
-	client.token = t
-	client.atomicToken.Store(t.String())
+	client.atomicToken.Store(t)
 }
 
 func (client *Client) String() string {
@@ -171,10 +180,6 @@ func (client *Client) DoWithContext(ctx context.Context, in Payload, out any, op
 		defer closer.Close()
 	}
 
-	if err := client.waitRateLimit(ctx); err != nil {
-		return err
-	}
-
 	// Make a request
 	var method string = http.MethodGet
 	var accept, mimetype string
@@ -192,12 +197,6 @@ func (client *Client) DoWithContext(ctx context.Context, in Payload, out any, op
 		return err
 	}
 
-	// If client token is set, then add to request.
-	// Only check Value; Scheme defaults to Bearer in Token.String() when empty.
-	if client.token.Value != "" {
-		opts = append([]RequestOpt{OptToken(client.token)}, opts...)
-	}
-
 	// Do the request
 	return do(client.Client, req, accept, client.strict, out, opts...)
 }
@@ -207,19 +206,8 @@ func (client *Client) Request(req *http.Request, out any, opts ...RequestOpt) er
 	client.RWMutex.Lock()
 	defer client.RWMutex.Unlock()
 
-	if err := client.waitRateLimit(req.Context()); err != nil {
-		return err
-	}
-
 	if err := client.refreshOAuth(req.Context()); err != nil {
 		return err
-	}
-
-	// If client token is set, then add to request, at the beginning so it can be
-	// overridden by any other options.
-	// Only check Value; Scheme defaults to Bearer in Token.String() when empty.
-	if client.token.Value != "" {
-		opts = append([]RequestOpt{OptToken(client.token)}, opts...)
 	}
 
 	return do(client.Client, req, "", false, out, opts...)
@@ -227,25 +215,6 @@ func (client *Client) Request(req *http.Request, out any, opts ...RequestOpt) er
 
 ///////////////////////////////////////////////////////////////////////////////
 // PRIVATE METHODS
-
-// waitRateLimit sleeps until the rate limit allows the next request, then
-// records the current time. The sleep is cancelled early if ctx is done.
-func (client *Client) waitRateLimit(ctx context.Context) error {
-	if !client.ts.IsZero() && client.rate > 0.0 {
-		next := client.ts.Add(time.Duration(float32(time.Second) / client.rate))
-		if delay := time.Until(next); delay > 0 {
-			t := time.NewTimer(delay)
-			select {
-			case <-ctx.Done():
-				t.Stop()
-				return ctx.Err()
-			case <-t.C:
-			}
-		}
-	}
-	client.ts = time.Now()
-	return nil
-}
 
 // refreshOAuth refreshes the OAuth token if credentials are set and the token
 // is expired. It injects the client's own HTTP transport into the context so
@@ -302,20 +271,6 @@ func (client *Client) request(ctx context.Context, method, accept, mimetype stri
 	if strings.Contains(accept, ContentTypeTextStream) || strings.Contains(accept, ContentTypeJsonStream) {
 		r.Header.Set("Cache-Control", "no-cache")
 		r.Header.Set("X-Accel-Buffering", "no")
-	}
-	if client.ua != "" {
-		r.Header.Set("User-Agent", client.ua)
-	}
-
-	// If there are headers, add them
-	if len(client.headers) > 0 {
-		for k, v := range client.headers {
-			if v == "" {
-				r.Header.Del(k)
-			} else {
-				r.Header.Set(k, v)
-			}
-		}
 	}
 
 	// Return success

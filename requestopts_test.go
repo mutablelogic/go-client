@@ -85,6 +85,48 @@ func Test_OptPath_MultipleSegmentsAndMixedTypes(t *testing.T) {
 	assert.Equal(t, "/v2/users/42", capturedPath)
 }
 
+func Test_OptAbsPath_EmptyNormalizesToRoot(t *testing.T) {
+	var capturedPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedPath = r.URL.Path
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	c, err := client.New(client.OptEndpoint(srv.URL))
+	require.NoError(t, err)
+	require.NoError(t, c.Do(client.MethodGet, nil, client.OptAbsPath()))
+	assert.Equal(t, "/", capturedPath)
+}
+
+func Test_OptAbsPath_LeadingSlashNormalizesToRootedPath(t *testing.T) {
+	var capturedPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedPath = r.URL.Path
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	c, err := client.New(client.OptEndpoint(srv.URL))
+	require.NoError(t, err)
+	require.NoError(t, c.Do(client.MethodGet, nil, client.OptAbsPath("/auth", "login")))
+	assert.Equal(t, "/auth/login", capturedPath)
+}
+
+func Test_OptPath_EmptyPreservesRoot(t *testing.T) {
+	var capturedPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedPath = r.URL.Path
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	c, err := client.New(client.OptEndpoint(srv.URL))
+	require.NoError(t, err)
+	require.NoError(t, c.Do(client.MethodGet, nil, client.OptPath()))
+	assert.Equal(t, "/", capturedPath)
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 // OptToken
 

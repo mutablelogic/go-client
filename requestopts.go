@@ -44,6 +44,19 @@ func OptReqEndpoint(value string) RequestOpt {
 	}
 }
 
+// OptAbsPath sets the absolute path for a request
+func OptAbsPath(value ...any) RequestOpt {
+	return func(r *requestOpts) error {
+		// Make a copy
+		url := *r.URL
+		// Clean up and append path
+		url.Path = PathSeparator + path.Join(strings.TrimPrefix(join(value, PathSeparator), PathSeparator))
+		// Set new path
+		r.URL = &url
+		return nil
+	}
+}
+
 // OptPath appends path elements onto a request
 func OptPath(value ...any) RequestOpt {
 	return func(r *requestOpts) error {

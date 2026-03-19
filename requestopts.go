@@ -50,7 +50,7 @@ func OptAbsPath(value ...any) RequestOpt {
 		// Make a copy
 		url := *r.URL
 		// Clean up and append path
-		url.Path = PathSeparator + path.Join(strings.TrimPrefix(join(value, PathSeparator), PathSeparator))
+		url.Path = absolutePath(strings.TrimPrefix(join(value, PathSeparator), PathSeparator))
 		// Set new path
 		r.URL = &url
 		return nil
@@ -63,7 +63,7 @@ func OptPath(value ...any) RequestOpt {
 		// Make a copy
 		url := *r.URL
 		// Clean up and append path
-		url.Path = PathSeparator + path.Join(strings.Trim(url.Path, PathSeparator), strings.TrimPrefix(join(value, PathSeparator), PathSeparator))
+		url.Path = absolutePath(strings.Trim(url.Path, PathSeparator), strings.TrimPrefix(join(value, PathSeparator), PathSeparator))
 		// Set new path
 		r.URL = &url
 		return nil
@@ -152,4 +152,12 @@ func join(values []any, sep string) string {
 		str[i] = fmt.Sprint(v)
 	}
 	return strings.Join(str, sep)
+}
+
+func absolutePath(elem ...string) string {
+	joined := path.Join(elem...)
+	if joined == "." {
+		return PathSeparator
+	}
+	return PathSeparator + joined
 }

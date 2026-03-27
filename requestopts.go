@@ -44,26 +44,44 @@ func OptReqEndpoint(value string) RequestOpt {
 	}
 }
 
-// OptAbsPath sets the absolute path for a request
+// OptAbsPath replaces the request path with the provided path segments.
+//
+// Each argument is treated as exactly one path segment. Leading and trailing
+// slashes on each argument are ignored for path joining, but any slash within
+// an argument is preserved as data and percent-encoded in the outbound request.
+//
+// For example, OptAbsPath("a/b", "c") results in a request target of
+// "/a%2Fb/c", not "/a/b/c".
 func OptAbsPath(value ...any) RequestOpt {
 	return func(r *requestOpts) error {
 		// Make a copy
 		url := *r.URL
 		// Clean up and append path
-		url.Path = absolutePath(strings.TrimPrefix(join(value, PathSeparator), PathSeparator))
+		url.Path = absolutePath(pathSegments(value)...)
+		url.RawPath = absolutePath(escapedPathSegments(value)...)
 		// Set new path
 		r.URL = &url
 		return nil
 	}
 }
 
-// OptPath appends path elements onto a request
+// OptPath appends the provided path segments onto the current request path.
+//
+// Each argument is treated as exactly one path segment. Leading and trailing
+// slashes on each argument are ignored for path joining, but any slash within
+// an argument is preserved as data and percent-encoded in the outbound request.
+//
+// For example, OptPath("a/b", "c") results in a request target of
+// "/a%2Fb/c", not "/a/b/c".
 func OptPath(value ...any) RequestOpt {
 	return func(r *requestOpts) error {
 		// Make a copy
 		url := *r.URL
+		basePath := strings.Trim(url.Path, PathSeparator)
+		baseRawPath := strings.Trim(url.EscapedPath(), PathSeparator)
 		// Clean up and append path
-		url.Path = absolutePath(strings.Trim(url.Path, PathSeparator), strings.TrimPrefix(join(value, PathSeparator), PathSeparator))
+		url.Path = absolutePath(append([]string{basePath}, pathSegments(value)...)...)
+		url.RawPath = absolutePath(append([]string{baseRawPath}, escapedPathSegments(value)...)...)
 		// Set new path
 		r.URL = &url
 		return nil
@@ -143,15 +161,27 @@ func OptReqTransport(fn func(http.RoundTripper) http.RoundTripper) RequestOpt {
 ///////////////////////////////////////////////////////////////////////////////
 // PRIVATE METHODS
 
-func join(values []any, sep string) string {
+func pathSegments(values []any) []string {
 	if len(values) == 0 {
-		return ""
+		return nil
 	}
-	str := make([]string, len(values))
-	for i, v := range values {
-		str[i] = fmt.Sprint(v)
+	segments := make([]string, 0, len(values))
+	for _, value := range values {
+		segments = append(segments, strings.Trim(fmt.Sprint(value), PathSeparator))
 	}
-	return strings.Join(str, sep)
+	return segments
+}
+
+func escapedPathSegments(values []any) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	segments := make([]string, 0, len(values))
+	for _, value := range values {
+		segment := strings.Trim(fmt.Sprint(value), PathSeparator)
+		segments = append(segments, url.PathEscape(segment))
+	}
+	return segments
 }
 
 func absolutePath(elem ...string) string {

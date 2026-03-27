@@ -127,6 +127,29 @@ func Test_OptPath_TreatsEachArgumentAsOneSegment(t *testing.T) {
 	assert.Equal(t, "/a%2Fb/c", capturedRequestURI)
 }
 
+func Test_OptPath_PreservesDotSegmentsAsData(t *testing.T) {
+	var capturedPath, capturedRequestURI string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	c, err := client.New(client.OptEndpoint(srv.URL))
+	require.NoError(t, err)
+	require.NoError(t, c.Do(client.MethodGet, nil,
+		client.OptPath("a/../b"),
+		client.OptReqTransport(func(next http.RoundTripper) http.RoundTripper {
+			return roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				capturedPath = req.URL.Path
+				capturedRequestURI = req.URL.RequestURI()
+				return next.RoundTrip(req)
+			})
+		}),
+	))
+	assert.Equal(t, "/a/../b", capturedPath)
+	assert.Equal(t, "/a%2F..%2Fb", capturedRequestURI)
+}
+
 func Test_OptAbsPath_EmptyNormalizesToRoot(t *testing.T) {
 	var capturedPath string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -195,6 +218,29 @@ func Test_OptAbsPath_TreatsEachArgumentAsOneSegment(t *testing.T) {
 	))
 	assert.Equal(t, "/a/b/c", capturedPath)
 	assert.Equal(t, "/a%2Fb/c", capturedRequestURI)
+}
+
+func Test_OptAbsPath_PreservesDotSegmentsAsData(t *testing.T) {
+	var capturedPath, capturedRequestURI string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	c, err := client.New(client.OptEndpoint(srv.URL))
+	require.NoError(t, err)
+	require.NoError(t, c.Do(client.MethodGet, nil,
+		client.OptAbsPath("a/../b"),
+		client.OptReqTransport(func(next http.RoundTripper) http.RoundTripper {
+			return roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				capturedPath = req.URL.Path
+				capturedRequestURI = req.URL.RequestURI()
+				return next.RoundTrip(req)
+			})
+		}),
+	))
+	assert.Equal(t, "/a/../b", capturedPath)
+	assert.Equal(t, "/a%2F..%2Fb", capturedRequestURI)
 }
 
 func Test_OptPath_EmptyPreservesRoot(t *testing.T) {

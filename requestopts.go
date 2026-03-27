@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"path"
 	"strings"
 
 	// Package imports
@@ -47,8 +46,9 @@ func OptReqEndpoint(value string) RequestOpt {
 // OptAbsPath replaces the request path with the provided path segments.
 //
 // Each argument is treated as exactly one path segment. Leading and trailing
-// slashes on each argument are ignored for path joining, but any slash within
-// an argument is preserved as data and percent-encoded in the outbound request.
+// slashes on each argument are ignored for path joining, but any slash or dot
+// segment within an argument is preserved as data and percent-encoded in the
+// outbound request.
 //
 // For example, OptAbsPath("a/b", "c") results in a request target of
 // "/a%2Fb/c", not "/a/b/c".
@@ -68,8 +68,9 @@ func OptAbsPath(value ...any) RequestOpt {
 // OptPath appends the provided path segments onto the current request path.
 //
 // Each argument is treated as exactly one path segment. Leading and trailing
-// slashes on each argument are ignored for path joining, but any slash within
-// an argument is preserved as data and percent-encoded in the outbound request.
+// slashes on each argument are ignored for path joining, but any slash or dot
+// segment within an argument is preserved as data and percent-encoded in the
+// outbound request.
 //
 // For example, OptPath("a/b", "c") results in a request target of
 // "/a%2Fb/c", not "/a/b/c".
@@ -185,9 +186,15 @@ func escapedPathSegments(values []any) []string {
 }
 
 func absolutePath(elem ...string) string {
-	joined := path.Join(elem...)
-	if joined == "." {
+	parts := make([]string, 0, len(elem))
+	for _, part := range elem {
+		part = strings.Trim(part, PathSeparator)
+		if part != "" {
+			parts = append(parts, part)
+		}
+	}
+	if len(parts) == 0 {
 		return PathSeparator
 	}
-	return PathSeparator + joined
+	return PathSeparator + strings.Join(parts, PathSeparator)
 }

@@ -85,6 +85,71 @@ func Test_OptPath_MultipleSegmentsAndMixedTypes(t *testing.T) {
 	assert.Equal(t, "/v2/users/42", capturedPath)
 }
 
+func Test_OptPath_EscapesSegments(t *testing.T) {
+	var capturedPath, capturedEscapedPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedPath = r.URL.Path
+		capturedEscapedPath = r.URL.EscapedPath()
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	c, err := client.New(client.OptEndpoint(srv.URL))
+	require.NoError(t, err)
+	require.NoError(t, c.Do(client.MethodGet, nil, client.OptPath("object", "cn=test user#1,ou=users,dc=example,dc=com")))
+	assert.Equal(t, "/object/cn=test user#1,ou=users,dc=example,dc=com", capturedPath)
+	assert.Contains(t, capturedEscapedPath, "%20")
+	assert.Contains(t, capturedEscapedPath, "%23")
+	assert.NotContains(t, capturedEscapedPath, " ")
+	assert.NotContains(t, capturedEscapedPath, "#")
+}
+
+func Test_OptPath_TreatsEachArgumentAsOneSegment(t *testing.T) {
+	var capturedPath, capturedRequestURI string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	c, err := client.New(client.OptEndpoint(srv.URL))
+	require.NoError(t, err)
+	require.NoError(t, c.Do(client.MethodGet, nil,
+		client.OptPath("a/b", "c"),
+		client.OptReqTransport(func(next http.RoundTripper) http.RoundTripper {
+			return roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				capturedPath = req.URL.Path
+				capturedRequestURI = req.URL.RequestURI()
+				return next.RoundTrip(req)
+			})
+		}),
+	))
+	assert.Equal(t, "/a/b/c", capturedPath)
+	assert.Equal(t, "/a%2Fb/c", capturedRequestURI)
+}
+
+func Test_OptPath_PreservesDotSegmentsAsData(t *testing.T) {
+	var capturedPath, capturedRequestURI string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	c, err := client.New(client.OptEndpoint(srv.URL))
+	require.NoError(t, err)
+	require.NoError(t, c.Do(client.MethodGet, nil,
+		client.OptPath("a/../b"),
+		client.OptReqTransport(func(next http.RoundTripper) http.RoundTripper {
+			return roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				capturedPath = req.URL.Path
+				capturedRequestURI = req.URL.RequestURI()
+				return next.RoundTrip(req)
+			})
+		}),
+	))
+	assert.Equal(t, "/a/../b", capturedPath)
+	assert.Equal(t, "/a%2F..%2Fb", capturedRequestURI)
+}
+
 func Test_OptAbsPath_EmptyNormalizesToRoot(t *testing.T) {
 	var capturedPath string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -111,6 +176,71 @@ func Test_OptAbsPath_LeadingSlashNormalizesToRootedPath(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, c.Do(client.MethodGet, nil, client.OptAbsPath("/auth", "login")))
 	assert.Equal(t, "/auth/login", capturedPath)
+}
+
+func Test_OptAbsPath_EscapesSegments(t *testing.T) {
+	var capturedPath, capturedEscapedPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedPath = r.URL.Path
+		capturedEscapedPath = r.URL.EscapedPath()
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	c, err := client.New(client.OptEndpoint(srv.URL))
+	require.NoError(t, err)
+	require.NoError(t, c.Do(client.MethodGet, nil, client.OptAbsPath("/object", "cn=test user#1,ou=users,dc=example,dc=com")))
+	assert.Equal(t, "/object/cn=test user#1,ou=users,dc=example,dc=com", capturedPath)
+	assert.Contains(t, capturedEscapedPath, "%20")
+	assert.Contains(t, capturedEscapedPath, "%23")
+	assert.NotContains(t, capturedEscapedPath, " ")
+	assert.NotContains(t, capturedEscapedPath, "#")
+}
+
+func Test_OptAbsPath_TreatsEachArgumentAsOneSegment(t *testing.T) {
+	var capturedPath, capturedRequestURI string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	c, err := client.New(client.OptEndpoint(srv.URL))
+	require.NoError(t, err)
+	require.NoError(t, c.Do(client.MethodGet, nil,
+		client.OptAbsPath("a/b", "c"),
+		client.OptReqTransport(func(next http.RoundTripper) http.RoundTripper {
+			return roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				capturedPath = req.URL.Path
+				capturedRequestURI = req.URL.RequestURI()
+				return next.RoundTrip(req)
+			})
+		}),
+	))
+	assert.Equal(t, "/a/b/c", capturedPath)
+	assert.Equal(t, "/a%2Fb/c", capturedRequestURI)
+}
+
+func Test_OptAbsPath_PreservesDotSegmentsAsData(t *testing.T) {
+	var capturedPath, capturedRequestURI string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	c, err := client.New(client.OptEndpoint(srv.URL))
+	require.NoError(t, err)
+	require.NoError(t, c.Do(client.MethodGet, nil,
+		client.OptAbsPath("a/../b"),
+		client.OptReqTransport(func(next http.RoundTripper) http.RoundTripper {
+			return roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				capturedPath = req.URL.Path
+				capturedRequestURI = req.URL.RequestURI()
+				return next.RoundTrip(req)
+			})
+		}),
+	))
+	assert.Equal(t, "/a/../b", capturedPath)
+	assert.Equal(t, "/a%2F..%2Fb", capturedRequestURI)
 }
 
 func Test_OptPath_EmptyPreservesRoot(t *testing.T) {

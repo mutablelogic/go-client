@@ -147,7 +147,7 @@ func (c *Client) Login(opts ...RequestOpt) error {
 		request.Device = c.session.Device
 		if payload, err := client.NewFormRequest(request, client.ContentTypeJson); err != nil {
 			return err
-		} else if err := c.client.Do(payload, &response, client.OptReqEndpoint(identityUrl), client.OptPath("connect/token")); err != nil {
+		} else if err := c.client.Do(payload, &response, client.OptReqEndpoint(identityUrl), client.OptPath("connect", "token")); err != nil {
 			return err
 		}
 

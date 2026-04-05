@@ -53,6 +53,11 @@ type TextStreamCallback func(TextStreamEvent) error
 const (
 	// Mime type for text stream
 	ContentTypeTextStream = types.ContentTypeTextStream
+
+	// Allow large SSE data lines such as JSON result events containing
+	// base64-encoded attachments.
+	textStreamScannerInitialBuffer = 64 * 1024
+	textStreamScannerMaxBuffer     = 64 * 1024 * 1024
 )
 
 /////////////////////////////////////////////////////////////////////////////
@@ -95,6 +100,7 @@ func (t TextStreamEvent) String() string {
 func (t *TextStream) Decode(r io.Reader, callback TextStreamCallback) error {
 	var event *TextStreamEvent
 	scanner := bufio.NewScanner(r)
+	scanner.Buffer(make([]byte, 0, textStreamScannerInitialBuffer), textStreamScannerMaxBuffer)
 
 	// If the callback is nil, then return without doing anything
 	if callback == nil {

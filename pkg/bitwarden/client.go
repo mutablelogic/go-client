@@ -63,9 +63,10 @@ const (
 )
 
 const (
-	defaultScope      = "api"
-	defaultGrantType  = "client_credentials"
-	defaultDeviceName = "github.com/mutablelogic/go-client/pkg/bitwarden"
+	defaultScope               = "api"
+	defaultGrantType           = "client_credentials"
+	defaultDeviceName          = "github.com/mutablelogic/go-client/pkg/bitwarden"
+	defaultClientVersionHeader = "2026.4.0"
 )
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -79,6 +80,7 @@ func New(opts ...client.ClientOpt) (*Client, error) {
 	// Create client
 	opts_ := []client.ClientOpt{
 		client.OptParent(parent),
+		client.OptHeader("Bitwarden-Client-Version", defaultClientVersionHeader),
 	}
 	opts_ = append(opts_, opts...)
 	client, err := client.New(append(opts_, client.OptEndpoint(baseUrl))...)

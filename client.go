@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -15,12 +14,9 @@ import (
 	"time"
 
 	// Package imports
-	oauth "github.com/mutablelogic/go-client/pkg/oauth"
-	otel "github.com/mutablelogic/go-client/pkg/otel"
 	transport "github.com/mutablelogic/go-client/pkg/transport"
 	httpresponse "github.com/mutablelogic/go-server/pkg/httpresponse"
 	types "github.com/mutablelogic/go-server/pkg/types"
-	oauth2 "golang.org/x/oauth2"
 )
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -49,7 +45,6 @@ type Client struct {
 	atomicToken atomic.Value                                // stores Token — lock-free; written by setToken, read by AccessToken
 	headers     map[string]string                           // setup-only: consumed by New() into HeadersTransport
 	transports  []func(http.RoundTripper) http.RoundTripper // setup-only: consumed by New()
-	oauth       *oauth.OAuthCredentials                     // OAuth credentials for automatic token refresh on requests
 }
 
 type ClientOpt func(*Client) error
@@ -143,23 +138,6 @@ func (client *Client) AccessToken() string {
 	return ""
 }
 
-// setToken stores t atomically so AccessToken() is always consistent.
-// Uses atomic.Value so no mutex is required.
-func (client *Client) setToken(t Token) {
-	client.atomicToken.Store(t)
-}
-
-func (client *Client) String() string {
-	str := "<client"
-	if client.endpoint != nil {
-		str += fmt.Sprintf(" endpoint=%q", otel.RedactedURL(client.endpoint))
-	}
-	if client.Client.Timeout > 0 {
-		str += fmt.Sprint(" timeout=", client.Client.Timeout)
-	}
-	return str + ">"
-}
-
 ///////////////////////////////////////////////////////////////////////////////
 // PUBLIC METHODS
 
@@ -191,17 +169,6 @@ func (client *Client) DoWithContext(ctx context.Context, in Payload, out any, op
 		return err
 	}
 
-	// Narrow critical section: serialise the OAuth check+refresh so that only
-	// one goroutine refreshes the token at a time (prevents thundering-herd).
-	// The lock is released before the main HTTP round-trip so concurrent
-	// requests can proceed in parallel once the token is known to be valid.
-	client.RWMutex.Lock()
-	err = client.refreshOAuth(ctx)
-	client.RWMutex.Unlock()
-	if err != nil {
-		return err
-	}
-
 	// HTTP round-trip (including redirect follows) runs without any lock.
 	// http.Client and its transport stack are safe for concurrent use.
 	return do(client.Client, req, accept, client.strict, out, opts...)
@@ -209,40 +176,11 @@ func (client *Client) DoWithContext(ctx context.Context, in Payload, out any, op
 
 // Do a HTTP request and decode it into an object
 func (client *Client) Request(req *http.Request, out any, opts ...RequestOpt) error {
-	client.RWMutex.Lock()
-	err := client.refreshOAuth(req.Context())
-	client.RWMutex.Unlock()
-	if err != nil {
-		return err
-	}
-
 	return do(client.Client, req, "", false, out, opts...)
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 // PRIVATE METHODS
-
-// refreshOAuth refreshes the OAuth token if credentials are set and the token
-// is expired. It injects the client's own HTTP transport into the context so
-// the refresh request honours the same proxy/TLS/logging configuration.
-// It is a no-op when no OAuth credentials are configured or the token is still valid.
-func (client *Client) refreshOAuth(ctx context.Context) error {
-	if client.oauth == nil {
-		return nil
-	}
-	if err := client.oauth.Refresh(context.WithValue(ctx, oauth2.HTTPClient, client.Client)); err != nil {
-		return err
-	}
-	scheme := client.oauth.Token.TokenType
-	if scheme == "" {
-		scheme = Bearer
-	}
-	client.setToken(Token{
-		Scheme: scheme,
-		Value:  client.oauth.Token.AccessToken,
-	})
-	return nil
-}
 
 // request creates a request which can be used to return responses. The accept
 // parameter is the accepted mime-type of the response. If the accept parameter is empty,
@@ -300,7 +238,7 @@ func do(client *http.Client, req *http.Request, accept string, strict bool, out 
 	// Work on a shallow copy so we never mutate the shared *http.Client.
 	// Per-request timeout and transport changes are therefore safe without
 	// needing a mutex or deferred restoration.
-	localCl := *client
+	localCl := types.Value(client)
 	if reqopts.noTimeout {
 		localCl.Timeout = 0
 	}
@@ -311,6 +249,7 @@ func do(client *http.Client, req *http.Request, accept string, strict bool, out 
 		}
 		localCl.Transport = t
 	}
+
 	// Disable the standard client's redirect-following so that our manual
 	// redirect loop below actually sees 3xx responses and can enforce the
 	// method/header-preservation and cross-origin stripping rules.
@@ -392,16 +331,31 @@ func do(client *http.Client, req *http.Request, accept string, strict bool, out 
 
 	// Check status code
 	if response.StatusCode < 200 || response.StatusCode > 299 {
+		var httpErr httpresponse.ErrResponse
+
 		// Read any information from the body
 		data, err := io.ReadAll(response.Body)
 		if err != nil {
 			return err
 		}
+
+		// If there's no body, return an error with just the status code
 		if len(data) == 0 {
 			return httpresponse.Err(response.StatusCode).With(response.Status)
-		} else {
+		}
+
+		// Preserve non-JSON error bodies so callers can surface useful server detail.
+		if err := json.Unmarshal(data, &httpErr); err != nil {
 			return httpresponse.Err(response.StatusCode).Withf("%s: %s", response.Status, string(data))
 		}
+
+		// If the response code doesn't match, fall back to the raw body text.
+		if httpErr.Code != response.StatusCode {
+			return httpresponse.Err(response.StatusCode).Withf("%s: %s", response.Status, string(data))
+		}
+
+		// Return the error response with any detail from the body
+		return httpErr
 	}
 
 	// When in strict mode, check content type returned is as expected.

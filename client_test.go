@@ -97,7 +97,7 @@ func Test_OptTimeout_sets_value(t *testing.T) {
 	)
 	require.NoError(t, err)
 	// Roundtrip through String() to make sure it surface the timeout
-	assert.Contains(t, c.String(), "5s")
+	assert.Contains(t, c.Timeout.String(), "5s")
 }
 
 func Test_OptTimeout_zero(t *testing.T) {

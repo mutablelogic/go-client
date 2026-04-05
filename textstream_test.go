@@ -191,3 +191,20 @@ func Test_TextStream_FinalEventNoTrailingBlankLine(t *testing.T) {
 	require.Len(t, events, 1)
 	assert.Equal(t, "last", events[0].Data)
 }
+
+func Test_TextStream_LargeDataLine(t *testing.T) {
+	ts := client.NewTextStream()
+	large := strings.Repeat("x", 256*1024)
+	input := "event: result\ndata: " + large + "\n\n"
+
+	var events []client.TextStreamEvent
+	err := ts.Decode(strings.NewReader(input), func(e client.TextStreamEvent) error {
+		events = append(events, e)
+		return nil
+	})
+
+	require.NoError(t, err)
+	require.Len(t, events, 1)
+	assert.Equal(t, "result", events[0].Event)
+	assert.Equal(t, large, events[0].Data)
+}

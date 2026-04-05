@@ -344,14 +344,14 @@ func do(client *http.Client, req *http.Request, accept string, strict bool, out 
 			return httpresponse.Err(response.StatusCode).With(response.Status)
 		}
 
-		// If we can't parse the body as JSON into an ErrResponse, return just the status code
+		// Preserve non-JSON error bodies so callers can surface useful server detail.
 		if err := json.Unmarshal(data, &httpErr); err != nil {
-			return httpresponse.Err(response.StatusCode).With(response.Status)
+			return httpresponse.Err(response.StatusCode).Withf("%s: %s", response.Status, string(data))
 		}
 
-		// If the response code doesn't match
+		// If the response code doesn't match, fall back to the raw body text.
 		if httpErr.Code != response.StatusCode {
-			return httpresponse.Err(response.StatusCode).With(response.Status)
+			return httpresponse.Err(response.StatusCode).Withf("%s: %s", response.Status, string(data))
 		}
 
 		// Return the error response with any detail from the body

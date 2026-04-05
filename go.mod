@@ -7,7 +7,7 @@ require (
 	github.com/andreburgaud/crypt2go v1.8.0
 	github.com/djthorpe/go-errors v1.0.3
 	github.com/djthorpe/go-tablewriter v0.0.11
-	github.com/mutablelogic/go-server v1.6.21
+	github.com/mutablelogic/go-server v1.6.22
 	github.com/stretchr/testify v1.11.1
 	github.com/xdg-go/pbkdf2 v1.0.0
 	go.opentelemetry.io/otel v1.43.0
@@ -27,7 +27,6 @@ require (
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
-	github.com/google/jsonschema-go v0.4.2 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.28.0 // indirect
 	github.com/mattn/go-runewidth v0.0.22 // indirect

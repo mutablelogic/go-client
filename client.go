@@ -51,7 +51,7 @@ type ClientOpt func(*Client) error
 
 // Callback for json stream events, return an error if you want to stop streaming
 // with an error and io.EOF if you want to stop streaming and return success
-type JsonStreamCallback func(v any) error
+type JsonStreamCallback func(json.RawMessage) error
 
 ///////////////////////////////////////////////////////////////////////////////
 // GLOBALS
@@ -212,7 +212,7 @@ func (client *Client) request(ctx context.Context, method, accept, mimetype stri
 	// For SSE or NDJSON streams, disable caching and Nginx proxy buffering so
 	// events are delivered immediately rather than held in intermediate buffers.
 	// Accept may be a comma-separated list so use Contains rather than ==.
-	if strings.Contains(accept, ContentTypeTextStream) || strings.Contains(accept, ContentTypeJsonStream) {
+	if strings.Contains(accept, ContentTypeTextStream) || strings.Contains(accept, ContentTypeJsonStream) || strings.Contains(accept, types.ContentTypeJSONStream) {
 		r.Header.Set("Cache-Control", "no-cache")
 		r.Header.Set("X-Accel-Buffering", "no")
 	}
@@ -367,8 +367,8 @@ func do(client *http.Client, req *http.Request, accept string, strict bool, out 
 		}
 	}
 
-	// Return success if out is nil
-	if out == nil {
+	// Return success if nothing is expected from the response body.
+	if out == nil && reqopts.jsonStreamCallback == nil && reqopts.textStreamCallback == nil {
 		return nil
 	}
 
@@ -388,32 +388,39 @@ func do(client *http.Client, req *http.Request, accept string, strict bool, out 
 		}
 	}
 
-	switch mimetype {
-	case ContentTypeJson, ContentTypeJsonStream:
-		// JSON decode is streamable
+	switch {
+	case mimetype == ContentTypeJson || isJSONStreamContentType(mimetype):
 		dec := json.NewDecoder(response.Body)
-		for {
-			if err := dec.Decode(out); err == io.EOF {
-				break
-			} else if err != nil {
-				return err
-			} else if reqopts.jsonStreamCallback != nil {
-				if err := reqopts.jsonStreamCallback(out); errors.Is(err, io.EOF) {
+		if reqopts.jsonStreamCallback != nil {
+			for {
+				var raw json.RawMessage
+				if err := dec.Decode(&raw); err == io.EOF {
+					break
+				} else if err != nil {
+					return err
+				} else if err := reqopts.jsonStreamCallback(raw); errors.Is(err, io.EOF) {
 					break
 				} else if err != nil {
 					return err
 				}
 			}
+			break
 		}
-	case ContentTypeTextStream:
-		if err := NewTextStream().Decode(response.Body, reqopts.textStreamCallback); err != nil {
-			return err
+		if out == nil {
+			return nil
 		}
-	case ContentTypeTextXml, ContentTypeApplicationXml:
+		for {
+			if err := dec.Decode(out); err == io.EOF {
+				break
+			} else if err != nil {
+				return err
+			}
+		}
+	case mimetype == ContentTypeTextXml || mimetype == ContentTypeApplicationXml:
 		if err := xml.NewDecoder(response.Body).Decode(out); err != nil {
 			return err
 		}
-	case ContentTypeTextPlain:
+	case mimetype == ContentTypeTextPlain:
 		data, err := io.ReadAll(response.Body)
 		if err != nil {
 			return err

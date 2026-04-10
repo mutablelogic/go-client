@@ -202,7 +202,7 @@ modify each individual request when using the `Do` method:
     function to process a streaming text response of type `text/event-stream`, where
     `TextStreamCallback` is `func(TextStreamEvent) error`. See below for more details.
 * `OptJsonStreamCallback(fn JsonStreamCallback)` allows you to set a callback for JSON streaming
-    responses, where `JsonStreamCallback` is `func(any) error`. See below for more details.
+    responses, where `JsonStreamCallback` is `func(json.RawMessage) error`. See below for more details.
 
 ## Authentication
 
@@ -334,7 +334,7 @@ func Callback(event client.TextStreamEvent) error {
 
     // Decode the data into a JSON object
     var data map[string]any
-    if err := event.Json(data); err != nil {
+    if err := event.Json(&data); err != nil {
         return err
     }
 
@@ -369,18 +369,148 @@ if err := stream.Decode(r, callback); err != nil {
 }
 ```
 
-When the `Accept` type of the payload is `text/event-stream` or `application/x-ndjson`, the client
-automatically adds `Cache-Control: no-cache` and `X-Accel-Buffering: no` request headers to
-prevent intermediate proxies (including Nginx) from buffering the stream.
+## JSON Streaming
 
-## JSON Streaming Responses
+The client supports both one-way NDJSON response streaming and bi-directional NDJSON channels.
 
-The client decodes JSON streaming responses by passing a callback function to the `OptJsonStreamCallback()` option.
-The callback with signature `func(any) error` is called for each JSON object in the stream, where the argument
-is the same type as the object in the request.
+### JSON Streaming Responses
+
+For one-way JSON streaming responses, pass a callback function to the `OptJsonStreamCallback()` option.
+The callback with signature `func(json.RawMessage) error` is called for each JSON object in the stream.
+Decode the raw frame into the concrete type you expect.
+
+```go
+package main
+
+import (
+    "encoding/json"
+    "io"
+    "log"
+    "net/http"
+
+    client "github.com/mutablelogic/go-client"
+)
+
+type Event struct {
+    Value int `json:"value"`
+}
+
+func main() {
+    c, err := client.New(client.OptEndpoint("https://api.example.com"))
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    err = c.Do(
+        client.NewRequestEx(http.MethodGet, client.ContentTypeJsonStream),
+        nil,
+        client.OptPath("events"),
+        client.OptNoTimeout(),
+        client.OptJsonStreamCallback(func(v json.RawMessage) error {
+            var event Event
+            if err := json.Unmarshal(v, &event); err != nil {
+                return err
+            }
+            log.Printf("value=%d", event.Value)
+            if event.Value >= 100 {
+                return io.EOF
+            }
+            return nil
+        }),
+    )
+    if err != nil {
+        log.Fatal(err)
+    }
+}
+```
 
 You can return an error from the callback to stop the stream and return the error, or return `io.EOF` to stop the stream
 immediately and return success.
+
+### Bi-Directional JSON Streams
+
+Use `Client.Stream(ctx, opts...)` to open a bi-directional JSON stream. The returned `JSONStream`
+lets you send newline-delimited JSON request frames with `Send`, receive response frames with `Recv`,
+close the outbound side with `CloseSend`, and tear down both sides with `Close`.
+
+Blank response lines are treated as keep-alive heartbeats and `Recv` returns `nil, nil` for them.
+
+```go
+package main
+
+import (
+    "context"
+    "encoding/json"
+    "io"
+    "log"
+    "time"
+
+    client "github.com/mutablelogic/go-client"
+)
+
+type Reply struct {
+    Echo string `json:"echo"`
+}
+
+func main() {
+    ctx, cancel := context.WithCancel(context.Background())
+    defer cancel()
+
+    // Create a new client
+    c, err := client.New(client.OptEndpoint("https://api.example.com"))
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    // Create a bi-directional JSON stream to a server
+    stream, err := c.Stream(ctx,client.OptPath("session", "1234", "channel"),client.OptNoTimeout())
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer stream.Close()
+
+    // Background goroutine to send JSON frames every 5 seconds until the context is cancelled
+    go func() {
+        ticker := time.NewTicker(5 * time.Second)
+        defer ticker.Stop()
+
+        for {
+            select {
+            case <-ctx.Done():
+                _ = stream.CloseSend()
+                return
+            case <-ticker.C:
+                frame := json.RawMessage(`{"text":"status"}`)
+                if err := stream.Send(frame); err != nil {
+                    log.Printf("send error: %v", err)
+                    cancel()
+                    return
+                }
+            }
+        }
+    }()
+
+    // Foreground loop to receive JSON frames until the stream is closed or an error occurs
+    for {
+        frame, err := stream.Recv()
+        if err == io.EOF {
+            break
+        }
+        if err != nil {
+            log.Fatal(err)
+        }
+        if len(frame) == 0 {
+            continue // keep-alive heartbeat
+        }
+
+        var reply Reply
+        if err := json.Unmarshal(frame, &reply); err != nil {
+            log.Fatal(err)
+        }
+        log.Printf("reply=%s", reply.Echo)
+    }
+}
+```
 
 ## Transport Middleware
 

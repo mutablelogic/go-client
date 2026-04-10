@@ -8,14 +8,13 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"strconv"
 	"strings"
 	"time"
 
 	// Packages
 	"github.com/mutablelogic/go-client"
-	"github.com/mutablelogic/go-client/pkg/version"
+	"github.com/mutablelogic/go-server/pkg/version"
 
 	// Namespace imports
 	. "github.com/djthorpe/go-errors"
@@ -204,29 +203,7 @@ func (flags *Flags) Cmd() *Cmd {
 
 // PrintVersion prints the version of the application
 func (flags *Flags) PrintVersion() {
-	w := flags.Output()
-	fmt.Fprintf(w, "%v", flags.Name())
-	if version.GitSource != "" {
-		if version.GitTag != "" {
-			fmt.Fprintf(w, " %v", version.GitTag)
-		}
-		if version.GitSource != "" {
-			fmt.Fprintf(w, " (%v)", version.GitSource)
-		}
-		fmt.Fprintln(w, "")
-	}
-	if runtime.Version() != "" {
-		fmt.Fprintf(w, "%v %v/%v\n", runtime.Version(), runtime.GOOS, runtime.GOARCH)
-	}
-	if version.GitBranch != "" {
-		fmt.Fprintf(w, "Branch: %v\n", version.GitBranch)
-	}
-	if version.GitHash != "" {
-		fmt.Fprintf(w, "Hash: %v\n", version.GitHash)
-	}
-	if version.GoBuildTime != "" {
-		fmt.Fprintf(w, "BuildTime: %v\n", version.GoBuildTime)
-	}
+	fmt.Fprintln(flags.Output(), string(version.JSON(flags.Name())))
 }
 
 // PrintUsage prints the usage of the application

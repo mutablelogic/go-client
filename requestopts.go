@@ -139,7 +139,7 @@ func OptTextStreamCallback(fn TextStreamCallback) RequestOpt {
 	}
 }
 
-// OptJsonStreamCallback is called for each decoded JSON event
+// OptJsonStreamCallback is called for each raw JSON event
 func OptJsonStreamCallback(fn JsonStreamCallback) RequestOpt {
 	return func(r *requestOpts) error {
 		r.jsonStreamCallback = fn

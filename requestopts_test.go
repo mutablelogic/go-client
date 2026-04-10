@@ -1,6 +1,7 @@
 package client_test
 
 import (
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -430,8 +431,12 @@ func Test_OptJsonStreamCallback_EventsDelivered(t *testing.T) {
 	err = c.Do(
 		client.NewRequestEx(http.MethodGet, client.ContentTypeJsonStream),
 		out,
-		client.OptJsonStreamCallback(func(v any) error {
-			values = append(values, v.(*jsonStreamEvent).Value)
+		client.OptJsonStreamCallback(func(v json.RawMessage) error {
+			var event jsonStreamEvent
+			if err := json.Unmarshal(v, &event); err != nil {
+				return err
+			}
+			values = append(values, event.Value)
 			return nil
 		}),
 	)
@@ -455,7 +460,7 @@ func Test_OptJsonStreamCallback_EOFStopsCleanly(t *testing.T) {
 	err = c.Do(
 		client.NewRequestEx(http.MethodGet, client.ContentTypeJsonStream),
 		out,
-		client.OptJsonStreamCallback(func(v any) error {
+		client.OptJsonStreamCallback(func(v json.RawMessage) error {
 			count++
 			return io.EOF // stop after the first decoded event
 		}),

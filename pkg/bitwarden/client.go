@@ -9,6 +9,7 @@ import (
 	// Packages
 	client "github.com/mutablelogic/go-client"
 	schema "github.com/mutablelogic/go-client/pkg/bitwarden/schema"
+	"github.com/mutablelogic/go-server/pkg/types"
 
 	// Namespace imports
 	. "github.com/djthorpe/go-errors"
@@ -147,7 +148,7 @@ func (c *Client) Login(opts ...RequestOpt) error {
 	if !c.session.IsValid() {
 		// Request -> Response
 		request.Device = c.session.Device
-		if payload, err := client.NewFormRequest(request, client.ContentTypeJson); err != nil {
+		if payload, err := client.NewFormRequest(request, types.ContentTypeJSON); err != nil {
 			return err
 		} else if err := c.client.Do(payload, &response, client.OptReqEndpoint(identityUrl), client.OptPath("connect", "token")); err != nil {
 			return err

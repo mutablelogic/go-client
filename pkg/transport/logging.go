@@ -87,11 +87,12 @@ func (t *Logging) Payload(v interface{}) {
 func (t *Logging) RoundTrip(req *http.Request) (*http.Response, error) {
 	// Clone the request before mutating it (RoundTripper must not modify the original)
 	req = req.Clone(req.Context())
+	contentType, _, _ := mime.ParseMediaType(req.Header.Get("Content-Type"))
 
 	// Pre-read the request body only when verbose logging is enabled so that
 	// non-verbose mode never buffers or truncates streaming/large bodies.
 	var rw readwrapper
-	if t.v && req.Body != nil {
+	if t.v && req.Body != nil && !isStreamingContentType(contentType) {
 		raw, err := io.ReadAll(req.Body)
 		_ = req.Body.Close()
 		if err != nil {
@@ -133,7 +134,7 @@ func (t *Logging) RoundTrip(req *http.Request) (*http.Response, error) {
 		contentType, _, _ := mime.ParseMediaType(resp.Header.Get("Content-Type"))
 
 		switch {
-		case contentType == types.ContentTypeTextStream || contentType == contentTypeJSONStream:
+		case isStreamingContentType(contentType):
 			// Streaming: tee through a line-buffered writer so each line appears in real-time
 			// without consuming the stream eagerly.
 			lw := &lineWriter{w: t.w}
@@ -148,7 +149,7 @@ func (t *Logging) RoundTrip(req *http.Request) (*http.Response, error) {
 			if readErr != nil {
 				return resp, fmt.Errorf("logging: read response body: %w", readErr)
 			}
-			dst := &bytes.Buffer{}
+			dst := new(bytes.Buffer)
 			if err := json.Indent(dst, body, "    ", "  "); err != nil {
 				fmt.Fprintf(t.w, "  <= %q\n", string(body))
 			} else {
@@ -230,6 +231,15 @@ func logHeaderValues(key string, values []string) []string {
 		return []string{redactedValue}
 	}
 	return values
+}
+
+func isStreamingContentType(contentType string) bool {
+	switch contentType {
+	case types.ContentTypeTextStream, types.ContentTypeJSONStream, contentTypeJSONStream:
+		return true
+	default:
+		return false
+	}
 }
 
 func (w *readwrapper) as(mimetype string) ([]byte, error) {

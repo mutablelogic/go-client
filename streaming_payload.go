@@ -6,6 +6,7 @@ import (
 
 	// Packages
 	"github.com/mutablelogic/go-client/pkg/multipart"
+	"github.com/mutablelogic/go-server/pkg/types"
 )
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -83,7 +84,7 @@ func (req *streamingRequest) Type() string {
 // Accept returns the acceptable mimetype responses
 func (req *streamingRequest) Accept() string {
 	if req.accept == "" {
-		return ContentTypeAny
+		return types.ContentTypeAny
 	}
 	return req.accept
 }

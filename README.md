@@ -402,7 +402,7 @@ func main() {
     }
 
     err = c.Do(
-        client.NewRequestEx(http.MethodGet, client.ContentTypeJsonStream),
+        client.NewRequestEx(http.MethodGet, "application/ndjson"),
         nil,
         client.OptPath("events"),
         client.OptNoTimeout(),
@@ -429,11 +429,19 @@ immediately and return success.
 
 ### Bi-Directional JSON Streams
 
-Use `Client.Stream(ctx, opts...)` to open a bi-directional JSON stream. The returned `JSONStream`
-lets you send newline-delimited JSON request frames with `Send`, receive response frames with `Recv`,
-close the outbound side with `CloseSend`, and tear down both sides with `Close`.
+Use `Client.Stream(ctx, callback, opts...)` to open a bi-directional NDJSON stream.
+The callback receives a `JSONStream`, which lets you send newline-delimited JSON
+request frames with `Send` and receive response frames from the channel returned
+by `Recv`.
 
-Blank response lines are treated as keep-alive heartbeats and `Recv` returns `nil, nil` for them.
+Returning from the callback closes the stream. Canceling the context passed to
+`Client.Stream` also closes the stream. Blank response lines are treated as
+keep-alive heartbeats and are delivered as `nil` frames on the receive channel.
+
+The receive side starts immediately when the stream opens. Callbacks should keep
+draining `Recv()` while the stream is active; if responses are not consumed and
+the internal receive buffer fills, the stream is canceled to avoid a full-duplex
+deadlock.
 
 ```go
 package main
@@ -441,7 +449,6 @@ package main
 import (
     "context"
     "encoding/json"
-    "io"
     "log"
     "time"
 
@@ -462,52 +469,37 @@ func main() {
         log.Fatal(err)
     }
 
-    // Create a bi-directional JSON stream to a server
-    stream, err := c.Stream(ctx,client.OptPath("session", "1234", "channel"),client.OptNoTimeout())
-    if err != nil {
-        log.Fatal(err)
-    }
-    defer stream.Close()
-
-    // Background goroutine to send JSON frames every 5 seconds until the context is cancelled
-    go func() {
+    // Run the stream until the callback returns or the context is cancelled.
+    if err := c.Stream(ctx, func(ctx context.Context, stream client.JSONStream) error {
         ticker := time.NewTicker(5 * time.Second)
         defer ticker.Stop()
 
         for {
             select {
-            case <-ctx.Done():
-                _ = stream.CloseSend()
-                return
             case <-ticker.C:
                 frame := json.RawMessage(`{"text":"status"}`)
                 if err := stream.Send(frame); err != nil {
-                    log.Printf("send error: %v", err)
-                    cancel()
-                    return
+                    return err
                 }
+            case frame, ok := <-stream.Recv():
+                if !ok {
+                    return nil
+                }
+                if frame == nil {
+                    continue // keep-alive heartbeat
+                }
+
+                var reply Reply
+                if err := json.Unmarshal(frame, &reply); err != nil {
+                    return err
+                }
+                log.Printf("reply=%s", reply.Echo)
+            case <-ctx.Done():
+                return ctx.Err()
             }
         }
-    }()
-
-    // Foreground loop to receive JSON frames until the stream is closed or an error occurs
-    for {
-        frame, err := stream.Recv()
-        if err == io.EOF {
-            break
-        }
-        if err != nil {
-            log.Fatal(err)
-        }
-        if len(frame) == 0 {
-            continue // keep-alive heartbeat
-        }
-
-        var reply Reply
-        if err := json.Unmarshal(frame, &reply); err != nil {
-            log.Fatal(err)
-        }
-        log.Printf("reply=%s", reply.Echo)
+    }, client.OptPath("session", "1234", "channel"), client.OptNoTimeout()); err != nil {
+        log.Fatal(err)
     }
 }
 ```
@@ -522,8 +514,8 @@ follows the same constructor pattern `New*(... , parent http.RoundTripper)` and 
 ### Logging Transport
 
 `transport.NewLogging` logs every request and response to an `io.Writer`. When `verbose` is true
-the request and response bodies are also printed; `text/event-stream` bodies are printed
-line-by-line as events arrive rather than buffered:
+the request and response bodies are also printed; `text/event-stream` and NDJSON streaming bodies
+are printed line-by-line as events arrive rather than buffered:
 
 ```go
 import (

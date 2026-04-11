@@ -57,17 +57,9 @@ type JsonStreamCallback func(json.RawMessage) error
 // GLOBALS
 
 const (
-	DefaultTimeout            = time.Second * 30
-	DefaultUserAgent          = "github.com/mutablelogic/go-client"
-	PathSeparator             = "/"
-	ContentTypeAny            = types.ContentTypeAny
-	ContentTypeJson           = types.ContentTypeJSON
-	ContentTypeJsonStream     = "application/x-ndjson"
-	ContentTypeTextXml        = types.ContentTypeTextXml
-	ContentTypeApplicationXml = types.ContentTypeXML
-	ContentTypeTextPlain      = types.ContentTypeTextPlain
-	ContentTypeTextHTML       = "text/html"
-	ContentTypeBinary         = types.ContentTypeBinary
+	DefaultTimeout   = time.Second * 30
+	DefaultUserAgent = "github.com/mutablelogic/go-client"
+	PathSeparator    = "/"
 )
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -200,19 +192,19 @@ func (client *Client) request(ctx context.Context, method, accept, mimetype stri
 	// Set the credentials and user agent
 	if body != nil {
 		if mimetype == "" {
-			mimetype = ContentTypeJson
+			mimetype = types.ContentTypeJSON
 		}
 		r.Header.Set("Content-Type", mimetype)
 	}
 	if accept != "" {
 		r.Header.Set("Accept", accept)
 	} else {
-		r.Header.Set("Accept", ContentTypeAny)
+		r.Header.Set("Accept", types.ContentTypeAny)
 	}
 	// For SSE or NDJSON streams, disable caching and Nginx proxy buffering so
 	// events are delivered immediately rather than held in intermediate buffers.
 	// Accept may be a comma-separated list so use Contains rather than ==.
-	if strings.Contains(accept, ContentTypeTextStream) || strings.Contains(accept, ContentTypeJsonStream) || strings.Contains(accept, types.ContentTypeJSONStream) {
+	if strings.Contains(accept, types.ContentTypeTextStream) || strings.Contains(accept, types.ContentTypeJSONStream) {
 		r.Header.Set("Cache-Control", "no-cache")
 		r.Header.Set("X-Accel-Buffering", "no")
 	}
@@ -361,7 +353,7 @@ func do(client *http.Client, req *http.Request, accept string, strict bool, out 
 	// When in strict mode, check content type returned is as expected.
 	// Use 406 Not Acceptable since this is client-side validation that the
 	// server's response doesn't match our Accept header expectations.
-	if strict && (accept != "" && accept != ContentTypeAny) {
+	if strict && (accept != "" && accept != types.ContentTypeAny) {
 		if mimetype != accept {
 			return httpresponse.Err(http.StatusNotAcceptable).Withf("strict mode: expected %q, got %q", accept, mimetype)
 		}
@@ -389,7 +381,7 @@ func do(client *http.Client, req *http.Request, accept string, strict bool, out 
 	}
 
 	switch {
-	case mimetype == ContentTypeJson || isJSONStreamContentType(mimetype):
+	case mimetype == types.ContentTypeJSON || mimetype == types.ContentTypeJSONStream:
 		dec := json.NewDecoder(response.Body)
 		if reqopts.jsonStreamCallback != nil {
 			for {
@@ -416,11 +408,11 @@ func do(client *http.Client, req *http.Request, accept string, strict bool, out 
 				return err
 			}
 		}
-	case mimetype == ContentTypeTextXml || mimetype == ContentTypeApplicationXml:
+	case mimetype == types.ContentTypeTextXml || mimetype == types.ContentTypeXML:
 		if err := xml.NewDecoder(response.Body).Decode(out); err != nil {
 			return err
 		}
-	case mimetype == ContentTypeTextPlain:
+	case mimetype == types.ContentTypeTextPlain:
 		data, err := io.ReadAll(response.Body)
 		if err != nil {
 			return err
@@ -455,7 +447,7 @@ func do(client *http.Client, req *http.Request, accept string, strict bool, out 
 func respContentType(resp *http.Response) (string, error) {
 	contenttype := resp.Header.Get("Content-Type")
 	if contenttype == "" {
-		return ContentTypeBinary, nil
+		return types.ContentTypeBinary, nil
 	}
 	if mimetype, err := types.ParseContentType(contenttype); err != nil {
 		return contenttype, httpresponse.Err(http.StatusUnsupportedMediaType).With(contenttype)

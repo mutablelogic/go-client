@@ -8,7 +8,8 @@ import (
 	"strconv"
 
 	// Packages
-	"github.com/mutablelogic/go-client/pkg/multipart"
+	multipart "github.com/mutablelogic/go-client/pkg/multipart"
+	types "github.com/mutablelogic/go-server/pkg/types"
 )
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -33,10 +34,10 @@ type Payload interface {
 // GLOBALS
 
 var (
-	MethodGet    = NewRequestEx(http.MethodGet, ContentTypeAny)
-	MethodHead   = NewRequestEx(http.MethodHead, ContentTypeAny)
-	MethodDelete = NewRequestEx(http.MethodDelete, ContentTypeAny)
-	MethodPut    = NewRequestEx(http.MethodPut, ContentTypeAny)
+	MethodGet    = NewRequestEx(http.MethodGet, types.ContentTypeAny)
+	MethodHead   = NewRequestEx(http.MethodHead, types.ContentTypeAny)
+	MethodDelete = NewRequestEx(http.MethodDelete, types.ContentTypeAny)
+	MethodPut    = NewRequestEx(http.MethodPut, types.ContentTypeAny)
 )
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -44,7 +45,7 @@ var (
 
 // Return a new empty request which defaults to GET
 func NewRequest() Payload {
-	return NewRequestEx(http.MethodGet, ContentTypeAny)
+	return NewRequestEx(http.MethodGet, types.ContentTypeAny)
 }
 
 // Return a new empty request. The accept parameter is the accepted mime-type
@@ -58,7 +59,7 @@ func NewRequestEx(method, accept string) Payload {
 
 // Return a new request with a JSON payload which defaults to POST.
 func NewJSONRequest(payload any) (Payload, error) {
-	return NewJSONRequestEx(http.MethodPost, payload, ContentTypeAny)
+	return NewJSONRequestEx(http.MethodPost, payload, types.ContentTypeAny)
 }
 
 // Return a new request with a JSON payload with method.  The accept
@@ -66,7 +67,7 @@ func NewJSONRequest(payload any) (Payload, error) {
 func NewJSONRequestEx(method string, payload any, accept string) (Payload, error) {
 	this := new(request)
 	this.method = method
-	this.mimetype = ContentTypeJson
+	this.mimetype = types.ContentTypeJSON
 	this.accept = accept
 	this.buffer = new(bytes.Buffer)
 	if err := json.NewEncoder(this.buffer).Encode(payload); err != nil {
@@ -150,7 +151,7 @@ func (req *request) Type() string {
 // Return the acceptable mimetype responses
 func (req *request) Accept() string {
 	if req.accept == "" {
-		return ContentTypeAny
+		return types.ContentTypeAny
 	} else {
 		return req.accept
 	}

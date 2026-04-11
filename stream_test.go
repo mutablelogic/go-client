@@ -5,6 +5,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -17,12 +19,25 @@ import (
 	require "github.com/stretchr/testify/require"
 )
 
-func recvFrame(t *testing.T, stream *client.JSONStream) (json.RawMessage, bool) {
-	t.Helper()
+func recvFrame(stream client.JSONStream) (json.RawMessage, bool, error) {
 	ch := stream.Recv()
-	require.NotNil(t, ch)
-	frame, ok := <-ch
-	return frame, ok
+	if ch == nil {
+		return nil, false, errors.New("recv channel is nil")
+	}
+	select {
+	case frame, ok := <-ch:
+		return frame, ok, nil
+	case <-time.After(time.Second):
+		return nil, false, errors.New("timed out waiting for stream frame")
+	}
+}
+
+func runStream(ctx context.Context, c *client.Client, callback func(context.Context, client.JSONStream) error, opts ...client.RequestOpt) <-chan error {
+	errch := make(chan error, 1)
+	go func() {
+		errch <- c.Stream(ctx, callback, opts...)
+	}()
+	return errch
 }
 
 func Test_JSONStream_Exchange(t *testing.T) {
@@ -61,7 +76,7 @@ func Test_JSONStream_Exchange(t *testing.T) {
 				flusher.Flush()
 			}
 		}
-		if err := scanner.Err(); err != nil {
+		if err := scanner.Err(); err != nil && !errors.Is(err, io.ErrUnexpectedEOF) {
 			t.Fatalf("server scanner: %v", err)
 		}
 	}))
@@ -70,25 +85,38 @@ func Test_JSONStream_Exchange(t *testing.T) {
 	c, err := client.New(client.OptEndpoint(srv.URL))
 	require.NoError(t, err)
 
-	stream, err := c.Stream(context.Background(), client.OptNoTimeout())
+	err = c.Stream(context.Background(), func(ctx context.Context, stream client.JSONStream) error {
+		if err := stream.Send(json.RawMessage(`{"text":"hello"}`)); err != nil {
+			return err
+		}
+		frame, ok, err := recvFrame(stream)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return errors.New("expected first response frame")
+		}
+		if string(frame) != `{"echo":"hello"}` {
+			return fmt.Errorf("unexpected first response frame: %s", frame)
+		}
+
+		if err := stream.Send(json.RawMessage(`{"text":"world"}`)); err != nil {
+			return err
+		}
+		frame, ok, err = recvFrame(stream)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return errors.New("expected second response frame")
+		}
+		if string(frame) != `{"echo":"world"}` {
+			return fmt.Errorf("unexpected second response frame: %s", frame)
+		}
+
+		return nil
+	}, client.OptNoTimeout())
 	require.NoError(t, err)
-	defer stream.Close()
-
-	require.NoError(t, stream.Send(json.RawMessage(`{"text":"hello"}`)))
-	frame, ok := recvFrame(t, stream)
-	require.True(t, ok)
-	assert.Equal(t, json.RawMessage(`{"echo":"hello"}`), frame)
-
-	require.NoError(t, stream.Send(json.RawMessage(`{"text":"world"}`)))
-	require.NoError(t, stream.CloseSend())
-
-	frame, ok = recvFrame(t, stream)
-	require.True(t, ok)
-	assert.Equal(t, json.RawMessage(`{"echo":"world"}`), frame)
-
-	frame, ok = recvFrame(t, stream)
-	assert.Nil(t, frame)
-	assert.False(t, ok)
 }
 
 func Test_JSONStream_KeepAlive(t *testing.T) {
@@ -109,21 +137,35 @@ func Test_JSONStream_KeepAlive(t *testing.T) {
 	c, err := client.New(client.OptEndpoint(srv.URL))
 	require.NoError(t, err)
 
-	stream, err := c.Stream(context.Background())
+	err = c.Stream(context.Background(), func(ctx context.Context, stream client.JSONStream) error {
+		frame, ok, err := recvFrame(stream)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return errors.New("expected heartbeat frame")
+		}
+		if frame != nil {
+			return fmt.Errorf("expected nil heartbeat frame, got: %s", frame)
+		}
+
+		frame, ok, err = recvFrame(stream)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return errors.New("expected ok frame after heartbeat")
+		}
+		if string(frame) != `{"ok":true}` {
+			return fmt.Errorf("unexpected response frame: %s", frame)
+		}
+
+		return nil
+	})
 	require.NoError(t, err)
-	defer stream.Close()
-	require.NoError(t, stream.CloseSend())
-
-	frame, ok := recvFrame(t, stream)
-	require.True(t, ok)
-	assert.Nil(t, frame)
-
-	frame, ok = recvFrame(t, stream)
-	require.True(t, ok)
-	assert.Equal(t, json.RawMessage(`{"ok":true}`), frame)
 }
 
-func Test_JSONStream_AcceptsLegacyContentType(t *testing.T) {
+func Test_JSONStream_RejectsLegacyContentTypeDuringProbe(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer r.Body.Close()
 		if rc := http.NewResponseController(w); rc != nil {
@@ -141,14 +183,11 @@ func Test_JSONStream_AcceptsLegacyContentType(t *testing.T) {
 	c, err := client.New(client.OptEndpoint(srv.URL))
 	require.NoError(t, err)
 
-	stream, err := c.Stream(context.Background())
-	require.NoError(t, err)
-	defer stream.Close()
-	require.NoError(t, stream.CloseSend())
-
-	frame, ok := recvFrame(t, stream)
-	require.True(t, ok)
-	assert.Equal(t, json.RawMessage(`{"ok":true}`), frame)
+	err = c.Stream(context.Background(), func(ctx context.Context, stream client.JSONStream) error {
+		return nil
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "strict mode")
 }
 
 func Test_JSONStream_RecvClosesOnContextCancel(t *testing.T) {
@@ -174,26 +213,38 @@ func Test_JSONStream_RecvClosesOnContextCancel(t *testing.T) {
 	c, err := client.New(client.OptEndpoint(srv.URL))
 	require.NoError(t, err)
 
-	stream, err := c.Stream(ctx, client.OptNoTimeout())
-	require.NoError(t, err)
-	defer stream.Close()
+	gotFrame := make(chan struct{})
+	errch := runStream(ctx, c, func(ctx context.Context, stream client.JSONStream) error {
+		frame, ok, err := recvFrame(stream)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return errors.New("expected initial response frame")
+		}
+		if string(frame) != `{"ok":true}` {
+			return fmt.Errorf("unexpected initial response frame: %s", frame)
+		}
+		close(gotFrame)
 
-	frame, ok := recvFrame(t, stream)
-	require.True(t, ok)
-	assert.Equal(t, json.RawMessage(`{"ok":true}`), frame)
+		ch := stream.Recv()
+		if ch == nil {
+			return errors.New("recv channel is nil")
+		}
+		select {
+		case frame, ok := <-ch:
+			if frame != nil || ok {
+				return fmt.Errorf("expected recv channel to close, got frame=%s ok=%v", frame, ok)
+			}
+			return nil
+		case <-time.After(time.Second):
+			return errors.New("timed out waiting for recv channel to close after cancellation")
+		}
+	}, client.OptNoTimeout())
 
-	ch := stream.Recv()
-	require.NotNil(t, ch)
-
+	<-gotFrame
 	cancel()
-
-	select {
-	case frame, ok = <-ch:
-		assert.Nil(t, frame)
-		assert.False(t, ok)
-	case <-time.After(time.Second):
-		t.Fatal("timed out waiting for Recv channel to close after context cancellation")
-	}
+	require.NoError(t, <-errch)
 }
 
 func Test_JSONStream_StreamReturnsOnContextCancelWhileOpening(t *testing.T) {
@@ -206,11 +257,10 @@ func Test_JSONStream_StreamReturnsOnContextCancelWhileOpening(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	errch := make(chan error, 1)
-	go func() {
-		_, err := c.Stream(ctx, client.OptNoTimeout())
-		errch <- err
-	}()
+	errch := runStream(ctx, c, func(ctx context.Context, stream client.JSONStream) error {
+		<-ctx.Done()
+		return nil
+	}, client.OptNoTimeout())
 
 	cancel()
 
@@ -232,11 +282,10 @@ func Test_JSONStream_StreamReturnsErrorOnNotFound(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
-	errch := make(chan error, 1)
-	go func() {
-		_, err := c.Stream(ctx, client.OptNoTimeout())
-		errch <- err
-	}()
+	errch := runStream(ctx, c, func(ctx context.Context, stream client.JSONStream) error {
+		<-ctx.Done()
+		return nil
+	}, client.OptNoTimeout())
 
 	select {
 	case err := <-errch:
@@ -278,18 +327,24 @@ func Test_JSONStream_ProbeHonorsRequestOptions(t *testing.T) {
 	c, err := client.New(client.OptEndpoint(srv.URL))
 	require.NoError(t, err)
 
-	stream, err := c.Stream(context.Background(), client.OptPath("stream"), client.OptReqHeader("X-Test", "token"))
+	err = c.Stream(context.Background(), func(ctx context.Context, stream client.JSONStream) error {
+		frame, ok, err := recvFrame(stream)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return errors.New("expected response frame")
+		}
+		if string(frame) != `{"ok":true}` {
+			return fmt.Errorf("unexpected response frame: %s", frame)
+		}
+		return nil
+	}, client.OptPath("stream"), client.OptReqHeader("X-Test", "token"))
 	require.NoError(t, err)
-	defer stream.Close()
-	defer stream.CloseSend()
-
-	frame, ok := recvFrame(t, stream)
-	require.True(t, ok)
-	assert.Equal(t, json.RawMessage(`{"ok":true}`), frame)
 	assert.Equal(t, 2, requestCount)
 }
 
-func Test_JSONStream_RecvReturnsClosedChannelAfterClose(t *testing.T) {
+func Test_JSONStream_RecvReturnsClosedChannelAfterContextCancelBeforeFrame(t *testing.T) {
 	release := make(chan struct{})
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if rc := http.NewResponseController(w); rc != nil {
@@ -311,23 +366,27 @@ func Test_JSONStream_RecvReturnsClosedChannelAfterClose(t *testing.T) {
 	c, err := client.New(client.OptEndpoint(srv.URL))
 	require.NoError(t, err)
 
-	stream, err := c.Stream(ctx, client.OptNoTimeout())
-	require.NoError(t, err)
-
-	cancel()
-	require.Eventually(t, func() bool {
-		select {
-		case _, ok := <-stream.Recv():
-			return !ok
-		default:
-			return false
+	started := make(chan struct{})
+	errch := runStream(ctx, c, func(ctx context.Context, stream client.JSONStream) error {
+		close(started)
+		ch := stream.Recv()
+		if ch == nil {
+			return errors.New("recv channel is nil")
 		}
-	}, time.Second, 10*time.Millisecond)
+		select {
+		case frame, ok := <-ch:
+			if frame != nil || ok {
+				return fmt.Errorf("expected closed recv channel, got frame=%s ok=%v", frame, ok)
+			}
+			return nil
+		case <-time.After(time.Second):
+			return errors.New("timed out waiting for recv channel to close")
+		}
+	}, client.OptNoTimeout())
 
-	ch := stream.Recv()
-	require.NotNil(t, ch)
-	frame, ok := <-ch
-	assert.Nil(t, frame)
-	assert.False(t, ok)
-	assert.NoError(t, stream.Close())
+	<-started
+	cancel()
+	err = <-errch
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "context canceled")
 }

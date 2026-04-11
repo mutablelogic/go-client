@@ -21,15 +21,20 @@ import (
 // TYPES
 
 type jsonstream struct {
-	req      *jsonrequest
-	response *http.Response
-	reader   *bufio.Reader
-	ready    chan struct{}
-	recv     sync.Once
-	ctx      context.Context
-	recvch   chan json.RawMessage
+	req             *jsonrequest         // The request payload used to send frames to the server
+	response        *http.Response       // The response from the server, used to read frames from the server
+	reader          *bufio.Reader        // The buffered reader used to read frames from the server
+	ready           chan struct{}        // A channel that signals when the stream is ready to receive frames
+	ctx             context.Context      // The context for the stream, used to cancel operations
+	cancel          context.CancelFunc   // Cancel the stream when the receive loop encounters a fatal error
+	recvch          chan json.RawMessage // The channel used to receive JSON frames
+	cancelReadClose func() bool          // A function to cancel the read and close operations
 }
 
+// JSONStream is an interface representing a bi-directional JSON streaming connection. Start a connection
+// with Client.Stream, which provides a callback with a JSONStream to send and receive frames.
+// Return from the callback to close the stream. The stream is also closed if the context passed
+// to Client.Stream is canceled.
 type JSONStream interface {
 	Recv() <-chan json.RawMessage
 	Send(json.RawMessage) error
@@ -65,9 +70,11 @@ func (client *Client) Stream(ctx context.Context, callback func(context.Context,
 	self := types.Ptr(jsonstream{
 		req:    req,
 		ctx:    errctx,
+		cancel: cancel,
 		ready:  make(chan struct{}),
-		recvch: make(chan json.RawMessage),
+		recvch: make(chan json.RawMessage, 16),
 	})
+	go self.recvLoop()
 
 	// Open the stream in one go routine
 	errgroup.Go(func() error {
@@ -80,6 +87,9 @@ func (client *Client) Stream(ctx context.Context, callback func(context.Context,
 		} else {
 			self.response = response
 			self.reader = bufio.NewReader(response.Body)
+			self.cancelReadClose = context.AfterFunc(errctx, func() {
+				response.Body.Close()
+			})
 		}
 
 		// Return success
@@ -95,88 +105,85 @@ func (client *Client) Stream(ctx context.Context, callback func(context.Context,
 		return callback(errctx, self)
 	})
 
-	// Wait for both go routines to finish, return any errors
+	// Wait for both go routines to finish, close request, and return any errors
 	result := errgroup.Wait()
-
-	// Close the stream, return any errors
-	if self.req != nil {
-		result = errors.Join(result, self.req.Close())
+	if self.cancelReadClose != nil {
+		_ = self.cancelReadClose()
 	}
 	if self.response != nil && self.response.Body != nil {
 		result = errors.Join(result, self.response.Body.Close())
+	}
+	if self.req != nil {
+		result = errors.Join(result, self.req.Close())
 	}
 	return result
 }
 
 func (s *jsonstream) Recv() <-chan json.RawMessage {
-	s.recv.Do(func() {
-		go func() {
-			// Close the receive channel when the loop exits
-			defer close(s.recvch)
-
-			// Wait for the stream to be ready before starting to read frames,
-			// or return if the context is canceled
-			select {
-			case <-s.ready:
-			case <-s.ctx.Done():
-				return
-			}
-
-			// If reader is nil, the stream failed to open, so return immediately
-			if s.reader == nil {
-				return
-			}
-
-			// Read frames until the stream is closed or an error occurs
-			for {
-				// Read a single line from the response body
-				line, err := s.reader.ReadBytes('\n')
-				if err != nil {
-					if err != io.EOF || len(line) == 0 {
-						return
-					}
-				}
-				if err != nil {
-					if err != io.EOF || len(line) == 0 {
-						return
-					}
-				}
-
-				// Handle pings
-				frame := bytes.TrimSpace(line)
-				if len(frame) == 0 {
-					select {
-					case <-s.ctx.Done():
-						return
-					case s.recvch <- nil:
-					}
-					if err == io.EOF {
-						return
-					}
-					continue
-				}
-
-				// Handle messages
-				var raw json.RawMessage
-				if err := json.Unmarshal(frame, &raw); err != nil {
-					return
-				}
-
-				// Send the frame to the receive channel, or exit if the context is canceled
-				select {
-				case <-s.ctx.Done():
-					return
-				case s.recvch <- raw:
-				}
-
-				// Check for EOF
-				if err == io.EOF {
-					return
-				}
-			}
-		}()
-	})
 	return s.recvch
+}
+
+func (s *jsonstream) recvLoop() {
+	defer close(s.recvch)
+
+	select {
+	case <-s.ready:
+	case <-s.ctx.Done():
+		return
+	}
+
+	if s.reader == nil {
+		return
+	}
+
+	for {
+		line, err := s.reader.ReadBytes('\n')
+		if err != nil && (err != io.EOF || len(line) == 0) {
+			s.cancel()
+			return
+		}
+
+		frame := bytes.TrimSpace(line)
+		if len(frame) == 0 {
+			if !s.pushFrame(nil) {
+				return
+			}
+			if err == io.EOF {
+				s.cancel()
+				return
+			}
+			continue
+		}
+
+		var raw json.RawMessage
+		if err := json.Unmarshal(frame, &raw); err != nil {
+			s.cancel()
+			return
+		}
+
+		if !s.pushFrame(raw) {
+			return
+		}
+
+		if err == io.EOF {
+			s.cancel()
+			return
+		}
+	}
+}
+
+func (s *jsonstream) pushFrame(frame json.RawMessage) bool {
+	select {
+	case <-s.ctx.Done():
+		return false
+	case s.recvch <- frame:
+		return true
+	default:
+		// Avoid deadlocking the full-duplex connection when the callback stops
+		// draining the response side of the stream.
+		s.cancel()
+		return false
+	}
 }
 
 func (s *jsonstream) Send(frame json.RawMessage) error {

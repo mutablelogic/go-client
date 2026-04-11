@@ -433,7 +433,7 @@ Use `Client.Stream(ctx, opts...)` to open a bi-directional JSON stream. The retu
 lets you send newline-delimited JSON request frames with `Send`, receive response frames with `Recv`,
 close the outbound side with `CloseSend`, and tear down both sides with `Close`.
 
-Blank response lines are treated as keep-alive heartbeats and `Recv` emits `nil` frames for them.
+Blank response lines are treated as keep-alive heartbeats and `Recv` returns `nil, nil` for them.
 
 ```go
 package main
@@ -441,6 +441,7 @@ package main
 import (
     "context"
     "encoding/json"
+    "io"
     "log"
     "time"
 
@@ -489,8 +490,15 @@ func main() {
         }
     }()
 
-    // Foreground loop to receive JSON frames until the stream is closed
-    for frame := range stream.Recv() {
+    // Foreground loop to receive JSON frames until the stream is closed or an error occurs
+    for {
+        frame, err := stream.Recv()
+        if err == io.EOF {
+            break
+        }
+        if err != nil {
+            log.Fatal(err)
+        }
         if len(frame) == 0 {
             continue // keep-alive heartbeat
         }

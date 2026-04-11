@@ -204,7 +204,7 @@ func (client *Client) request(ctx context.Context, method, accept, mimetype stri
 	// For SSE or NDJSON streams, disable caching and Nginx proxy buffering so
 	// events are delivered immediately rather than held in intermediate buffers.
 	// Accept may be a comma-separated list so use Contains rather than ==.
-	if strings.Contains(accept, types.ContentTypeTextStream) || strings.Contains(accept, types.ContentTypeJSONStream) {
+	if strings.Contains(accept, ContentTypeTextStream) || strings.Contains(accept, ContentTypeJsonStream) || strings.Contains(accept, types.ContentTypeJSONStream) {
 		r.Header.Set("Cache-Control", "no-cache")
 		r.Header.Set("X-Accel-Buffering", "no")
 	}
@@ -381,7 +381,7 @@ func do(client *http.Client, req *http.Request, accept string, strict bool, out 
 	}
 
 	switch {
-	case mimetype == types.ContentTypeJSON || mimetype == types.ContentTypeJSONStream:
+	case mimetype == ContentTypeJson || isJSONStreamContentType(mimetype):
 		dec := json.NewDecoder(response.Body)
 		if reqopts.jsonStreamCallback != nil {
 			for {
@@ -408,11 +408,11 @@ func do(client *http.Client, req *http.Request, accept string, strict bool, out 
 				return err
 			}
 		}
-	case mimetype == types.ContentTypeTextXml || mimetype == types.ContentTypeXML:
+	case mimetype == ContentTypeTextXml || mimetype == ContentTypeApplicationXml:
 		if err := xml.NewDecoder(response.Body).Decode(out); err != nil {
 			return err
 		}
-	case mimetype == types.ContentTypeTextPlain:
+	case mimetype == ContentTypeTextPlain:
 		data, err := io.ReadAll(response.Body)
 		if err != nil {
 			return err

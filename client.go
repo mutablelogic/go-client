@@ -316,7 +316,7 @@ func do(client *http.Client, req *http.Request, accept string, strict bool, out 
 	defer response.Body.Close()
 
 	// Get content type
-	mimetype, err := respContentType(response)
+	mimetype, err := types.ParseContentType(response.Header.Get(types.ContentTypeHeader))
 	if err != nil {
 		return err
 	}
@@ -381,7 +381,7 @@ func do(client *http.Client, req *http.Request, accept string, strict bool, out 
 	}
 
 	switch {
-	case mimetype == types.ContentTypeJSON || mimetype == types.ContentTypeJSONStream:
+	case mimetype == types.ContentTypeJSON || mimetype == types.ContentTypeJSONStream || mimetype == types.ContentTypeJSONStreamLegacy:
 		dec := json.NewDecoder(response.Body)
 		if reqopts.jsonStreamCallback != nil {
 			for {
@@ -408,6 +408,24 @@ func do(client *http.Client, req *http.Request, accept string, strict bool, out 
 				return err
 			}
 		}
+	case mimetype == types.ContentTypeTextStream:
+		if reqopts.textStreamCallback != nil {
+			stream := NewTextStream()
+			if err := stream.Decode(response.Body, reqopts.textStreamCallback); err != nil {
+				return err
+			}
+			return nil
+		}
+		if out == nil {
+			return nil
+		}
+		if v, ok := out.(io.Writer); ok {
+			if _, err := io.Copy(v, response.Body); err != nil {
+				return err
+			}
+			return nil
+		}
+		return httpresponse.ErrInternalError.Withf("do: response does not implement Unmarshaler for %q", mimetype)
 	case mimetype == types.ContentTypeTextXml || mimetype == types.ContentTypeXML:
 		if err := xml.NewDecoder(response.Body).Decode(out); err != nil {
 			return err
@@ -441,17 +459,4 @@ func do(client *http.Client, req *http.Request, accept string, strict bool, out 
 
 	// Return success
 	return nil
-}
-
-// Parse the response content type
-func respContentType(resp *http.Response) (string, error) {
-	contenttype := resp.Header.Get("Content-Type")
-	if contenttype == "" {
-		return types.ContentTypeBinary, nil
-	}
-	if mimetype, err := types.ParseContentType(contenttype); err != nil {
-		return contenttype, httpresponse.Err(http.StatusUnsupportedMediaType).With(contenttype)
-	} else {
-		return mimetype, nil
-	}
 }

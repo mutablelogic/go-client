@@ -38,6 +38,7 @@ var (
 	MethodHead   = NewRequestEx(http.MethodHead, types.ContentTypeAny)
 	MethodDelete = NewRequestEx(http.MethodDelete, types.ContentTypeAny)
 	MethodPut    = NewRequestEx(http.MethodPut, types.ContentTypeAny)
+	MethodPost   = NewRequestEx(http.MethodPost, types.ContentTypeAny)
 )
 
 ///////////////////////////////////////////////////////////////////////////////

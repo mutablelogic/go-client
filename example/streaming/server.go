@@ -2,9 +2,9 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"math/rand"
+	"net/http"
 	"time"
 
 	// Packages
@@ -25,8 +25,9 @@ func runServer(ctx context.Context, listenAddr string) error {
 	}
 
 	// Create a handler for the streaming endpoint
-	handler := httpresponse.NewJSONStreamHandler(func(r <-chan json.RawMessage, w chan<- json.RawMessage) error {
+	handler := httpresponse.NewJSONStreamHandler(func(_ *http.Request, stream httpresponse.JSONStream) error {
 		fmt.Println("stream opened")
+		r := stream.Recv()
 
 		// Create a ticker
 		ticker := time.NewTimer(time.Second)
@@ -48,7 +49,9 @@ func runServer(ctx context.Context, listenAddr string) error {
 				}
 			case <-ticker.C:
 				fmt.Println("sending event")
-				w <- Event{Message: fmt.Sprintf("server seq %d", seq)}.JSON()
+				if err := stream.Send(Event{Message: fmt.Sprintf("server seq %d", seq)}.JSON()); err != nil {
+					return err
+				}
 				fmt.Println("sent event")
 				seq++
 				ticker.Reset(time.Second * time.Duration(rand.Int31n(8)))

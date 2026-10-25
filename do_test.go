@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/xml"
+	types "github.com/mutablelogic/go-server/pkg/types"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -98,7 +99,7 @@ func Test_Do_StrictMode_ContentTypeMismatch(t *testing.T) {
 	c, err := client.New(client.OptEndpoint(srv.URL), client.OptStrict())
 	require.NoError(t, err)
 	var out string
-	err = c.Do(client.NewRequestEx(http.MethodGet, client.ContentTypeJson), &out)
+	err = c.Do(client.NewRequestEx(http.MethodGet, types.ContentTypeJSON), &out)
 	assert.Error(t, err)
 }
 

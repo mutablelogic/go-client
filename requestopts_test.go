@@ -2,6 +2,7 @@ package client_test
 
 import (
 	"encoding/json"
+	types "github.com/mutablelogic/go-server/pkg/types"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -429,7 +430,7 @@ func Test_OptJsonStreamCallback_EventsDelivered(t *testing.T) {
 	out := new(jsonStreamEvent)
 	var values []int
 	err = c.Do(
-		client.NewRequestEx(http.MethodGet, client.ContentTypeJsonStream),
+		client.NewRequestEx(http.MethodGet, types.ContentTypeJSONStream),
 		out,
 		client.OptJsonStreamCallback(func(v json.RawMessage) error {
 			var event jsonStreamEvent
@@ -458,7 +459,7 @@ func Test_OptJsonStreamCallback_EOFStopsCleanly(t *testing.T) {
 	out := new(jsonStreamEvent)
 	var count int
 	err = c.Do(
-		client.NewRequestEx(http.MethodGet, client.ContentTypeJsonStream),
+		client.NewRequestEx(http.MethodGet, types.ContentTypeJSONStream),
 		out,
 		client.OptJsonStreamCallback(func(v json.RawMessage) error {
 			count++

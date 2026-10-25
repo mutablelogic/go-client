@@ -3,6 +3,7 @@ package client_test
 import (
 	"bytes"
 	"fmt"
+	types "github.com/mutablelogic/go-server/pkg/types"
 	"io"
 	"strings"
 	"testing"
@@ -18,7 +19,7 @@ func Test_payload_001(t *testing.T) {
 	payload := client.NewRequest()
 	assert.NotNil(payload)
 	assert.Equal("GET", payload.Method())
-	assert.Equal(client.ContentTypeAny, payload.Accept())
+	assert.Equal(types.ContentTypeAny, payload.Accept())
 }
 
 func Test_payload_002_JSONRequest(t *testing.T) {
@@ -33,7 +34,7 @@ func Test_payload_002_JSONRequest(t *testing.T) {
 	assert.NoError(err)
 	assert.NotNil(payload)
 	assert.Equal("POST", payload.Method())
-	assert.Equal(client.ContentTypeJson, payload.Type())
+	assert.Equal(types.ContentTypeJSON, payload.Type())
 
 	// Read the body
 	body, err := io.ReadAll(payload)
@@ -50,7 +51,7 @@ func Test_payload_003_MultipartRequest(t *testing.T) {
 		Value int    `json:"value"`
 	}{"test", 42}
 
-	payload, err := client.NewMultipartRequest(data, client.ContentTypeAny)
+	payload, err := client.NewMultipartRequest(data, types.ContentTypeAny)
 	assert.NoError(err)
 	assert.NotNil(payload)
 	assert.Equal("POST", payload.Method())
@@ -80,7 +81,7 @@ func Test_payload_004_MultipartWithFile(t *testing.T) {
 		},
 	}
 
-	payload, err := client.NewMultipartRequest(data, client.ContentTypeAny)
+	payload, err := client.NewMultipartRequest(data, types.ContentTypeAny)
 	assert.NoError(err)
 	assert.NotNil(payload)
 
@@ -102,12 +103,12 @@ func Test_streaming_payload_001(t *testing.T) {
 		Value int    `json:"value"`
 	}{"streaming", 123}
 
-	payload, err := client.NewStreamingMultipartRequest(data, client.ContentTypeAny)
+	payload, err := client.NewStreamingMultipartRequest(data, types.ContentTypeAny)
 	assert.NoError(err)
 	assert.NotNil(payload)
 	assert.Equal("POST", payload.Method())
 	assert.Contains(payload.Type(), "multipart/form-data")
-	assert.Equal(client.ContentTypeAny, payload.Accept())
+	assert.Equal(types.ContentTypeAny, payload.Accept())
 
 	// Read the body
 	body, err := io.ReadAll(payload)
@@ -138,7 +139,7 @@ func Test_streaming_payload_002_WithFile(t *testing.T) {
 		},
 	}
 
-	payload, err := client.NewStreamingMultipartRequest(data, client.ContentTypeAny)
+	payload, err := client.NewStreamingMultipartRequest(data, types.ContentTypeAny)
 	assert.NoError(err)
 	assert.NotNil(payload)
 
@@ -168,7 +169,7 @@ func Test_streaming_payload_003_LargeFile(t *testing.T) {
 		},
 	}
 
-	payload, err := client.NewStreamingMultipartRequest(data, client.ContentTypeAny)
+	payload, err := client.NewStreamingMultipartRequest(data, types.ContentTypeAny)
 	assert.NoError(err)
 	assert.NotNil(payload)
 
@@ -192,7 +193,7 @@ func Test_streaming_payload_004_CloseBeforeRead(t *testing.T) {
 		Name string `json:"name"`
 	}{"test"}
 
-	payload, err := client.NewStreamingMultipartRequest(data, client.ContentTypeAny)
+	payload, err := client.NewStreamingMultipartRequest(data, types.ContentTypeAny)
 	assert.NoError(err)
 	assert.NotNil(payload)
 
@@ -215,7 +216,7 @@ func Test_streaming_payload_005_PartialRead(t *testing.T) {
 		},
 	}
 
-	payload, err := client.NewStreamingMultipartRequest(data, client.ContentTypeAny)
+	payload, err := client.NewStreamingMultipartRequest(data, types.ContentTypeAny)
 	assert.NoError(err)
 
 	// Read only a small portion (may return less than buffer size, that's valid)
@@ -239,12 +240,12 @@ func Test_payload_form_001_IsPost(t *testing.T) {
 		Name  string `json:"name"`
 		Value int    `json:"value"`
 	}{"alice", 7}
-	payload, err := client.NewFormRequest(data, client.ContentTypeAny)
+	payload, err := client.NewFormRequest(data, types.ContentTypeAny)
 	assert.NoError(err)
 	assert.NotNil(payload)
 	assert.Equal("POST", payload.Method())
 	assert.Contains(payload.Type(), "application/x-www-form-urlencoded")
-	assert.Equal(client.ContentTypeAny, payload.Accept())
+	assert.Equal(types.ContentTypeAny, payload.Accept())
 }
 
 func Test_payload_form_002_BodyContainsFields(t *testing.T) {
@@ -253,7 +254,7 @@ func Test_payload_form_002_BodyContainsFields(t *testing.T) {
 		Name  string `json:"name"`
 		Value int    `json:"value"`
 	}{"bob", 99}
-	payload, err := client.NewFormRequest(data, client.ContentTypeAny)
+	payload, err := client.NewFormRequest(data, types.ContentTypeAny)
 	assert.NoError(err)
 	body, err := io.ReadAll(payload)
 	assert.NoError(err)
@@ -262,7 +263,7 @@ func Test_payload_form_002_BodyContainsFields(t *testing.T) {
 }
 
 func Test_payload_form_003_InvalidInputErrors(t *testing.T) {
-	_, err := client.NewFormRequest("not a struct", client.ContentTypeAny)
+	_, err := client.NewFormRequest("not a struct", types.ContentTypeAny)
 	assert.Error(t, err)
 }
 
@@ -271,7 +272,7 @@ func Test_payload_form_003_InvalidInputErrors(t *testing.T) {
 
 func Test_payload_string_001_IncludesMethod(t *testing.T) {
 	assert := assert.New(t)
-	payload := client.NewRequestEx("DELETE", client.ContentTypeJson)
+	payload := client.NewRequestEx("DELETE", types.ContentTypeJSON)
 	str := payload.(fmt.Stringer).String()
 	assert.Contains(str, "DELETE")
 }

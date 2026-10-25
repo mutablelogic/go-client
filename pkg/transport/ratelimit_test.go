@@ -148,3 +148,58 @@ func TestRateLimit_ConcurrentRequestsAreThrottled(t *testing.T) {
 			"requests %d and %d fired too close together: %v (want >= %v)", i-1, i, gap, minInterval)
 	}
 }
+
+// TestRateLimit_ConcurrentRequestsAfterIdleAreThrottled verifies that
+// concurrent callers are spaced when they arrive after the transport has
+// been idle for longer than they would take, rather than each reserving a
+// slot after the last one, which has passed, so all proceed at once.
+func TestRateLimit_ConcurrentRequestsAfterIdleAreThrottled(t *testing.T) {
+	const rate = float32(10) // 10 req/s → ~100ms interval
+	const n = 4
+
+	var mu sync.Mutex
+	var timestamps []time.Time
+	inner := roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		mu.Lock()
+		timestamps = append(timestamps, time.Now())
+		mu.Unlock()
+		return stubResp(200, "text/plain", "ok"), nil
+	})
+	rl := transport.NewRateLimit(inner, rate)
+
+	// A request, and then an idle spell, longer than the burst would take
+	resp, err := rl.RoundTrip(httptest.NewRequest(http.MethodGet, "http://example.com/", nil))
+	if err == nil {
+		resp.Body.Close()
+	}
+	time.Sleep(time.Duration(n+2) * time.Second / time.Duration(rate))
+	mu.Lock()
+	timestamps = nil
+	mu.Unlock()
+
+	// A burst of concurrent requests
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			resp, err := rl.RoundTrip(httptest.NewRequest(http.MethodGet, "http://example.com/", nil))
+			if err == nil {
+				resp.Body.Close()
+			}
+		}()
+	}
+	close(start)
+	wg.Wait()
+
+	assert.Equal(t, n, len(timestamps), "all requests should complete")
+	sort.Slice(timestamps, func(i, j int) bool { return timestamps[i].Before(timestamps[j]) })
+	minInterval := time.Duration(float64(time.Second)/float64(rate)) * 8 / 10
+	for i := 1; i < len(timestamps); i++ {
+		gap := timestamps[i].Sub(timestamps[i-1])
+		assert.GreaterOrEqualf(t, gap, minInterval,
+			"requests %d and %d fired too close together after idle: %v (want >= %v)", i-1, i, gap, minInterval)
+	}
+}

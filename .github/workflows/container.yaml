@@ -19,7 +19,7 @@ jobs:
       tag: ${{ steps.var.outputs.tag }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
       - name: Set variables
@@ -44,7 +44,7 @@ jobs:
           sudo apt -y install build-essential git
           git config --global advice.detachedHead false
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
       - name: Login

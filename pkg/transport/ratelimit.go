@@ -46,11 +46,13 @@ func (t *RateLimitTransport) RoundTrip(req *http.Request) (*http.Response, error
 	if t.rate > 0 {
 		t.mu.Lock()
 		interval := time.Duration(float32(time.Second) / t.rate)
-		var slot time.Time
-		if t.ts.IsZero() {
-			slot = time.Now() // first request: no wait
-		} else {
-			slot = t.ts.Add(interval) // queue behind last reservation
+		// queue behind the last reservation, or send now when that's
+		// passed, such as the first request, or one after the client has
+		// been idle, so a burst after an idle spell is spaced too, rather
+		// than every request taking a slot which has passed
+		slot := time.Now()
+		if next := t.ts.Add(interval); !t.ts.IsZero() && next.After(slot) {
+			slot = next
 		}
 		t.ts = slot // reserve this slot before releasing the lock
 		t.mu.Unlock()

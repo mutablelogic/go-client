@@ -63,6 +63,7 @@ func Test_Do_NonOK_HTMLBody(t *testing.T) {
 	}{
 		{"text/html; charset=UTF-8", "<!DOCTYPE html>\n<html><head>\n<title>api.example.com | 504: Gateway\n time-out &amp; more</title></head><body>" + strings.Repeat("<div>noise</div>", 1000) + "</body></html>", "504 Gateway Timeout: api.example.com | 504: Gateway time-out & more"},
 		{"", "<html><body><h1>Bad gateway</h1></body></html>", "504 Gateway Timeout"},
+		{"Text/HTML", "<title>Upper case</title>", "504 Gateway Timeout: Upper case"},
 	} {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if test.contentType != "" {
@@ -79,6 +80,22 @@ func Test_Do_NonOK_HTMLBody(t *testing.T) {
 		assert.Contains(t, err.Error(), test.want)
 		assert.NotContains(t, err.Error(), "<")
 	}
+}
+
+func Test_Do_NonOK_TextNamedHTML(t *testing.T) {
+	// Plain text whose content type has a parameter which mentions HTML is
+	// plain text
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain; name=error.html")
+		w.WriteHeader(http.StatusBadRequest)
+		io.WriteString(w, "invalid parameter")
+	}))
+	defer srv.Close()
+	c, err := client.New(client.OptEndpoint(srv.URL))
+	require.NoError(t, err)
+	err = c.Do(client.MethodGet, nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid parameter")
 }
 
 func Test_Do_NonOK_LongBody(t *testing.T) {

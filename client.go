@@ -7,6 +7,7 @@ import (
 	"errors"
 	"html"
 	"io"
+	"mime"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -466,6 +467,13 @@ func do(client *http.Client, req *http.Request, accept string, strict bool, out 
 	return nil
 }
 
+// isHTML returns true when the content type's media type, without its
+// parameters, and in any case, is HTML
+func isHTML(contentType string) bool {
+	mediaType, _, err := mime.ParseMediaType(contentType)
+	return err == nil && (mediaType == "text/html" || mediaType == "application/xhtml+xml")
+}
+
 // maxErrorDetail is the most of an error response's body, in bytes, which is
 // kept as the detail of its error
 const maxErrorDetail = 512
@@ -492,7 +500,7 @@ func errorResponse(response *http.Response, data []byte) error {
 func errorDetail(contentType string, data []byte) string {
 	text := strings.TrimSpace(string(data))
 	start := strings.ToLower(text[:min(len(text), 64)])
-	if strings.Contains(contentType, "html") || strings.HasPrefix(start, "<!doctype html") || strings.HasPrefix(start, "<html") {
+	if isHTML(contentType) || strings.HasPrefix(start, "<!doctype html") || strings.HasPrefix(start, "<html") {
 		if match := reHTMLTitle.FindStringSubmatch(text); match != nil {
 			return strings.TrimSpace(reSpace.ReplaceAllString(html.UnescapeString(match[1]), " "))
 		}

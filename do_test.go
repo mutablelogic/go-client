@@ -8,7 +8,9 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"unicode/utf8"
 
 	client "github.com/mutablelogic/go-client"
 	"github.com/stretchr/testify/assert"
@@ -51,6 +53,48 @@ func Test_Do_NonOK_WithBody(t *testing.T) {
 	err = c.Do(client.MethodGet, nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid parameter")
+}
+
+func Test_Do_NonOK_HTMLBody(t *testing.T) {
+	// An HTML error page, such as a CDN's, is its title, and one without a
+	// title is only its status
+	for _, test := range []struct {
+		contentType, body, want string
+	}{
+		{"text/html; charset=UTF-8", "<!DOCTYPE html>\n<html><head>\n<title>api.example.com | 504: Gateway\n time-out &amp; more</title></head><body>" + strings.Repeat("<div>noise</div>", 1000) + "</body></html>", "504 Gateway Timeout: api.example.com | 504: Gateway time-out & more"},
+		{"", "<html><body><h1>Bad gateway</h1></body></html>", "504 Gateway Timeout"},
+	} {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if test.contentType != "" {
+				w.Header().Set("Content-Type", test.contentType)
+			}
+			w.WriteHeader(http.StatusGatewayTimeout)
+			io.WriteString(w, test.body)
+		}))
+		c, err := client.New(client.OptEndpoint(srv.URL))
+		require.NoError(t, err)
+		err = c.Do(client.MethodGet, nil)
+		srv.Close()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), test.want)
+		assert.NotContains(t, err.Error(), "<")
+	}
+}
+
+func Test_Do_NonOK_LongBody(t *testing.T) {
+	// A long error body is cut short
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		io.WriteString(w, strings.Repeat("é", 1000))
+	}))
+	defer srv.Close()
+	c, err := client.New(client.OptEndpoint(srv.URL))
+	require.NoError(t, err)
+	err = c.Do(client.MethodGet, nil)
+	require.Error(t, err)
+	assert.Less(t, len(err.Error()), 600)
+	assert.True(t, strings.HasSuffix(err.Error(), "…"))
+	assert.True(t, utf8.ValidString(err.Error()))
 }
 
 func Test_Do_NonOK_EmptyBody(t *testing.T) {

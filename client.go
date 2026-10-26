@@ -5,13 +5,16 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"errors"
+	"html"
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
+	"unicode/utf8"
 
 	// Package imports
 	transport "github.com/mutablelogic/go-client/pkg/transport"
@@ -336,14 +339,16 @@ func do(client *http.Client, req *http.Request, accept string, strict bool, out 
 			return httpresponse.Err(response.StatusCode).With(response.Status)
 		}
 
-		// Preserve non-JSON error bodies so callers can surface useful server detail.
+		// Preserve non-JSON error bodies so callers can surface useful server
+		// detail, which is the title of an HTML page, such as a proxy's, or
+		// the start of other text
 		if err := json.Unmarshal(data, &httpErr); err != nil {
-			return httpresponse.Err(response.StatusCode).Withf("%s: %s", response.Status, string(data))
+			return errorResponse(response, data)
 		}
 
-		// If the response code doesn't match, fall back to the raw body text.
+		// If the response code doesn't match, fall back to the body text.
 		if httpErr.Code != response.StatusCode {
-			return httpresponse.Err(response.StatusCode).Withf("%s: %s", response.Status, string(data))
+			return errorResponse(response, data)
 		}
 
 		// Return the error response with any detail from the body
@@ -459,4 +464,48 @@ func do(client *http.Client, req *http.Request, accept string, strict bool, out 
 
 	// Return success
 	return nil
+}
+
+// maxErrorDetail is the most of an error response's body, in bytes, which is
+// kept as the detail of its error
+const maxErrorDetail = 512
+
+var (
+	reHTMLTitle = regexp.MustCompile(`(?is)<title[^>]*>(.*?)</title>`)
+	reSpace     = regexp.MustCompile(`\s+`)
+)
+
+// errorResponse returns the error of a response whose body isn't an error as
+// JSON, with the detail of its body (see errorDetail), or only its status
+// when it has none
+func errorResponse(response *http.Response, data []byte) error {
+	if detail := errorDetail(response.Header.Get("Content-Type"), data); detail != "" {
+		return httpresponse.Err(response.StatusCode).Withf("%s: %s", response.Status, detail)
+	}
+	return httpresponse.Err(response.StatusCode).With(response.Status)
+}
+
+// errorDetail returns the detail of an error response's body: the title of
+// an HTML page, such as a proxy's or a CDN's error page, which can be large,
+// or none when it has no title, or else the text, without its surrounding
+// space, of at most maxErrorDetail bytes
+func errorDetail(contentType string, data []byte) string {
+	text := strings.TrimSpace(string(data))
+	start := strings.ToLower(text[:min(len(text), 64)])
+	if strings.Contains(contentType, "html") || strings.HasPrefix(start, "<!doctype html") || strings.HasPrefix(start, "<html") {
+		if match := reHTMLTitle.FindStringSubmatch(text); match != nil {
+			return strings.TrimSpace(reSpace.ReplaceAllString(html.UnescapeString(match[1]), " "))
+		}
+		return ""
+	}
+	if len(text) <= maxErrorDetail {
+		return text
+	}
+
+	// Cut it at a character's start, rather than in its middle
+	cut := maxErrorDetail
+	for cut > 0 && !utf8.RuneStart(text[cut]) {
+		cut--
+	}
+	return text[:cut] + "…"
 }

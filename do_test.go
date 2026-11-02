@@ -282,3 +282,34 @@ func Test_Do_CrossOriginRedirectStripsCredentials(t *testing.T) {
 	assert.Equal(t, "", targetAuth,
 		"Authorization must not be forwarded to a cross-origin redirect target")
 }
+
+func TestDoContentType(t *testing.T) {
+	// A server which records the content type and length of each request,
+	// and its body
+	var contentType, body string
+	var contentLength int64
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		data, _ := io.ReadAll(r.Body)
+		contentType, contentLength, body = r.Header.Get("Content-Type"), r.ContentLength, string(data)
+	}))
+	t.Cleanup(server.Close)
+	c, err := client.New(client.OptEndpoint(server.URL))
+	require.NoError(t, err)
+
+	// A request without a payload has no body, and no content type
+	for _, method := range []string{http.MethodGet, http.MethodHead, http.MethodPost, http.MethodDelete} {
+		require.NoError(t, c.Do(client.NewRequestEx(method, types.ContentTypeAny), nil), method)
+		assert.Empty(t, contentType, method)
+		assert.Zero(t, contentLength, method)
+		assert.Empty(t, body, method)
+	}
+	require.NoError(t, c.Do(client.NewRequest(), nil))
+	assert.Empty(t, contentType)
+
+	// A request with a payload has its content type
+	payload, err := client.NewJSONRequest(map[string]string{"a": "b"})
+	require.NoError(t, err)
+	require.NoError(t, c.Do(payload, nil))
+	assert.Equal(t, types.ContentTypeJSON, contentType)
+	assert.JSONEq(t, `{"a":"b"}`, body)
+}

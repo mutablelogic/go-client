@@ -160,7 +160,14 @@ func (client *Client) DoWithContext(ctx context.Context, in Payload, out any, op
 		accept = in.Accept()
 		mimetype = in.Type()
 	}
-	req, err := client.request(ctx, method, accept, mimetype, in)
+
+	// A request without a payload has no body, so it's sent without one, and
+	// without a content type, which a GET or HEAD request can be refused for
+	var body io.Reader = in
+	if r, ok := in.(*request); ok && r.buffer == nil {
+		body = nil
+	}
+	req, err := client.request(ctx, method, accept, mimetype, body)
 	if err != nil {
 		return err
 	}

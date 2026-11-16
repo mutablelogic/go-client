@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -44,6 +45,22 @@ func Test_OptReqEndpoint_RedirectsToOtherServer(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, c.Do(client.MethodGet, nil, client.OptReqEndpoint(srv2.URL)))
 	assert.True(t, srv2Hit.Load(), "request should have been sent to srv2, not srv1")
+}
+
+func Test_OptReqEndpoint_KeepsPort(t *testing.T) {
+	// The Host header has the endpoint's port, which a server, such as one
+	// which says its own URL, needs
+	var host atomic.Value
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		host.Store(r.Host)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	c, err := client.New(client.OptEndpoint("http://example.com"))
+	require.NoError(t, err)
+	require.NoError(t, c.Do(client.MethodGet, nil, client.OptReqEndpoint(srv.URL)))
+	assert.Equal(t, strings.TrimPrefix(srv.URL, "http://"), host.Load())
 }
 
 func Test_OptReqEndpoint_InvalidURL_Errors(t *testing.T) {

@@ -13,6 +13,8 @@ import (
 	// Packages
 	transport "github.com/mutablelogic/go-client/pkg/transport"
 	assert "github.com/stretchr/testify/assert"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	trace "go.opentelemetry.io/otel/trace"
 )
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -343,4 +345,39 @@ func TestPayload_IgnoresUnmarshalableValue(t *testing.T) {
 	assert.NotPanics(t, func() {
 		l.Payload(make(chan int))
 	})
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// RoundTrip – trace ID
+
+// A request which is traced logs its trace ID, and one which isn't doesn't
+func TestRoundTrip_LogsTraceID(t *testing.T) {
+	assert := assert.New(t)
+	inner := roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		return stubResp(200, "text/plain", "ok"), nil
+	})
+
+	// Not traced
+	var out bytes.Buffer
+	resp, err := transport.NewLogging(&out, inner, false).RoundTrip(httptest.NewRequest(http.MethodGet, "http://example.com/", nil))
+	assert.NoError(err)
+	resp.Body.Close()
+	assert.NotContains(out.String(), "trace:")
+
+	// Traced, with the tracer's transport outside the logging one, as
+	// OptTrace and then OptTracer are
+	provider := sdktrace.NewTracerProvider()
+	defer provider.Shutdown(t.Context())
+	var traceID string
+	traced := roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		traceID = trace.SpanContextFromContext(r.Context()).TraceID().String()
+		return stubResp(200, "text/plain", "ok"), nil
+	})
+	out.Reset()
+	rt := transport.NewTransport(provider.Tracer("test"), transport.NewLogging(&out, traced, false))
+	resp, err = rt.RoundTrip(httptest.NewRequest(http.MethodGet, "http://example.com/", nil))
+	assert.NoError(err)
+	resp.Body.Close()
+	assert.Len(traceID, 32)
+	assert.Contains(out.String(), "  trace: "+traceID+"\n")
 }

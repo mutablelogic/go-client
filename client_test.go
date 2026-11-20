@@ -1,6 +1,7 @@
 package client_test
 
 import (
+	"bytes"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -9,8 +10,11 @@ import (
 	"time"
 
 	client "github.com/mutablelogic/go-client"
+	transport "github.com/mutablelogic/go-client/pkg/transport"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -376,6 +380,33 @@ func Test_OptTracer_noop_no_error(t *testing.T) {
 	)
 	require.NoError(t, err)
 	assert.NotNil(t, c)
+}
+
+// The tracer is outside OptTransport's middleware, whichever order the
+// options are in, so the logging transport logs each request's trace ID
+func Test_OptTracer_wraps_middleware(t *testing.T) {
+	srv, _ := newTestServer(t)
+	defer srv.Close()
+	for _, tracerFirst := range []bool{true, false} {
+		recorder := tracetest.NewSpanRecorder()
+		provider := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(recorder))
+		var log bytes.Buffer
+		logging := client.OptTransport(func(parent http.RoundTripper) http.RoundTripper {
+			return transport.NewLogging(&log, parent, false)
+		})
+		tracer := client.OptTracer(provider.Tracer("test"))
+		opts := []client.ClientOpt{client.OptEndpoint(srv.URL), logging, tracer}
+		if tracerFirst {
+			opts = []client.ClientOpt{client.OptEndpoint(srv.URL), tracer, logging}
+		}
+		c, err := client.New(opts...)
+		require.NoError(t, err)
+		require.NoError(t, c.Do(nil, nil))
+		spans := recorder.Ended()
+		require.Len(t, spans, 1)
+		assert.Contains(t, log.String(), "  trace: "+spans[0].SpanContext().TraceID().String()+"\n", "tracer first: %v", tracerFirst)
+		require.NoError(t, provider.Shutdown(t.Context()))
+	}
 }
 
 ///////////////////////////////////////////////////////////////////////////////

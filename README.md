@@ -513,7 +513,9 @@ follows the same constructor pattern `New*(... , parent http.RoundTripper)` and 
 
 ### Logging Transport
 
-`transport.NewLogging` logs every request and response to an `io.Writer`. When `verbose` is true
+`transport.NewLogging` logs every request and response to an `io.Writer`. When the request is
+traced with OpenTelemetry, such as with `OptTracer`, its trace ID is logged too, so it can be
+looked up in your tracing backend. When `verbose` is true
 the request and response bodies are also printed; `text/event-stream` and NDJSON streaming bodies
 are printed line-by-line as events arrive rather than buffered:
 

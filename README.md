@@ -66,9 +66,8 @@ Various options can be passed to the client `New` method to control its behaviou
 * `OptEndpoint(value string)` sets the endpoint for all requests
 * `OptTimeout(value time.Duration)` sets the timeout on any request, which defaults to 30 seconds.
     Timeouts can be ignored on a request-by-request basis using the `OptNoTimeout` option (see below).
-* `OptUserAgent(value string)` sets the user agent string on each API request.
-* `OptTrace(w io.Writer, verbose bool)` — **Deprecated.** Use `OptTransport` with `transport.NewLogging` instead.
-    See the Transport Middleware section below for details.
+* `OptUserAgent(value string)` sets the user agent string on each API request. An empty
+    string sets the default, `DefaultUserAgent`.
 * `OptStrict()` turns on strict content type checking on anything returned from the API.
 * `OptRateLimit(value float32)` sets the limit on number of requests per second and the API
     will sleep to regulate the rate limit when exceeded.
@@ -89,7 +88,8 @@ The client automatically follows HTTP redirects (3xx responses) for GET and HEAD
 
 * The HTTP method is preserved (HEAD stays HEAD, GET stays GET)
 * Request headers are preserved across redirects
-* For security, `Authorization` and `Cookie` headers are stripped when redirecting to a different host
+* For security, `Authorization`, `Proxy-Authorization` and `Cookie` headers are stripped when redirecting to a different host, or from HTTPS to HTTP
+* A redirect of any other method, such as POST, isn't followed, and is returned as an error
 
 This behavior ensures that redirects work correctly for APIs that use CDNs or load balancers with temporary redirects.
 
@@ -182,6 +182,9 @@ type Client interface {
 
     // Perform request and wait for response, with context for cancellation
     DoWithContext(ctx context.Context, in Payload, out any, opts ...RequestOpt) error
+
+    // Perform a request which you have built, and decode the response
+    Request(req *http.Request, out any, opts ...RequestOpt) error
 }
 ```
 
@@ -191,6 +194,8 @@ modify each individual request when using the `Do` method:
 
 * `OptReqEndpoint(value string)` sets the endpoint for the request
 * `OptPath(value ...any)` appends path elements onto a request endpoint
+* `OptAbsPath(value ...any)` replaces the request path with the path elements. Each element is
+    one segment, so a `/` within one is escaped.
 * `OptToken(value Token)` adds an authorization header (overrides the client OptReqToken option)
 * `OptQuery(value url.Values)` sets the query parameters to a request
 * `OptReqHeader(name, value string)` sets a custom header to the request
@@ -251,12 +256,13 @@ You can create a payload with form data:
     large file uploads to avoid high memory usage. The returned payload implements `io.Closer`
     and is automatically closed by the HTTP client after the request completes.
 
-The payload should be a `struct` where the fields are converted to form tuples. File uploads require a field of type `multipart.File`. For example,
+The payload should be a `struct` where the fields are converted to form tuples. File uploads require a field of type `multipart.File`, whose `Body` is an `io.ReadCloser`, with an optional `ContentType`. For example,
 
 ```go
 package main
 
 import (
+    "io"
     "log"
     "strings"
 
@@ -279,7 +285,7 @@ func main() {
     request := FileUpload{
         File: multipart.File{
             Path: "helloworld.txt",
-            Body: strings.NewReader("Hello, world!"),
+            Body: io.NopCloser(strings.NewReader("Hello, world!")),
         },
     }
 
@@ -315,6 +321,7 @@ to indicate how the client should handle the response:
   * `application/json` → any JSON-decodable type
   * `application/xml` or `text/xml` → any XML-decodable type
   * `text/plain` → `*string` (value set to the body text), `*[]byte` (raw bytes), or `io.Writer` (body copied into it)
+  * `text/event-stream`, without a callback, and any other type → `io.Writer` (body copied into it)
 * Any other error to indicate a failure in unmarshaling.
 
 ## Text Streaming Responses
@@ -506,24 +513,32 @@ func main() {
 
 ## Transport Middleware
 
-The `pkg/transport` package provides composable `http.RoundTripper` middleware. All middleware
-follows the same constructor pattern `New*(... , parent http.RoundTripper)` and falls back to
-`http.DefaultTransport` when `parent` is nil. Middleware can be composed using `OptTransport`
-(client-wide) or `OptReqTransport` (per-request).
+The `pkg/transport` package provides composable `http.RoundTripper` middleware. Each constructor
+takes the parent `http.RoundTripper` it wraps, and falls back to `http.DefaultTransport` when it's
+nil. Middleware can be composed using `OptTransport` (client-wide) or `OptReqTransport` (per-request).
+
+The client uses some of them itself:
+
+* `transport.NewHeaders(parent, ua, headers)` sets the user agent and headers, from `OptUserAgent` and `OptHeader`.
+* `transport.NewRateLimit(parent, rate)` limits requests per second, from `OptRateLimit`.
+* `transport.NewToken(parent, token)` sets the `Authorization` header, from `OptReqToken` and `OptToken`.
 
 ### Logging Transport
 
-`transport.NewLogging` logs every request and response to an `io.Writer`. When the request is
+`transport.NewLogging` logs every request and response to an `io.Writer`, which is useful for
+debugging. Sensitive headers, such as `Authorization`, are redacted. When the request is
 traced with OpenTelemetry, such as with `OptTracer`, its trace ID is logged too, so it can be
 looked up in your tracing backend. When `verbose` is true
-the request and response bodies are also printed; `text/event-stream` and NDJSON streaming bodies
+the request and response bodies are also printed, unredacted; `text/event-stream` and NDJSON streaming bodies
 are printed line-by-line as events arrive rather than buffered:
 
 ```go
 import (
+    "net/http"
+    "os"
+
     client "github.com/mutablelogic/go-client"
     "github.com/mutablelogic/go-client/pkg/transport"
-    "os"
 )
 
 c, err := client.New(
@@ -533,9 +548,6 @@ c, err := client.New(
     }),
 )
 ```
-
-The convenience client option `OptTrace(w io.Writer, verbose bool)` (deprecated) is equivalent and internally
-calls `transport.NewLogging`.
 
 ### Recorder Transport
 
@@ -570,7 +582,8 @@ The `pkg/otel` package provides OpenTelemetry tracing utilities for both HTTP cl
 
 ### Creating a Tracer Provider
 
-Use `otel.NewProvider` to create a tracer provider that exports spans to an OTLP endpoint:
+Use `otel.NewProvider` to create a tracer provider that exports spans to an OTLP endpoint. It's
+registered as the global provider, and `otel.ShutdownProvider` flushes and shuts it down:
 
 ```go
 package main
@@ -597,7 +610,7 @@ func main() {
     if err != nil {
         log.Fatal(err)
     }
-    defer provider.Shutdown(context.Background())
+    defer otel.ShutdownProvider(context.Background())
 
     // Get a tracer from the provider
     tracer := provider.Tracer("my-service")
@@ -672,7 +685,7 @@ func main() {
     if err != nil {
         log.Fatal(err)
     }
-    defer provider.Shutdown(context.Background())
+    defer otel.ShutdownProvider(context.Background())
 
     tracer := provider.Tracer("my-server")
 

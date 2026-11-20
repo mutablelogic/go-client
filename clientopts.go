@@ -2,14 +2,12 @@ package client
 
 import (
 	"crypto/tls"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
 
 	// Package imports
-	transport "github.com/mutablelogic/go-client/pkg/transport"
 	httpresponse "github.com/mutablelogic/go-server/pkg/httpresponse"
 	trace "go.opentelemetry.io/otel/trace"
 )
@@ -49,17 +47,6 @@ func OptUserAgent(value string) ClientOpt {
 		} else {
 			client.ua = value
 		}
-		return nil
-	}
-}
-
-// Deprecated: Use OptTransport with transport.NewLogging instead.
-// OptTrace allows you to be the "man in the middle" on any
-// requests so you can see traffic move back and forth.
-// Setting verbose to true also displays the JSON response
-func OptTrace(w io.Writer, verbose bool) ClientOpt {
-	return func(client *Client) error {
-		client.Client.Transport = transport.NewLogging(w, client.Client.Transport, verbose)
 		return nil
 	}
 }

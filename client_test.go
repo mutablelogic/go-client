@@ -2,7 +2,6 @@ package client_test
 
 import (
 	"bytes"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -355,18 +354,6 @@ func Test_OptTransport_middleware_sees_auth_header(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, doGet(c))
 	assert.Equal(t, "Bearer mwtest", gotAuth)
-}
-
-///////////////////////////////////////////////////////////////////////////////
-// OptTrace (deprecated but still supported)
-
-func Test_OptTrace_no_error(t *testing.T) {
-	c, err := client.New(
-		client.OptEndpoint("http://example.com"),
-		client.OptTrace(io.Discard, false),
-	)
-	require.NoError(t, err)
-	assert.NotNil(t, c)
 }
 
 ///////////////////////////////////////////////////////////////////////////////

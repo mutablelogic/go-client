@@ -12,11 +12,11 @@ This repository contains a generic HTTP client which can be adapted to provide:
 
 API Documentation: <https://pkg.go.dev/github.com/mutablelogic/go-client>
 
-There are also some example clients which use this library:
+There are also some examples which use this library, which `make examples` builds:
 
-* [Bitwarden API Client](https://github.com/mutablelogic/go-client/tree/main/pkg/bitwarden)
-* [Home Assistant API Client](https://github.com/mutablelogic/go-client/tree/main/pkg/homeassistant)
-* [IPify Client](https://github.com/mutablelogic/go-client/tree/main/pkg/ipify)
+* [Bitwarden](https://github.com/mutablelogic/go-client/tree/main/examples/bitwarden): signs in with an API key, syncs the vault, and decrypts it
+* [IPify](https://github.com/mutablelogic/go-client/tree/main/examples/ipify): prints the host's public IP address
+* [Streaming](https://github.com/mutablelogic/go-client/tree/main/examples/streaming): a server and client of text and JSON event streams
 
 There are also utility packages for working with multipart file uploads, transport middleware, and OpenTelemetry:
 
@@ -24,7 +24,7 @@ There are also utility packages for working with multipart file uploads, transpo
 * [Transport Middleware Package](https://github.com/mutablelogic/go-client/tree/main/pkg/transport)
 * [Multipart Package](https://github.com/mutablelogic/go-client/tree/main/pkg/multipart)
 
-Compatibility with go version 1.25 and above.
+Compatibility with go version 1.27 and above.
 
 ## Basic Usage
 

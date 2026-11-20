@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/xml"
+	"errors"
 	types "github.com/mutablelogic/go-server/pkg/types"
 	"io"
 	"net/http"
@@ -312,4 +313,99 @@ func TestDoContentType(t *testing.T) {
 	require.NoError(t, c.Do(payload, nil))
 	assert.Equal(t, types.ContentTypeJSON, contentType)
 	assert.JSONEq(t, `{"a":"b"}`, body)
+}
+
+func Test_Do_OptResponse_Handled(t *testing.T) {
+	// A 308 of a resumable upload, without a Location, or a body, whose
+	// Range header the caller reads
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Range", "bytes=0-262143")
+		w.WriteHeader(http.StatusPermanentRedirect)
+	}))
+	defer srv.Close()
+	c, err := client.New(client.OptEndpoint(srv.URL))
+	require.NoError(t, err)
+	var status int
+	var got string
+	require.NoError(t, c.Do(client.MethodPut, nil, client.OptResponse(func(response *http.Response) error {
+		status, got = response.StatusCode, response.Header.Get("Range")
+		return client.ErrResponseHandled
+	})))
+	assert.Equal(t, http.StatusPermanentRedirect, status)
+	assert.Equal(t, "bytes=0-262143", got)
+
+	// Without it, the 308 is an error
+	assert.Error(t, c.Do(client.MethodPut, nil))
+}
+
+func Test_Do_OptResponse_Error(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		io.WriteString(w, `{"name":"ok"}`)
+	}))
+	defer srv.Close()
+	c, err := client.New(client.OptEndpoint(srv.URL))
+	require.NoError(t, err)
+
+	// An error of the function is returned as it is
+	sentinel := errors.New("not this one")
+	err = c.Do(client.MethodGet, nil, client.OptResponse(func(*http.Response) error { return sentinel }))
+	assert.Equal(t, sentinel, err)
+
+	// And nil carries on, so the body is decoded
+	var out struct {
+		Name string `json:"name"`
+	}
+	called := false
+	require.NoError(t, c.Do(client.MethodGet, &out, client.OptResponse(func(*http.Response) error { called = true; return nil })))
+	assert.True(t, called)
+	assert.Equal(t, "ok", out.Name)
+}
+
+func Test_Do_OptResponse_NotOK(t *testing.T) {
+	// A response which isn't a success is still an error, when it carries on
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+	c, err := client.New(client.OptEndpoint(srv.URL))
+	require.NoError(t, err)
+	var status int
+	err = c.Do(client.MethodGet, nil, client.OptResponse(func(response *http.Response) error {
+		status = response.StatusCode
+		return nil
+	}))
+	assert.Error(t, err)
+	assert.Equal(t, http.StatusNotFound, status)
+}
+
+func Test_Do_BytesRequest_ContentLength(t *testing.T) {
+	// A payload of a buffer is sent with its length, rather than chunked
+	type seen struct {
+		length   int64
+		chunked  bool
+		mimetype string
+		body     string
+	}
+	var got seen
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		data, _ := io.ReadAll(r.Body)
+		got = seen{length: r.ContentLength, chunked: len(r.TransferEncoding) > 0, mimetype: r.Header.Get("Content-Type"), body: string(data)}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+	c, err := client.New(client.OptEndpoint(srv.URL))
+	require.NoError(t, err)
+
+	require.NoError(t, c.Do(client.NewBytesRequest(http.MethodPut, []byte("chunk"), "", ""), nil))
+	assert.Equal(t, seen{length: 5, mimetype: types.ContentTypeBinary, body: "chunk"}, got)
+
+	require.NoError(t, c.Do(client.NewBytesRequest(http.MethodPut, nil, "text/plain", ""), nil))
+	assert.Equal(t, seen{length: 0, mimetype: "text/plain"}, got, "an empty one")
+
+	payload, err := client.NewJSONRequestEx(http.MethodPost, map[string]string{"a": "b"}, "")
+	require.NoError(t, err)
+	require.NoError(t, c.Do(payload, nil))
+	assert.False(t, got.chunked, "a JSON payload too")
+	assert.Equal(t, int64(len(got.body)), got.length)
 }

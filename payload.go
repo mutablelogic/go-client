@@ -119,6 +119,17 @@ func NewFormRequest(payload any, accept string) (Payload, error) {
 	return this, nil
 }
 
+// Return a new request with the bytes as its payload, of its mimetype, such
+// as a chunk of a file which is uploaded, which is sent with its length,
+// rather than chunked. The accept parameter is the accepted mime-type of the
+// response.
+func NewBytesRequest(method string, data []byte, mimetype, accept string) Payload {
+	if mimetype == "" {
+		mimetype = types.ContentTypeBinary
+	}
+	return &request{method: method, accept: accept, mimetype: mimetype, buffer: bytes.NewBuffer(data)}
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 // STRINGIFY
 

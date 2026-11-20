@@ -19,6 +19,7 @@ type requestOpts struct {
 	textStreamCallback TextStreamCallback                          // OptTextStreamCallback
 	jsonStreamCallback JsonStreamCallback                          // OptJsonStreamCallback
 	transports         []func(http.RoundTripper) http.RoundTripper // OptReqTransport
+	response           func(*http.Response) error                  // OptResponse
 }
 
 type RequestOpt func(*requestOpts) error
@@ -118,6 +119,21 @@ func OptQuery(value url.Values) RequestOpt {
 func OptReqHeader(name, value string) RequestOpt {
 	return func(r *requestOpts) error {
 		r.Header.Set(name, value)
+		return nil
+	}
+}
+
+// OptResponse calls fn with the response of the request, once any
+// redirects are followed, before its status is checked, or its body is
+// decoded, so the caller can handle a response which isn't a success, such
+// as a 308 of a resumable upload, of its headers, or read headers which
+// aren't otherwise returned. When fn returns ErrResponseHandled, the
+// response is done with, and the request returns nil, without its status
+// being checked, or its body decoded; any other error is returned as it is,
+// and nil carries on, as without it. The body is closed once fn returns.
+func OptResponse(fn func(*http.Response) error) RequestOpt {
+	return func(r *requestOpts) error {
+		r.response = fn
 		return nil
 	}
 }

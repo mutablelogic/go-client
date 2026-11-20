@@ -130,7 +130,9 @@ func OptReqHeader(name, value string) RequestOpt {
 // aren't otherwise returned. When fn returns ErrResponseHandled, the
 // response is done with, and the request returns nil, without its status
 // being checked, or its body decoded; any other error is returned as it is,
-// and nil carries on, as without it. The body is closed once fn returns.
+// and nil carries on, as without it, when the body is decoded, so fn
+// mustn't read it then. The body is closed when the request returns, not
+// when fn does.
 func OptResponse(fn func(*http.Response) error) RequestOpt {
 	return func(r *requestOpts) error {
 		r.response = fn

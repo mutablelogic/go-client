@@ -135,8 +135,10 @@ func (cmd *PasswordCmd) Run(ctx context.Context, cli *CLI) error {
 	case 0:
 		return fmt.Errorf("no item %q", cmd.Name)
 	case 1:
-		fmt.Println(found[0].Password)
-		return nil
+		// The password is the command's output, to stdout, such as for a
+		// pipe, not a log
+		_, err := os.Stdout.WriteString(found[0].Password + "\n")
+		return err
 	default:
 		return fmt.Errorf("%d items are named %q, use an ID", len(found), cmd.Name)
 	}

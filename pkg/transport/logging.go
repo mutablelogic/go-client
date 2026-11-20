@@ -16,6 +16,7 @@ import (
 	// Packages
 	otel "github.com/mutablelogic/go-client/pkg/otel"
 	types "github.com/mutablelogic/go-server/pkg/types"
+	trace "go.opentelemetry.io/otel/trace"
 )
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -58,7 +59,8 @@ var sensitiveHeaders = map[string]bool{
 
 // NewLogging creates a logging middleware that wraps parent. Every request and
 // response is written to w. When verbose is true the request and response
-// bodies are also written. If parent is nil, http.DefaultTransport is used.
+// bodies are also written. When the request is traced, with OpenTelemetry,
+// its trace ID is written too. If parent is nil, http.DefaultTransport is used.
 func NewLogging(w io.Writer, parent http.RoundTripper, verbose bool) *Logging {
 	if parent == nil {
 		parent = http.DefaultTransport
@@ -103,6 +105,10 @@ func (t *Logging) RoundTrip(req *http.Request) (*http.Response, error) {
 	}
 
 	fmt.Fprintln(t.w, "request:", req.Method, otel.RedactedURL(req.URL))
+	if span := trace.SpanContextFromContext(req.Context()); span.IsValid() {
+		// The request is traced, so its trace can be looked up
+		fmt.Fprintln(t.w, "  trace:", span.TraceID())
+	}
 	if t.v {
 		for key := range req.Header {
 			fmt.Fprintf(t.w, "  => %v: %q\n", key, logHeaderValue(key, req.Header.Get(key)))

@@ -9,6 +9,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"net/http"
 	"net/url"
 	"os"
 	"os/signal"
@@ -16,6 +17,7 @@ import (
 
 	// Packages
 	client "github.com/mutablelogic/go-client"
+	transport "github.com/mutablelogic/go-client/pkg/transport"
 )
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -68,7 +70,7 @@ func (c *Client) Get(ctx context.Context) (string, error) {
 
 func main() {
 	ipv6 := flag.Bool("6", false, "Return an IPv6 address, when the host has one")
-	debug := flag.Bool("debug", false, "Trace requests")
+	debug := flag.Bool("debug", false, "Trace requests and responses, with their bodies")
 	flag.Parse()
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -82,7 +84,9 @@ func main() {
 func run(ctx context.Context, ipv6, debug bool) error {
 	var opts []client.ClientOpt
 	if debug {
-		opts = append(opts, client.OptTrace(os.Stderr, true))
+		opts = append(opts, client.OptTransport(func(parent http.RoundTripper) http.RoundTripper {
+			return transport.NewLogging(os.Stderr, parent, true)
+		}))
 	}
 	e := endpoint
 	if ipv6 {

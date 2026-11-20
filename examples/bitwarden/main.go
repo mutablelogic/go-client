@@ -11,6 +11,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -20,6 +21,7 @@ import (
 	// Packages
 	kong "github.com/alecthomas/kong"
 	client "github.com/mutablelogic/go-client"
+	transport "github.com/mutablelogic/go-client/pkg/transport"
 	term "golang.org/x/term"
 )
 
@@ -32,7 +34,8 @@ type CLI struct {
 	ClientSecret   string `env:"BW_CLIENTSECRET" required:"" help:"API key client secret"`
 	MasterPassword string `env:"BW_PASSWORD" name:"password" help:"Master password, which is prompted for when it isn't set"`
 	Cache          string `type:"path" help:"File of the session, by default in the user's cache directory"`
-	Debug          bool   `help:"Trace requests"`
+	Debug          bool   `help:"Trace requests and responses, without their bodies"`
+	Verbose        bool   `help:"Trace the bodies of requests and responses too, which include the client secret and access token"`
 
 	Login    LoginCmd    `cmd:"" help:"Sign in, even when the session is still valid"`
 	Folders  FoldersCmd  `cmd:"" help:"List folders"`
@@ -153,8 +156,10 @@ func (cli *CLI) client() (*Client, error) {
 		path = filepath.Join(dir, "go-client", "bitwarden.json")
 	}
 	var opts []client.ClientOpt
-	if cli.Debug {
-		opts = append(opts, client.OptTrace(os.Stderr, true))
+	if cli.Debug || cli.Verbose {
+		opts = append(opts, client.OptTransport(func(parent http.RoundTripper) http.RoundTripper {
+			return transport.NewLogging(os.Stderr, parent, cli.Verbose)
+		}))
 	}
 	return New(cli.Server, cli.ClientID, cli.ClientSecret, path, opts...)
 }

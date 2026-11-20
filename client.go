@@ -62,6 +62,11 @@ type JsonStreamCallback func(json.RawMessage) error
 ///////////////////////////////////////////////////////////////////////////////
 // GLOBALS
 
+// ErrResponseHandled is returned by the function of OptResponse, when it
+// has handled the response, so the request returns nil, without its status
+// being checked, or its body decoded
+var ErrResponseHandled = errors.New("response handled")
+
 const (
 	DefaultTimeout   = time.Second * 30
 	DefaultUserAgent = "github.com/mutablelogic/go-client"
@@ -172,10 +177,14 @@ func (client *Client) DoWithContext(ctx context.Context, in Payload, out any, op
 	}
 
 	// A request without a payload has no body, so it's sent without one, and
-	// without a content type, which a GET or HEAD request can be refused for
+	// without a content type, which a GET or HEAD request can be refused for,
+	// and one of a buffer is sent of it, so it's sent with its length, rather
+	// than chunked, which a server can require, such as of an upload
 	var body io.Reader = in
 	if r, ok := in.(*request); ok && r.buffer == nil {
 		body = nil
+	} else if ok {
+		body = r.buffer
 	}
 	req, err := client.request(ctx, method, accept, mimetype, body)
 	if err != nil {
@@ -335,6 +344,15 @@ func do(client *http.Client, req *http.Request, accept string, strict bool, out 
 		break
 	}
 	defer response.Body.Close()
+
+	// The caller handles the response, when it says so
+	if reqopts.response != nil {
+		if err := reqopts.response(response); errors.Is(err, ErrResponseHandled) {
+			return nil
+		} else if err != nil {
+			return err
+		}
+	}
 
 	// Get content type
 	mimetype, err := types.ParseContentType(response.Header.Get(types.ContentTypeHeader))

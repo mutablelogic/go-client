@@ -113,6 +113,12 @@ You can create a payload using the following methods:
     by the HTTP client after the request completes.
 * `client.NewFormRequest(payload any, accept string) (Payload, error)` returns a new request with a
     Form data payload which defaults to POST.
+* `client.NewBytesRequest(method string, data []byte, mimetype, accept string) Payload` returns a new
+    request with the bytes as its payload, such as a chunk of an upload. Its type is
+    `application/octet-stream` when the mimetype is empty.
+
+A payload of a buffer, such as JSON, form data or bytes, is sent with its `Content-Length` rather than
+chunked, as some servers require.
 
 For example,
 
@@ -200,6 +206,11 @@ modify each individual request when using the `Do` method:
 * `OptQuery(value url.Values)` sets the query parameters to a request
 * `OptReqHeader(name, value string)` sets a custom header to the request
 * `OptNoTimeout()` disables the timeout on the request, which is useful for long running requests
+* `OptResponse(fn func(*http.Response) error)` calls `fn` with the response, after redirects are
+    followed, and before its status is checked or its body decoded. It's for a response that isn't a
+    success but is expected, such as a resumable upload's `308`, or for headers that aren't otherwise
+    returned. Return `client.ErrResponseHandled` to finish the request with no error, another error to
+    return it, or `nil` to carry on as usual.
 * `OptReqTransport(fn func(http.RoundTripper) http.RoundTripper)` inserts a transport middleware
     for this single request only. Multiple calls stack in order; the first becomes the outermost.
     The middleware is applied on a per-request copy of the client and does not affect other requests.

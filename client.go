@@ -21,6 +21,7 @@ import (
 	transport "github.com/mutablelogic/go-client/pkg/transport"
 	httpresponse "github.com/mutablelogic/go-server/pkg/httpresponse"
 	types "github.com/mutablelogic/go-server/pkg/types"
+	trace "go.opentelemetry.io/otel/trace"
 )
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -49,6 +50,7 @@ type Client struct {
 	atomicToken atomic.Value                                // stores Token — lock-free; written by setToken, read by AccessToken
 	headers     map[string]string                           // setup-only: consumed by New() into HeadersTransport
 	transports  []func(http.RoundTripper) http.RoundTripper // setup-only: consumed by New()
+	tracer      trace.Tracer                                // setup-only: consumed by New() into the OpenTelemetry transport
 }
 
 type ClientOpt func(*Client) error
@@ -97,6 +99,14 @@ func New(opts ...ClientOpt) (*Client, error) {
 		this.Client.Transport = this.transports[i](this.Client.Transport)
 	}
 	this.transports = nil
+
+	// Install the OpenTelemetry transport outside the middleware, so it sees
+	// each request with its client span, such as the logging transport,
+	// which logs its trace ID, whichever order the options are in
+	if this.tracer != nil {
+		this.Client.Transport = transport.NewTransport(this.tracer, this.Client.Transport)
+		this.tracer = nil
+	}
 
 	// Install a headers transport for User-Agent and custom headers.
 	if this.ua != "" || len(this.headers) > 0 {

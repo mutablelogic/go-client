@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"sync/atomic"
 	"testing"
@@ -206,6 +207,23 @@ func Test_Sync(t *testing.T) {
 	assert.Equal(t, int32(1), tokens.Load())
 	require.NoError(t, c2.Login(context.Background(), true))
 	assert.Equal(t, int32(2), tokens.Load())
+
+	// The session file is only the user's, even when it was another's
+	require.NoError(t, os.Chmod(path, 0o644))
+	require.NoError(t, c2.Login(context.Background(), true))
+	info, err := os.Stat(path)
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0o600), info.Mode().Perm())
+
+	// The token isn't used for another account, or another server, which
+	// signs in, with the same device
+	c3, err := New(server.URL, "other", "secret", path)
+	require.NoError(t, err)
+	assert.Empty(t, c3.session.Token)
+	assert.Equal(t, c.session.Device, c3.session.Device)
+	c4, err := New(server.URL+"/", "id", "secret", path)
+	require.NoError(t, err)
+	assert.Empty(t, c4.session.Token)
 
 	// A cancelled context is an error
 	ctx, cancel := context.WithCancel(context.Background())

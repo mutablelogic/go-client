@@ -30,12 +30,15 @@ type Client struct {
 	session      session
 }
 
-// session is what's kept between runs: the device, and the token
+// session is what's kept between runs: the device, and the token, of the
+// server and client id which it was issued by
 type session struct {
-	Device  string    `json:"device"`
-	Token   string    `json:"token,omitempty"`
-	Expires time.Time `json:"expires,omitzero"`
-	Kdf     kdf       `json:"kdf"`
+	Server   string    `json:"server"`
+	ClientID string    `json:"clientId"`
+	Device   string    `json:"device"`
+	Token    string    `json:"token,omitempty"`
+	Expires  time.Time `json:"expires,omitzero"`
+	Kdf      kdf       `json:"kdf"`
 }
 
 // tokenRequest signs in with an API key
@@ -97,6 +100,12 @@ func New(server, clientID, clientSecret, path string, opts ...client.ClientOpt) 
 	self := &Client{Client: c, identity: identity, clientID: clientID, clientSecret: clientSecret, path: path}
 	if err := self.read(); err != nil {
 		return nil, err
+	}
+
+	// A token of another server, or account, isn't used, so it isn't sent
+	// to a server which didn't issue it
+	if self.session.Server != server || self.session.ClientID != clientID {
+		self.session = session{Server: server, ClientID: clientID, Device: self.session.Device}
 	}
 	if self.session.Device == "" {
 		self.session.Device = rand.Text()
@@ -171,19 +180,37 @@ func (c *Client) read() error {
 	return nil
 }
 
-// write writes the session, which only the user can read
+// write writes the session, which only the user can read, to a new file,
+// which replaces it, so a file which others can read doesn't keep its mode
 func (c *Client) write() error {
 	if c.path == "" {
 		return nil
 	}
-	if err := os.MkdirAll(filepath.Dir(c.path), 0o700); err != nil {
+	dir := filepath.Dir(c.path)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
 	data, err := json.Marshal(c.session)
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(c.path, data, 0o600)
+	f, err := os.CreateTemp(dir, ".session-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(f.Name())
+	if err := f.Chmod(0o600); err != nil {
+		f.Close()
+		return err
+	}
+	if _, err := f.Write(data); err != nil {
+		f.Close()
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	return os.Rename(f.Name(), c.path)
 }
 
 // deviceType returns Bitwarden's type of a command-line device, on this

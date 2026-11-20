@@ -8,7 +8,6 @@ import (
 	"time"
 
 	// Package imports
-	transport "github.com/mutablelogic/go-client/pkg/transport"
 	httpresponse "github.com/mutablelogic/go-server/pkg/httpresponse"
 	trace "go.opentelemetry.io/otel/trace"
 )
@@ -98,10 +97,12 @@ func OptReqToken(value Token) ClientOpt {
 // OptTracer sets the OpenTelemetry tracer for this client. It wraps the
 // underlying HTTP transport so that every HTTP call — including OAuth token
 // refresh and redirect hops — produces a client span. Span names default
-// to "METHOD /path" format.
+// to "METHOD /path" format. It's installed outside the middleware of
+// OptTransport, whichever order the options are in, so the middleware sees
+// each request's span, such as the logging transport, which logs its trace ID.
 func OptTracer(tracer trace.Tracer) ClientOpt {
 	return func(client *Client) error {
-		client.Client.Transport = transport.NewTransport(tracer, client.Client.Transport)
+		client.tracer = tracer
 		return nil
 	}
 }

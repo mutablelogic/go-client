@@ -526,7 +526,9 @@ The client uses some of them itself:
 ### Logging Transport
 
 `transport.NewLogging` logs every request and response to an `io.Writer`, which is useful for
-debugging. Sensitive headers, such as `Authorization`, are redacted. When `verbose` is true
+debugging. Sensitive headers, such as `Authorization`, are redacted. When the request is
+traced with OpenTelemetry, such as with `OptTracer`, its trace ID is logged too, so it can be
+looked up in your tracing backend. When `verbose` is true
 the request and response bodies are also printed, unredacted; `text/event-stream` and NDJSON streaming bodies
 are printed line-by-line as events arrive rather than buffered:
 

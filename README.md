@@ -67,7 +67,6 @@ Various options can be passed to the client `New` method to control its behaviou
 * `OptTimeout(value time.Duration)` sets the timeout on any request, which defaults to 30 seconds.
     Timeouts can be ignored on a request-by-request basis using the `OptNoTimeout` option (see below).
 * `OptUserAgent(value string)` sets the user agent string on each API request.
-* `OptTrace(w io.Writer, verbose bool)` — **Deprecated.** Use `OptTransport` with `transport.NewLogging` instead.
     See the Transport Middleware section below for details.
 * `OptStrict()` turns on strict content type checking on anything returned from the API.
 * `OptRateLimit(value float32)` sets the limit on number of requests per second and the API
@@ -531,9 +530,6 @@ c, err := client.New(
     }),
 )
 ```
-
-The convenience client option `OptTrace(w io.Writer, verbose bool)` (deprecated) is equivalent and internally
-calls `transport.NewLogging`.
 
 ### Recorder Transport
 
